@@ -29,15 +29,15 @@ export interface CalEvent {
   caseTitle?: string;
 }
 
-export const EVENT_TYPE_COLORS: Record<EventType, { bg: string; text: string; dot: string }> = {
-  HEARING:    { bg: "bg-orange-100",  text: "text-orange-700",  dot: "bg-orange-500" },
-  DEPOSITION: { bg: "bg-purple-100",  text: "text-purple-700",  dot: "bg-purple-500" },
-  TRIAL:      { bg: "bg-green-100",   text: "text-green-700",   dot: "bg-green-500" },
-  CONFERENCE: { bg: "bg-blue-100",    text: "text-blue-700",    dot: "bg-blue-500" },
-  MEETING:    { bg: "bg-sky-100",     text: "text-sky-700",     dot: "bg-sky-500" },
-  DEADLINE:   { bg: "bg-red-100",     text: "text-red-700",     dot: "bg-red-500" },
-  REMINDER:   { bg: "bg-yellow-100",  text: "text-yellow-700",  dot: "bg-yellow-500" },
-  OTHER:      { bg: "bg-slate-100",   text: "text-slate-700",   dot: "bg-slate-400" },
+export const EVENT_TYPE_COLORS: Record<EventType, { bg: string; text: string; dot: string; border: string; ring: string }> = {
+  HEARING:    { bg: "bg-orange-50",  text: "text-orange-800",  dot: "bg-orange-500",  border: "border-orange-300",  ring: "ring-orange-100" },
+  DEPOSITION: { bg: "bg-violet-50",  text: "text-violet-800",  dot: "bg-violet-500",  border: "border-violet-300",  ring: "ring-violet-100" },
+  TRIAL:      { bg: "bg-emerald-50", text: "text-emerald-800", dot: "bg-emerald-500", border: "border-emerald-300", ring: "ring-emerald-100" },
+  CONFERENCE: { bg: "bg-blue-50",    text: "text-blue-800",    dot: "bg-blue-500",    border: "border-blue-300",    ring: "ring-blue-100" },
+  MEETING:    { bg: "bg-cyan-50",    text: "text-cyan-800",    dot: "bg-cyan-500",    border: "border-cyan-300",    ring: "ring-cyan-100" },
+  DEADLINE:   { bg: "bg-rose-50",    text: "text-rose-800",    dot: "bg-rose-500",    border: "border-rose-300",    ring: "ring-rose-100" },
+  REMINDER:   { bg: "bg-amber-50",   text: "text-amber-800",   dot: "bg-amber-500",   border: "border-amber-300",   ring: "ring-amber-100" },
+  OTHER:      { bg: "bg-slate-50",   text: "text-slate-700",   dot: "bg-slate-400",   border: "border-slate-300",   ring: "ring-slate-100" },
 };
 
 export function mapGoogleEvent(e: GoogleCalEvent): CalEvent {

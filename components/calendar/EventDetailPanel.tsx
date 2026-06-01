@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, MapPin, Calendar, Clock, Pencil, Trash2, Check, Briefcase } from "lucide-react";
+import { X, MapPin, Calendar, Clock, Pencil, Trash2, Check, Briefcase, ChevronRight, FileText, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -123,22 +123,21 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
   const colors = EVENT_TYPE_COLORS[event.eventType];
 
   return (
-    <div className="w-80 shrink-0 border-l border-border bg-background flex flex-col overflow-hidden">
+    <div className="ml-5 w-[360px] shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
-        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Event Details</span>
+      <div className="flex items-center justify-end px-5 py-4 shrink-0">
         <div className="flex items-center gap-1">
           {!editing && (
             <>
-              <button onClick={startEdit} className="p-1.5 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground">
+              <button onClick={startEdit} className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors text-slate-500 hover:text-slate-950">
                 <Pencil className="w-3.5 h-3.5" />
               </button>
-              <button onClick={handleDelete} disabled={deleting} className="p-1.5 rounded hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive">
+              <button onClick={handleDelete} disabled={deleting} className="p-1.5 rounded-lg hover:bg-rose-50 transition-colors text-slate-500 hover:text-rose-600">
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
             </>
           )}
-          <button onClick={onClose} className="p-1.5 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground">
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors text-slate-500 hover:text-slate-950">
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -147,24 +146,24 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
         {!editing ? (
-          <div className="px-5 py-4 flex flex-col gap-4">
+          <div className="px-6 pb-6 flex flex-col gap-5">
             {/* Title + type */}
             <div className="flex flex-col gap-2">
-              <h2 className="text-lg font-semibold leading-tight">{event.title}</h2>
-              <span className={`self-start text-xs font-medium px-2.5 py-1 rounded-full ${colors.bg} ${colors.text}`}>
+              <h2 className="text-2xl font-bold leading-tight text-slate-950">{event.title}</h2>
+              <span className={`self-start text-sm font-semibold px-2.5 py-1 rounded-full ${colors.bg} ${colors.text}`}>
                 <span className={`inline-block w-1.5 h-1.5 rounded-full ${colors.dot} mr-1.5 align-middle`} />
                 {EVENT_TYPE_LABELS[event.eventType]}
               </span>
             </div>
 
             {/* Date / time */}
-            <div className="flex flex-col gap-2 text-sm">
-              <div className="flex items-center gap-2.5 text-muted-foreground">
+            <div className="flex flex-col gap-3 border-b border-slate-200 pb-5 text-sm">
+              <div className="flex items-center gap-3 text-slate-700">
                 <Calendar className="w-4 h-4 shrink-0" />
                 <span>{event.start.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</span>
               </div>
               {!event.allDay && (
-                <div className="flex items-center gap-2.5 text-muted-foreground">
+                <div className="flex items-center gap-3 text-slate-700">
                   <Clock className="w-4 h-4 shrink-0" />
                   <span>
                     {event.start.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
@@ -177,15 +176,15 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
 
             {/* Location */}
             {event.location && (
-              <div className="flex items-start gap-2.5 text-sm">
-                <MapPin className="w-4 h-4 shrink-0 text-muted-foreground mt-0.5" />
+              <div className="flex items-start gap-3 border-b border-slate-200 pb-5 text-sm">
+                <MapPin className="w-4 h-4 shrink-0 text-slate-500 mt-0.5" />
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-foreground">{event.location}</span>
+                  <span className="text-slate-800">{event.location}</span>
                   <a
                     href={`https://maps.google.com/?q=${encodeURIComponent(event.location)}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-xs text-indigo-600 hover:underline"
+                    className="text-xs font-semibold text-violet-600 hover:text-violet-700"
                   >
                     Directions
                   </a>
@@ -195,21 +194,49 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
 
             {/* Case link */}
             {event.caseId && event.caseTitle && (
-              <div className="flex items-center gap-2.5 text-sm">
-                <Briefcase className="w-4 h-4 shrink-0 text-muted-foreground" />
-                <Link href={`/cases/${event.caseId}`} className="text-indigo-600 hover:underline font-medium truncate">
-                  {event.caseTitle}
+              <div className="border-b border-slate-200">
+                <Link href={`/cases/${event.caseId}`} className="flex items-center gap-3 py-4 text-sm group">
+                  <Briefcase className="w-4 h-4 shrink-0 text-slate-500" />
+                  <span className="flex-1">
+                    <span className="block text-xs text-slate-500">Case</span>
+                    <span className="font-semibold text-slate-900 group-hover:text-violet-700">{event.caseTitle}</span>
+                  </span>
+                  <ChevronRight className="size-4 text-slate-400" />
                 </Link>
               </div>
             )}
 
             {/* Notes */}
             {event.description && (
-              <div className="flex flex-col gap-1">
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Notes</span>
-                <p className="text-sm text-foreground whitespace-pre-wrap">{event.description}</p>
+              <div className="flex flex-col gap-2 border-b border-slate-200 pb-5">
+                <span className="text-sm font-semibold text-slate-950">Case Notes</span>
+                <p className="text-sm leading-6 text-slate-600 whitespace-pre-wrap">{event.description}</p>
               </div>
             )}
+
+            <div className="rounded-lg border border-violet-100 bg-violet-50/70 p-4">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="flex items-center gap-2 text-sm font-semibold text-slate-950">
+                  <Sparkles className="size-4 text-violet-600" />
+                  AI Summary
+                </span>
+                <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-700">Beta</span>
+              </div>
+              <p className="text-xs leading-5 text-slate-600">
+                Review upcoming obligations, court appearance details, and related case notes before this event.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <Link
+                href={event.caseId ? `/cases/${event.caseId}` : "/cases"}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 text-sm font-semibold text-white hover:bg-slate-800"
+              >
+                <FileText className="size-4" />
+                Open Case
+              </Link>
+              <Button variant="outline" className="h-10 border-slate-200 bg-white">More</Button>
+            </div>
 
             {error && <p className="text-xs text-destructive">{error}</p>}
           </div>

@@ -1,12 +1,12 @@
 "use client";
 
-import { Fragment, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import type { CalEvent } from "@/lib/google-calendar";
 import { EVENT_TYPE_COLORS } from "@/lib/google-calendar";
 
-const ROW_HEIGHT = 56;
-const DAY_ABBR = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const HOURS = Array.from({ length: 24 }, (_, i) => i);
+const ROW_HEIGHT = 64;
+const DAY_ABBR = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+const HOURS = Array.from({ length: 10 }, (_, i) => i + 8);
 
 function formatHour(h: number) {
   if (h === 0) return "12 AM";
@@ -51,17 +51,18 @@ interface Props {
 export default function WeekView({ date, today, events, onCellClick, onSelectDay, onEventClick }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const days = getWeekDays(date);
+  const allDayEvents = events.filter((e) => e.allDay);
 
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = 7 * ROW_HEIGHT;
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
   }, []);
 
   function handleColumnClick(day: Date, e: React.MouseEvent<HTMLDivElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
-    const scrollTop = scrollRef.current?.scrollTop ?? 0;
-    const y = e.clientY - rect.top + scrollTop;
+    const y = e.clientY - rect.top;
+    const startOffset = HOURS[0] * 60;
     const totalMins = Math.floor(y / ROW_HEIGHT * 60);
-    const hour = Math.min(Math.floor(totalMins / 60), 23);
+    const hour = Math.min(Math.floor((totalMins + startOffset) / 60), 23);
     const minute = Math.round((totalMins % 60) / 15) * 15 % 60;
     const d = new Date(day);
     d.setHours(hour, minute, 0, 0);
@@ -69,41 +70,62 @@ export default function WeekView({ date, today, events, onCellClick, onSelectDay
   }
 
   return (
-    <div className="flex flex-col h-full border border-border rounded-lg overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       {/* Day headers */}
-      <div className="flex shrink-0 border-b border-border bg-muted/30">
-        <div className="w-14 shrink-0" />
+      <div className="flex shrink-0 border-b border-slate-200 bg-white">
+        <div className="w-16 shrink-0 border-r border-slate-100" />
         {days.map((d, i) => {
           const isToday = isSameDay(d, today);
           return (
             <button
               key={i}
               onClick={() => onSelectDay(d)}
-              className={`flex-1 py-2 text-center border-l border-border hover:bg-accent/30 transition-colors ${isToday ? "bg-primary/5" : ""}`}
+              className={`flex-1 py-3 text-center border-l border-slate-100 hover:bg-slate-50 transition-colors ${isToday ? "bg-violet-50/70" : ""}`}
             >
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide block">
-                {DAY_ABBR[d.getDay()]}
-              </span>
-              <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm font-medium mx-auto ${isToday ? "bg-primary text-primary-foreground" : "text-foreground"}`}>
-                {d.getDate()}
+              <span className={`text-[11px] font-semibold tracking-wide block ${isToday ? "text-violet-600" : "text-slate-500"}`}>
+                {DAY_ABBR[d.getDay()]} {d.getDate()}
               </span>
             </button>
           );
         })}
       </div>
 
+      <div className="flex shrink-0 border-b border-slate-200 bg-white">
+        <div className="w-16 shrink-0 border-r border-slate-100 px-2 py-3 text-right text-xs text-slate-500">all-day</div>
+        {days.map((day, di) => {
+          const dayAllDay = allDayEvents.filter((e) => isSameDay(e.start, day));
+          return (
+            <div key={di} className="min-h-16 flex-1 border-l border-slate-100 px-1.5 py-2">
+              {dayAllDay.slice(0, 2).map((ev) => {
+                const colors = EVENT_TYPE_COLORS[ev.eventType ?? "OTHER"];
+                return (
+                  <button
+                    key={ev.id}
+                    onClick={() => onEventClick(ev)}
+                    className={`mb-1 block w-full truncate rounded-md border px-2 py-1 text-left text-xs font-semibold shadow-sm ${colors.bg} ${colors.text} ${colors.border}`}
+                    title={ev.title}
+                  >
+                    {ev.title}
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+
       {/* Scrollable body */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto">
-        <div className="flex" style={{ height: 24 * ROW_HEIGHT }}>
+        <div className="flex" style={{ height: HOURS.length * ROW_HEIGHT }}>
           {/* Time gutter */}
-          <div className="w-14 shrink-0 relative border-r border-border">
-            {HOURS.map((h) => (
+          <div className="w-16 shrink-0 relative border-r border-slate-100 bg-white">
+            {HOURS.map((h, index) => (
               <div
                 key={h}
                 className="absolute w-full flex items-start justify-end pr-2 pt-1 select-none"
-                style={{ top: h * ROW_HEIGHT, height: ROW_HEIGHT }}
+                style={{ top: index * ROW_HEIGHT, height: ROW_HEIGHT }}
               >
-                <span className="text-xs text-muted-foreground">{formatHour(h)}</span>
+                <span className="text-xs font-medium text-slate-500">{formatHour(h)}</span>
               </div>
             ))}
           </div>
@@ -115,15 +137,15 @@ export default function WeekView({ date, today, events, onCellClick, onSelectDay
             return (
               <div
                 key={di}
-                className={`flex-1 relative border-l border-border cursor-pointer ${isToday ? "bg-primary/[0.02]" : ""}`}
+                className={`flex-1 relative border-l border-slate-100 cursor-pointer ${isToday ? "bg-violet-50/30" : ""}`}
                 onClick={(e) => handleColumnClick(day, e)}
               >
                 {/* Hour lines */}
-                {HOURS.map((h) => (
+                {HOURS.map((h, index) => (
                   <div
                     key={h}
-                    className="absolute w-full border-b border-border"
-                    style={{ top: h * ROW_HEIGHT, height: ROW_HEIGHT }}
+                    className="absolute w-full border-b border-slate-100 hover:bg-slate-50/70"
+                    style={{ top: index * ROW_HEIGHT, height: ROW_HEIGHT }}
                   />
                 ))}
 
@@ -134,18 +156,16 @@ export default function WeekView({ date, today, events, onCellClick, onSelectDay
                     <div
                       key={ev.id}
                       onClick={(e) => { e.stopPropagation(); onEventClick(ev); }}
-                      className={`absolute left-1 right-1 rounded text-xs px-1.5 py-0.5 overflow-hidden z-10 cursor-pointer hover:brightness-95 transition-[filter] border-l-2 ${colors.bg} ${colors.text}`}
-                      style={{ top: eventTop(ev), height: eventHeight(ev), borderLeftColor: undefined }}
+                      className={`absolute left-1.5 right-1.5 z-10 cursor-pointer overflow-hidden rounded-lg border px-2.5 py-2 text-xs shadow-sm ring-1 transition hover:-translate-y-0.5 hover:shadow-md ${colors.bg} ${colors.text} ${colors.border} ${colors.ring}`}
+                      style={{ top: eventTop(ev) - HOURS[0] * ROW_HEIGHT, height: eventHeight(ev) }}
                       title={ev.title}
                     >
+                      <span className="mb-0.5 block text-[11px] font-medium opacity-80">
+                        {ev.start.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                      </span>
                       <span className="font-semibold truncate block">{ev.title}</span>
-                      {eventHeight(ev) > 30 && ev.location && (
-                        <span className="opacity-70 truncate block">{ev.location}</span>
-                      )}
-                      {eventHeight(ev) > 44 && (
-                        <span className="opacity-70">
-                          {ev.start.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-                        </span>
+                      {eventHeight(ev) > 44 && ev.location && (
+                        <span className="opacity-75 truncate block">{ev.location}</span>
                       )}
                     </div>
                   );

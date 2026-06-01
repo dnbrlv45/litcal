@@ -2,7 +2,21 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, SlidersHorizontal, Plus } from "lucide-react";
+import {
+  Bell,
+  CalendarDays,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Command,
+  FileText,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  Sparkles,
+  TriangleAlert,
+} from "lucide-react";
+import { UserButton } from "@clerk/nextjs";
 import MonthView from "./MonthView";
 import WeekView from "./WeekView";
 import DayView from "./DayView";
@@ -125,47 +139,68 @@ export default function CalendarView() {
       : `${DAY_NAMES[date.getDay()]}, ${MONTH_NAMES[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
-      {/* Toolbar */}
-      <div className="flex items-center justify-between px-6 py-3.5 border-b border-border shrink-0 bg-background">
-        <div className="flex items-center gap-3">
-          <h1 className="text-xl font-semibold tracking-tight">{periodLabel}</h1>
-          <div className="flex items-center gap-1">
-            <button onClick={prev} className="p-1.5 rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-foreground">
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button onClick={next} className="p-1.5 rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-foreground">
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-          <Button variant="outline" size="sm" onClick={goToToday} className="text-xs h-7 px-3">
-            Today
-          </Button>
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden bg-slate-50/70">
+      <div className="h-[72px] shrink-0 border-b border-slate-200/80 bg-white/95 px-7 flex items-center justify-between gap-5">
+        <div className="relative w-full max-w-[680px]">
+          <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+          <input
+            className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-14 text-sm text-slate-700 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-violet-300 focus:ring-4 focus:ring-violet-100"
+            placeholder="Search cases, events, deadlines... or ask AI"
+          />
+          <span className="absolute right-3 top-1/2 inline-flex -translate-y-1/2 items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-1 text-[11px] font-medium text-slate-400">
+            <Command className="size-3" />K
+          </span>
         </div>
+        <div className="flex items-center gap-3 text-slate-700">
+          <button className="relative grid size-9 place-items-center rounded-lg hover:bg-slate-100">
+            <Bell className="size-4" />
+            <span className="absolute right-1.5 top-1.5 grid size-4 place-items-center rounded-full bg-violet-600 text-[10px] font-semibold text-white">3</span>
+          </button>
+          <button className="grid size-9 place-items-center rounded-lg hover:bg-slate-100">
+            <CalendarDays className="size-4" />
+          </button>
+          <UserButton appearance={{ elements: { avatarBox: "size-9" } }} />
+        </div>
+      </div>
 
-        <div className="flex items-center gap-2">
-          {/* View tabs */}
-          <div className="flex rounded-lg border border-border overflow-hidden bg-muted/30">
+      {/* Toolbar */}
+      <div className="flex items-center justify-between px-8 py-5 shrink-0">
+        <div className="flex items-center gap-4">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-950">{periodLabel}</h1>
+          <ChevronDown className="size-4 text-slate-500" />
+          <div className="ml-4 flex rounded-lg border border-slate-200 bg-white p-0.5 shadow-sm">
             {(["day", "week", "month"] as CalView[]).map((v) => (
               <button
                 key={v}
                 onClick={() => setView(v)}
-                className={`px-3.5 py-1.5 text-sm capitalize transition-colors ${
+                className={`h-8 min-w-[68px] rounded-md px-4 text-sm capitalize transition-colors ${
                   view === v
-                    ? "bg-background text-foreground font-medium shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
+                    ? "bg-slate-950 text-white shadow-sm"
+                    : "text-slate-600 hover:text-slate-950"
                 }`}
               >
                 {v}
               </button>
             ))}
           </div>
+        </div>
 
-          <button className="p-1.5 rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-foreground border border-border">
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="lg" onClick={goToToday} className="h-10 border-slate-200 bg-white px-4 text-sm shadow-sm">
+            Today
+          </Button>
+          <div className="flex overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+            <button onClick={prev} className="grid size-10 place-items-center border-r border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-950">
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button onClick={next} className="grid size-10 place-items-center text-slate-600 hover:bg-slate-50 hover:text-slate-950">
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+          <button className="grid size-10 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50 hover:text-slate-950">
             <SlidersHorizontal className="w-4 h-4" />
           </button>
-
-          <Button size="sm" onClick={() => openModal()} className="gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white border-0">
+          <Button size="lg" onClick={() => openModal()} className="h-10 gap-2 bg-slate-950 px-4 text-white shadow-sm hover:bg-slate-800">
             <Plus className="w-4 h-4" />
             New Event
           </Button>
@@ -173,9 +208,9 @@ export default function CalendarView() {
       </div>
 
       {/* Main content row */}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      <div className="flex flex-1 min-h-0 overflow-hidden px-5 pb-5">
         {/* Calendar */}
-        <div className="flex-1 min-w-0 px-6 py-4 overflow-hidden flex flex-col">
+        <div className="flex-1 min-w-0 overflow-hidden flex flex-col gap-5">
           {view === "month" && (
             <MonthView
               date={date}
@@ -205,6 +240,42 @@ export default function CalendarView() {
               onEventClick={(ev) => setSelectedEvent(ev)}
             />
           )}
+          <div className="hidden min-h-[72px] shrink-0 items-center gap-5 rounded-xl border border-slate-200 bg-white px-6 shadow-sm xl:flex">
+            <div className="flex min-w-48 items-center gap-3 border-r border-slate-200 pr-6">
+              <Sparkles className="size-5 text-slate-950" />
+              <span className="text-sm font-semibold text-slate-950">4 Items Need Attention</span>
+            </div>
+            <div className="grid flex-1 grid-cols-4 gap-4 text-xs">
+              <div className="flex items-center gap-3">
+                <TriangleAlert className="size-5 text-rose-500" />
+                <div>
+                  <p className="font-semibold text-slate-800">Remote appearance due tomorrow</p>
+                  <p className="text-slate-500">Lopez v. Progressive</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="grid size-5 place-items-center rounded-full border border-orange-400 text-orange-500">!</span>
+                <div>
+                  <p className="font-semibold text-slate-800">Discovery responses due in 3 days</p>
+                  <p className="text-slate-500">Garcia v. State Farm</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <FileText className="size-5 text-violet-600" />
+                <div>
+                  <p className="font-semibold text-slate-800">New court order received</p>
+                  <p className="text-slate-500">Smith v. Jones</p>
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-slate-800">Calendar conflict detected</p>
+                  <p className="text-slate-500">Thursday, June 12 at 10:00 AM</p>
+                </div>
+                <button className="font-semibold text-violet-600 hover:text-violet-700">View All</button>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Right detail panel */}

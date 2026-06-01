@@ -53,10 +53,10 @@ export default function MonthView({ date, today, events, onCellClick, onSelectDa
   }
 
   return (
-    <div className="flex flex-col h-full border border-border rounded-lg overflow-hidden">
-      <div className="grid grid-cols-7 border-b border-border bg-muted/30 shrink-0">
+    <div className="flex flex-col h-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="grid grid-cols-7 border-b border-slate-200 bg-white shrink-0">
         {DAYS_OF_WEEK.map((d) => (
-          <div key={d} className="py-2 text-center text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          <div key={d} className="py-3 text-center text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
             {d}
           </div>
         ))}
@@ -71,17 +71,17 @@ export default function MonthView({ date, today, events, onCellClick, onSelectDa
                 <div
                   key={di}
                   onClick={() => day && onCellClick(new Date(year, month, day))}
-                  className={`border-b border-r border-border p-1.5 last:border-r-0 flex flex-col gap-0.5 ${
-                    day === null ? "bg-muted/10" : "hover:bg-accent/10 cursor-pointer"
+                  className={`border-b border-r border-slate-100 p-2 last:border-r-0 flex flex-col gap-1 ${
+                    day === null ? "bg-slate-50/60" : "hover:bg-slate-50 cursor-pointer"
                   }`}
                 >
                   {day !== null && (
                     <button
                       onClick={(e) => { e.stopPropagation(); onSelectDay(new Date(year, month, day)); }}
-                      className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm self-start hover:bg-accent transition-colors ${
+                      className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm self-start transition-colors ${
                         isToday(day)
-                          ? "bg-primary text-primary-foreground font-semibold"
-                          : "text-foreground"
+                          ? "bg-violet-600 text-white font-semibold shadow-sm"
+                          : "text-slate-700 hover:bg-slate-100"
                       }`}
                     >
                       {day}
@@ -93,7 +93,7 @@ export default function MonthView({ date, today, events, onCellClick, onSelectDa
                       <div
                         key={ev.id}
                         onClick={(e) => { e.stopPropagation(); onEventClick(ev); }}
-                        className={`truncate text-xs rounded px-1.5 py-0.5 font-medium cursor-pointer transition-colors hover:brightness-95 ${colors.bg} ${colors.text}`}
+                        className={`truncate rounded-md border px-2 py-1 text-xs font-semibold cursor-pointer shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${colors.bg} ${colors.text} ${colors.border}`}
                         title={ev.title}
                       >
                         <span className={`inline-block w-1.5 h-1.5 rounded-full ${colors.dot} mr-1 align-middle`} />
