@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { UserButton, OrganizationSwitcher } from "@clerk/nextjs";
+import { UserButton } from "@clerk/nextjs";
 import {
   CalendarDays,
   Briefcase,
@@ -54,22 +54,15 @@ export default function Sidebar() {
         </div>
       </div>
 
-      {/* Org switcher */}
+      {/* Workspace */}
       <div className="px-4 pb-4 shrink-0">
-        <OrganizationSwitcher
-          hidePersonal={false}
-          afterCreateOrganizationUrl="/"
-          afterSelectOrganizationUrl="/"
-          afterLeaveOrganizationUrl="/"
-          appearance={{
-            elements: {
-              rootBox: "w-full",
-              organizationSwitcherTrigger:
-                "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-slate-700 hover:bg-slate-100 transition-colors border border-slate-200 bg-slate-50/80",
-              organizationSwitcherTriggerIcon: "text-slate-500",
-            },
-          }}
-        />
+        <Link
+          href="/settings/team"
+          className="flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-100"
+        >
+          <Building2 className="size-4 text-slate-500" />
+          <span className="truncate">LitCal Team</span>
+        </Link>
       </div>
 
       {/* Nav */}

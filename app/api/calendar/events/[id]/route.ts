@@ -2,20 +2,28 @@ import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAccessToken, deleteGoogleEvent } from "@/lib/google-calendar";
+import { getCurrentWorkspace } from "@/lib/workspaces";
 
 // DELETE /api/calendar/events/[id]
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { userId, orgId } = await auth();
+  const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { workspace } = await getCurrentWorkspace(userId);
 
   const { id } = await params;
 
   // Fetch event with its Google sync record before deleting
   const event = await prisma.event.findFirst({
-    where: orgId ? { id, orgId } : { id, userId },
+    where: {
+      id,
+      OR: [
+        { workspaceId: workspace.id },
+        { userId, workspaceId: null },
+      ],
+    },
     include: { googleSync: true },
   });
 
@@ -51,8 +59,9 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { userId, orgId } = await auth();
+  const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { workspace } = await getCurrentWorkspace(userId);
 
   const { id } = await params;
 
@@ -66,7 +75,15 @@ export async function PATCH(
     caseId?: string | null;
   };
 
-  const event = await prisma.event.findFirst({ where: orgId ? { id, orgId } : { id, userId } });
+  const event = await prisma.event.findFirst({
+    where: {
+      id,
+      OR: [
+        { workspaceId: workspace.id },
+        { userId, workspaceId: null },
+      ],
+    },
+  });
   if (!event) return NextResponse.json({ error: "Event not found" }, { status: 404 });
 
   const validTypes = ["DEADLINE","HEARING","DEPOSITION","TRIAL","CONFERENCE","MEETING","REMINDER","OTHER"];

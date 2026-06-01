@@ -1,50 +1,32 @@
-import { auth, clerkClient } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAccessToken, createGoogleEvent, createLitCalCalendar } from "@/lib/google-calendar";
 import type { GoogleCalEvent } from "@/lib/google-calendar";
-
-// Ensure a User shadow row exists for this Clerk user.
-// Called at the start of every authenticated API route.
-async function ensureUser(userId: string) {
-  const existing = await prisma.user.findUnique({ where: { id: userId } });
-  if (existing) return existing;
-
-  const clerk = await clerkClient();
-  const clerkUser = await clerk.users.getUser(userId);
-  const email = clerkUser.emailAddresses[0]?.emailAddress ?? "";
-
-  return prisma.user.upsert({
-    where: { id: userId },
-    create: {
-      id: userId,
-      email,
-      firstName: clerkUser.firstName ?? null,
-      lastName: clerkUser.lastName ?? null,
-    },
-    update: {},
-  });
-}
+import { getCurrentWorkspace } from "@/lib/workspaces";
 
 // GET /api/calendar/events?start=ISO&end=ISO
 export async function GET(request: NextRequest) {
-  const { userId, orgId } = await auth();
+  const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { workspace } = await getCurrentWorkspace(userId);
 
   const { searchParams } = new URL(request.url);
   const start = searchParams.get("start");
   const end = searchParams.get("end");
   if (!start || !end) return NextResponse.json({ error: "Missing start/end" }, { status: 400 });
 
-  await ensureUser(userId);
-
   const timeFilter = { gte: new Date(start), lte: new Date(end) };
 
   const [events, connection] = await Promise.all([
     prisma.event.findMany({
-      where: orgId
-        ? { orgId, startTime: timeFilter }
-        : { userId, orgId: null, startTime: timeFilter },
+      where: {
+        startTime: timeFilter,
+        OR: [
+          { workspaceId: workspace.id },
+          { userId, workspaceId: null },
+        ],
+      },
       include: { googleSync: true, caseRef: { select: { id: true, title: true } } },
       orderBy: { startTime: "asc" },
     }),
@@ -72,8 +54,9 @@ export async function GET(request: NextRequest) {
 
 // POST /api/calendar/events  body: { title, description?, start, end, timeZone }
 export async function POST(request: NextRequest) {
-  const { userId, orgId } = await auth();
+  const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { workspace } = await getCurrentWorkspace(userId);
 
   const body = await request.json();
   const { title, description, start, end, timeZone, eventType, location, caseId } = body as {
@@ -90,8 +73,6 @@ export async function POST(request: NextRequest) {
   if (!title?.trim() || !start || !end)
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
 
-  await ensureUser(userId);
-
   const validTypes = ["DEADLINE","HEARING","DEPOSITION","TRIAL","CONFERENCE","MEETING","REMINDER","OTHER"];
   const safeEventType = validTypes.includes(eventType ?? "") ? eventType as never : "OTHER";
 
@@ -99,7 +80,8 @@ export async function POST(request: NextRequest) {
   const event = await prisma.event.create({
     data: {
       userId,
-      orgId: orgId ?? null,
+      workspaceId: workspace.id,
+      orgId: null,
       title: title.trim(),
       description: description || null,
       startTime: new Date(start),

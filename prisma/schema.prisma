@@ -23,6 +23,45 @@ model User {
   events              Event[]
   calendarConnections UserCalendarConnection[]
   cases               Case[]
+  workspaceMemberships WorkspaceMember[]
+}
+
+// ─── WORKSPACES / TEAMS ──────────────────────────────────────────────────────
+// First-party LitCal teams. Clerk owns sign-in only; LitCal owns team membership.
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members   WorkspaceMember[]
+  cases     Case[]
+  events    Event[]
+
+  @@index([createdBy])
+}
+
+model WorkspaceMember {
+  id          String        @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        WorkspaceRole @default(MEMBER)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+}
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MEMBER
 }
 
 // ─── CALENDAR CONNECTIONS ─────────────────────────────────────────────────────
@@ -70,6 +109,7 @@ model Event {
   allDay      Boolean     @default(false)
 
   orgId       String?     // Clerk org ID — null for personal events
+  workspaceId String?
   caseId      String?
 
   eventType   EventType   @default(OTHER)
@@ -80,11 +120,13 @@ model Event {
   updatedAt   DateTime    @updatedAt
 
   user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace?          @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
   caseRef     Case?               @relation(fields: [caseId], references: [id], onDelete: SetNull)
   googleSync  GoogleCalendarSync?
 
   @@index([userId, startTime])
   @@index([userId, startTime, endTime])
+  @@index([workspaceId, startTime])
   @@index([orgId, startTime])
   @@index([caseId])
 }
@@ -140,6 +182,7 @@ enum SyncStatus {
 model Case {
   id           String     @id @default(cuid())
   orgId        String?
+  workspaceId  String?
   userId       String
 
   caseNumber   String?
@@ -159,10 +202,12 @@ model Case {
   updatedAt    DateTime   @updatedAt
 
   user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace    Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
   parties      CaseParty[]
   events       Event[]
 
   @@index([orgId])
+  @@index([workspaceId])
   @@index([userId])
   @@index([status])
 }

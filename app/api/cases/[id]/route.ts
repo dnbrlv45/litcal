@@ -2,18 +2,26 @@ import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAccessToken, deleteGoogleEvent } from "@/lib/google-calendar";
+import { getCurrentWorkspace } from "@/lib/workspaces";
 
 type Params = { params: Promise<{ id: string }> };
 
 // GET /api/cases/[id]
 export async function GET(_req: NextRequest, { params }: Params) {
-  const { userId, orgId } = await auth();
+  const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { workspace } = await getCurrentWorkspace(userId);
 
   const { id } = await params;
 
   const c = await prisma.case.findFirst({
-    where: orgId ? { id, orgId } : { id, userId },
+    where: {
+      id,
+      OR: [
+        { workspaceId: workspace.id },
+        { userId, workspaceId: null },
+      ],
+    },
     include: {
       parties: true,
       events: { orderBy: { startTime: "asc" } },
@@ -26,8 +34,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
 // PATCH /api/cases/[id]
 export async function PATCH(request: NextRequest, { params }: Params) {
-  const { userId, orgId } = await auth();
+  const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { workspace } = await getCurrentWorkspace(userId);
 
   const { id } = await params;
   const body = await request.json() as {
@@ -44,7 +53,13 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   };
 
   const existing = await prisma.case.findFirst({
-    where: orgId ? { id, orgId } : { id, userId },
+    where: {
+      id,
+      OR: [
+        { workspaceId: workspace.id },
+        { userId, workspaceId: null },
+      ],
+    },
   });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -102,13 +117,20 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
 // DELETE /api/cases/[id]
 export async function DELETE(_req: NextRequest, { params }: Params) {
-  const { userId, orgId } = await auth();
+  const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { workspace } = await getCurrentWorkspace(userId);
 
   const { id } = await params;
 
   const existing = await prisma.case.findFirst({
-    where: orgId ? { id, orgId } : { id, userId },
+    where: {
+      id,
+      OR: [
+        { workspaceId: workspace.id },
+        { userId, workspaceId: null },
+      ],
+    },
   });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
