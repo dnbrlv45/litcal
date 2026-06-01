@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import CalendarView from "@/components/calendar/CalendarView";
 import { SignInButton, SignUpButton } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
+import Image from "next/image";
 
 export default async function HomePage() {
   const { userId } = await auth();
@@ -10,9 +11,7 @@ export default async function HomePage() {
     return (
       <div className="flex flex-col flex-1 items-center justify-center gap-8 text-center px-4 bg-slate-50">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-slate-950 flex items-center justify-center text-white font-bold text-xl mb-1">
-            V
-          </div>
+          <Image src="/litcal-logo.svg" alt="LitCal" width={56} height={56} className="mb-1 size-14 rounded-xl shadow-sm" priority />
           <div className="flex flex-col gap-1">
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">
               LitCal

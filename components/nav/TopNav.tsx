@@ -19,7 +19,7 @@ export default function TopNav() {
   return (
     <header className="h-14 border-b border-border bg-background flex items-center px-6 gap-8 shrink-0">
       <span className="text-sm font-semibold tracking-tight text-foreground whitespace-nowrap">
-        Litigation Calendar
+        LitCal
       </span>
 
       <nav className="flex items-center gap-1 flex-1">

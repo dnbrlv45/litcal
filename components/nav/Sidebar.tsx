@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { UserButton, OrganizationSwitcher } from "@clerk/nextjs";
 import {
@@ -47,9 +48,7 @@ export default function Sidebar() {
     <aside className="w-[248px] shrink-0 flex flex-col bg-white text-slate-950 h-full border-r border-slate-200/80">
       {/* Logo */}
       <div className="flex items-center gap-3 px-5 py-5 shrink-0">
-        <div className="w-9 h-9 rounded-lg bg-slate-950 flex items-center justify-center text-white font-bold text-lg shrink-0 shadow-sm">
-          V
-        </div>
+        <Image src="/litcal-logo.svg" alt="LitCal" width={36} height={36} className="size-9 shrink-0 rounded-lg shadow-sm" priority />
         <div className="leading-tight">
           <div className="text-[15px] font-extrabold tracking-[0.12em] text-slate-950 uppercase">LitCal</div>
         </div>

@@ -159,7 +159,7 @@ export async function createLitCalCalendar(accessToken: string): Promise<string>
     },
     body: JSON.stringify({
       summary: "LitCal",
-      description: "Litigation deadlines and events from Litigation Calendar",
+      description: "Litigation deadlines and events from LitCal",
     }),
   });
   if (!res.ok) {
