@@ -13,7 +13,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { EventType } from "@/lib/google-calendar";
-import { useEffect } from "react";
 
 const EVENT_TYPES: { value: EventType; label: string }[] = [
   { value: "HEARING",    label: "Hearing" },
