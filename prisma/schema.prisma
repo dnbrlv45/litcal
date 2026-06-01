@@ -167,23 +167,45 @@ model Case {
   @@index([status])
 }
 
-enum CaseStatus { ACTIVE CLOSED ARCHIVED PENDING }
-enum CaseType   { CIVIL CRIMINAL FAMILY BANKRUPTCY IMMIGRATION ADMINISTRATIVE OTHER }
+enum CaseStatus {
+  ACTIVE
+  CLOSED
+  ARCHIVED
+  PENDING
+}
+
+enum CaseType {
+  CIVIL
+  CRIMINAL
+  FAMILY
+  BANKRUPTCY
+  IMMIGRATION
+  ADMINISTRATIVE
+  OTHER
+}
+
+enum PartyRole {
+  PLAINTIFF
+  DEFENDANT
+  PETITIONER
+  RESPONDENT
+  COUNTERCLAIMANT
+  THIRD_PARTY
+  OTHER
+}
 
 model CaseParty {
-  id     String    @id @default(cuid())
-  caseId String
-  name   String
-  role   PartyRole
-  email  String?
-  phone  String?
+  id      String    @id @default(cuid())
+  caseId  String
+  name    String
+  role    PartyRole
+  email   String?
+  phone   String?
 
-  caseRef   Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  caseRef Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
 
   @@index([caseId])
 }
-
-enum PartyRole { PLAINTIFF DEFENDANT PETITIONER RESPONDENT COUNTERCLAIMANT THIRD_PARTY OTHER }
 
 // ─── FUTURE ───────────────────────────────────────────────────────────────────
 // model InboxItem { ... }
