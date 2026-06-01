@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
       where: orgId
         ? { orgId, startTime: timeFilter }
         : { userId, orgId: null, startTime: timeFilter },
-      include: { googleSync: true, case: { select: { id: true, title: true } } },
+      include: { googleSync: true, caseRef: { select: { id: true, title: true } } },
       orderBy: { startTime: "asc" },
     }),
     prisma.userCalendarConnection.findFirst({
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
       eventType: e.eventType,
       location: e.location,
       caseId: e.caseId,
-      caseTitle: e.case?.title ?? null,
+      caseTitle: e.caseRef?.title ?? null,
     })),
     connected: !!connection,
   });
