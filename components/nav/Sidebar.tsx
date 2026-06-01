@@ -84,14 +84,12 @@ export default function Sidebar() {
               href={href}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
                 isActive
-                  ? "bg-violet-50 text-violet-700 shadow-[inset_0_0_0_1px_rgba(124,58,237,0.08)]"
+                  ? "bg-teal-50 text-teal-800 shadow-[inset_0_0_0_1px_rgba(15,118,110,0.10)]"
                   : "text-slate-700 hover:text-slate-950 hover:bg-slate-100"
               }`}
             >
               <Icon className="w-4 h-4 shrink-0" />
               <span className="flex-1">{label}</span>
-              {label === "Tasks" && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500">12</span>}
-              {label === "Inbox" && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500">7</span>}
             </Link>
           );
         })}

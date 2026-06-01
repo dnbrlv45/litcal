@@ -31,7 +31,7 @@ export interface CalEvent {
 
 export const EVENT_TYPE_COLORS: Record<EventType, { bg: string; text: string; dot: string; border: string; ring: string }> = {
   HEARING:    { bg: "bg-orange-50",  text: "text-orange-800",  dot: "bg-orange-500",  border: "border-orange-300",  ring: "ring-orange-100" },
-  DEPOSITION: { bg: "bg-violet-50",  text: "text-violet-800",  dot: "bg-violet-500",  border: "border-violet-300",  ring: "ring-violet-100" },
+  DEPOSITION: { bg: "bg-cyan-50",    text: "text-cyan-800",    dot: "bg-cyan-500",    border: "border-cyan-300",    ring: "ring-cyan-100" },
   TRIAL:      { bg: "bg-emerald-50", text: "text-emerald-800", dot: "bg-emerald-500", border: "border-emerald-300", ring: "ring-emerald-100" },
   CONFERENCE: { bg: "bg-blue-50",    text: "text-blue-800",    dot: "bg-blue-500",    border: "border-blue-300",    ring: "ring-blue-100" },
   MEETING:    { bg: "bg-cyan-50",    text: "text-cyan-800",    dot: "bg-cyan-500",    border: "border-cyan-300",    ring: "ring-cyan-100" },

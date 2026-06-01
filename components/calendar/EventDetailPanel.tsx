@@ -184,7 +184,7 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
                     href={`https://maps.google.com/?q=${encodeURIComponent(event.location)}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-xs font-semibold text-violet-600 hover:text-violet-700"
+                    className="text-xs font-semibold text-teal-700 hover:text-teal-800"
                   >
                     Directions
                   </a>
@@ -199,7 +199,7 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
                   <Briefcase className="w-4 h-4 shrink-0 text-slate-500" />
                   <span className="flex-1">
                     <span className="block text-xs text-slate-500">Case</span>
-                    <span className="font-semibold text-slate-900 group-hover:text-violet-700">{event.caseTitle}</span>
+                    <span className="font-semibold text-slate-900 group-hover:text-teal-800">{event.caseTitle}</span>
                   </span>
                   <ChevronRight className="size-4 text-slate-400" />
                 </Link>
@@ -214,13 +214,13 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
               </div>
             )}
 
-            <div className="rounded-lg border border-violet-100 bg-violet-50/70 p-4">
+            <div className="rounded-lg border border-teal-100 bg-teal-50/70 p-4">
               <div className="mb-2 flex items-center justify-between">
                 <span className="flex items-center gap-2 text-sm font-semibold text-slate-950">
-                  <Sparkles className="size-4 text-violet-600" />
+                  <Sparkles className="size-4 text-teal-700" />
                   AI Summary
                 </span>
-                <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-700">Beta</span>
+                <span className="rounded-full bg-teal-100 px-2 py-0.5 text-[11px] font-semibold text-teal-800">Beta</span>
               </div>
               <p className="text-xs leading-5 text-slate-600">
                 Review upcoming obligations, court appearance details, and related case notes before this event.

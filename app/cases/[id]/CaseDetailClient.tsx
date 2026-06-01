@@ -175,7 +175,7 @@ export default function CaseDetailClient({ id }: { id: string }) {
               <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setError(null); }}>
                 <X className="w-3.5 h-3.5 mr-1" /> Cancel
               </Button>
-              <Button size="sm" onClick={handleSave} disabled={saving} className="bg-indigo-600 hover:bg-indigo-700 text-white border-0">
+              <Button size="sm" onClick={handleSave} disabled={saving} className="bg-teal-700 hover:bg-teal-800 text-white border-0">
                 <Check className="w-3.5 h-3.5 mr-1" /> {saving ? "Saving…" : "Save"}
               </Button>
             </>

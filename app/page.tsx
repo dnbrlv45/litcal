@@ -10,7 +10,7 @@ export default async function HomePage() {
     return (
       <div className="flex flex-col flex-1 items-center justify-center gap-8 text-center px-4 bg-slate-50">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold text-xl mb-1">
+          <div className="w-12 h-12 rounded-xl bg-slate-950 flex items-center justify-center text-white font-bold text-xl mb-1">
             V
           </div>
           <div className="flex flex-col gap-1">
@@ -27,7 +27,7 @@ export default async function HomePage() {
             <Button variant="outline" className="min-w-28">Sign In</Button>
           </SignInButton>
           <SignUpButton mode="modal">
-            <Button className="min-w-28 bg-indigo-600 hover:bg-indigo-700 text-white border-0">
+            <Button className="min-w-28 bg-teal-700 hover:bg-teal-800 text-white border-0">
               Get Started
             </Button>
           </SignUpButton>

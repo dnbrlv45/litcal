@@ -119,7 +119,7 @@ export default function CreateCaseModal({ open, onClose, onCreated }: Props) {
 
           <DialogFooter className="mt-1">
             <Button type="button" variant="ghost" onClick={() => { onClose(); reset(); }}>Cancel</Button>
-            <Button type="submit" disabled={saving} className="bg-indigo-600 hover:bg-indigo-700 text-white border-0">
+            <Button type="submit" disabled={saving} className="bg-teal-700 hover:bg-teal-800 text-white border-0">
               {saving ? "Creating…" : "Create Case"}
             </Button>
           </DialogFooter>

@@ -80,9 +80,9 @@ export default function WeekView({ date, today, events, onCellClick, onSelectDay
             <button
               key={i}
               onClick={() => onSelectDay(d)}
-              className={`flex-1 py-3 text-center border-l border-slate-100 hover:bg-slate-50 transition-colors ${isToday ? "bg-violet-50/70" : ""}`}
+              className={`flex-1 py-3 text-center border-l border-slate-100 hover:bg-slate-50 transition-colors ${isToday ? "bg-teal-50/80" : ""}`}
             >
-              <span className={`text-[11px] font-semibold tracking-wide block ${isToday ? "text-violet-600" : "text-slate-500"}`}>
+              <span className={`text-[11px] font-semibold tracking-wide block ${isToday ? "text-teal-700" : "text-slate-500"}`}>
                 {DAY_ABBR[d.getDay()]} {d.getDate()}
               </span>
             </button>
@@ -137,7 +137,7 @@ export default function WeekView({ date, today, events, onCellClick, onSelectDay
             return (
               <div
                 key={di}
-                className={`flex-1 relative border-l border-slate-100 cursor-pointer ${isToday ? "bg-violet-50/30" : ""}`}
+                className={`flex-1 relative border-l border-slate-100 cursor-pointer ${isToday ? "bg-teal-50/30" : ""}`}
                 onClick={(e) => handleColumnClick(day, e)}
               >
                 {/* Hour lines */}

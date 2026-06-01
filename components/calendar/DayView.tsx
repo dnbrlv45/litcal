@@ -66,9 +66,9 @@ export default function DayView({ date, today, events, onCellClick, onEventClick
   return (
     <div className="flex flex-col h-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       {/* Day header */}
-      <div className={`shrink-0 border-b border-slate-200 px-4 py-3 ${isToday ? "bg-violet-50/70" : "bg-white"}`}
+      <div className={`shrink-0 border-b border-slate-200 px-4 py-3 ${isToday ? "bg-teal-50/80" : "bg-white"}`}
         style={{ paddingLeft: "calc(64px + 1rem)" }}>
-        <span className={`text-sm font-semibold ${isToday ? "text-violet-700" : "text-slate-600"}`}>
+        <span className={`text-sm font-semibold ${isToday ? "text-teal-800" : "text-slate-600"}`}>
           {isToday
             ? "Today"
             : date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}

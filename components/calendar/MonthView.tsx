@@ -80,7 +80,7 @@ export default function MonthView({ date, today, events, onCellClick, onSelectDa
                       onClick={(e) => { e.stopPropagation(); onSelectDay(new Date(year, month, day)); }}
                       className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm self-start transition-colors ${
                         isToday(day)
-                          ? "bg-violet-600 text-white font-semibold shadow-sm"
+                          ? "bg-teal-700 text-white font-semibold shadow-sm"
                           : "text-slate-700 hover:bg-slate-100"
                       }`}
                     >

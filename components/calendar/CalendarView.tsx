@@ -144,7 +144,7 @@ export default function CalendarView() {
         <div className="relative w-full max-w-[680px]">
           <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
           <input
-            className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-14 text-sm text-slate-700 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-violet-300 focus:ring-4 focus:ring-violet-100"
+            className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-14 text-sm text-slate-700 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
             placeholder="Search cases, events, deadlines... or ask AI"
           />
           <span className="absolute right-3 top-1/2 inline-flex -translate-y-1/2 items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-1 text-[11px] font-medium text-slate-400">
@@ -154,7 +154,7 @@ export default function CalendarView() {
         <div className="flex items-center gap-3 text-slate-700">
           <button className="relative grid size-9 place-items-center rounded-lg hover:bg-slate-100">
             <Bell className="size-4" />
-            <span className="absolute right-1.5 top-1.5 grid size-4 place-items-center rounded-full bg-violet-600 text-[10px] font-semibold text-white">3</span>
+            <span className="absolute right-1.5 top-1.5 grid size-4 place-items-center rounded-full bg-teal-700 text-[10px] font-semibold text-white">3</span>
           </button>
           <button className="grid size-9 place-items-center rounded-lg hover:bg-slate-100">
             <CalendarDays className="size-4" />
@@ -261,7 +261,7 @@ export default function CalendarView() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <FileText className="size-5 text-violet-600" />
+                <FileText className="size-5 text-teal-700" />
                 <div>
                   <p className="font-semibold text-slate-800">New court order received</p>
                   <p className="text-slate-500">Smith v. Jones</p>
@@ -272,7 +272,7 @@ export default function CalendarView() {
                   <p className="font-semibold text-slate-800">Calendar conflict detected</p>
                   <p className="text-slate-500">Thursday, June 12 at 10:00 AM</p>
                 </div>
-                <button className="font-semibold text-violet-600 hover:text-violet-700">View All</button>
+                <button className="font-semibold text-teal-700 hover:text-teal-800">View All</button>
               </div>
             </div>
           </div>

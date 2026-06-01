@@ -72,7 +72,7 @@ export default function CasesClient() {
           <h1 className="text-xl font-semibold">Cases</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{cases.length} total</p>
         </div>
-        <Button onClick={() => setModalOpen(true)} className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white border-0">
+        <Button onClick={() => setModalOpen(true)} className="gap-2 bg-teal-700 hover:bg-teal-800 text-white border-0">
           <Plus className="w-4 h-4" />
           New Case
         </Button>
@@ -102,7 +102,7 @@ export default function CasesClient() {
               <p className="font-medium text-sm">No cases yet</p>
               <p className="text-xs text-muted-foreground mt-0.5">Create your first case to start tracking events and deadlines.</p>
             </div>
-            <Button size="sm" onClick={() => setModalOpen(true)} className="mt-1 bg-indigo-600 hover:bg-indigo-700 text-white border-0">
+            <Button size="sm" onClick={() => setModalOpen(true)} className="mt-1 bg-teal-700 hover:bg-teal-800 text-white border-0">
               New Case
             </Button>
           </div>
