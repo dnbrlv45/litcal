@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getAccessToken, deleteGoogleEvent } from "@/lib/google-calendar";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -15,9 +16,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
     where: orgId ? { id, orgId } : { id, userId },
     include: {
       parties: true,
-      events: {
-        orderBy: { startTime: "asc" },
-      },
+      events: { orderBy: { startTime: "asc" } },
     },
   });
 
@@ -51,6 +50,10 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
   const validTypes = ["CIVIL","CRIMINAL","FAMILY","BANKRUPTCY","IMMIGRATION","ADMINISTRATIVE","OTHER"];
   const validStatuses = ["ACTIVE","CLOSED","ARCHIVED","PENDING"];
+  const closingStatuses = ["CLOSED", "ARCHIVED"];
+
+  const newStatus = body.status && validStatuses.includes(body.status) ? body.status : null;
+  const isClosing = newStatus && closingStatuses.includes(newStatus) && !closingStatuses.includes(existing.status);
 
   const updated = await prisma.case.update({
     where: { id },
@@ -58,7 +61,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       ...(body.title !== undefined && { title: body.title.trim() }),
       ...(body.caseNumber !== undefined && { caseNumber: body.caseNumber?.trim() || null }),
       ...(body.caseType && validTypes.includes(body.caseType) && { caseType: body.caseType as never }),
-      ...(body.status && validStatuses.includes(body.status) && { status: body.status as never }),
+      ...(newStatus && { status: newStatus as never }),
       ...(body.court !== undefined && { court: body.court?.trim() || null }),
       ...(body.judge !== undefined && { judge: body.judge?.trim() || null }),
       ...(body.jurisdiction !== undefined && { jurisdiction: body.jurisdiction?.trim() || null }),
@@ -68,6 +71,31 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     },
     include: { parties: true, _count: { select: { events: true } } },
   });
+
+  // When closing/archiving, delete all associated events from DB and Google Calendar
+  if (isClosing) {
+    const events = await prisma.event.findMany({
+      where: { caseId: id },
+      include: { googleSync: true },
+    });
+
+    if (events.length > 0) {
+      const connection = await prisma.userCalendarConnection.findFirst({
+        where: { userId, provider: "GOOGLE", isActive: true },
+      });
+
+      for (const ev of events) {
+        if (ev.googleSync && connection) {
+          try {
+            const accessToken = await getAccessToken(connection.refreshToken);
+            await deleteGoogleEvent(accessToken, ev.googleSync.googleCalendarId, ev.googleSync.googleEventId);
+          } catch { /* mirror deletion best-effort */ }
+        }
+      }
+
+      await prisma.event.deleteMany({ where: { caseId: id } });
+    }
+  }
 
   return NextResponse.json({ case: updated });
 }
@@ -84,6 +112,26 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  await prisma.case.delete({ where: { id } });
+  // Delete events from Google Calendar before deleting the case
+  const events = await prisma.event.findMany({
+    where: { caseId: id },
+    include: { googleSync: true },
+  });
+
+  if (events.length > 0) {
+    const connection = await prisma.userCalendarConnection.findFirst({
+      where: { userId, provider: "GOOGLE", isActive: true },
+    });
+    for (const ev of events) {
+      if (ev.googleSync && connection) {
+        try {
+          const accessToken = await getAccessToken(connection.refreshToken);
+          await deleteGoogleEvent(accessToken, ev.googleSync.googleCalendarId, ev.googleSync.googleEventId);
+        } catch { /* best-effort */ }
+      }
+    }
+  }
+
+  await prisma.case.delete({ where: { id } }); // cascades to events + parties
   return NextResponse.json({ ok: true });
 }

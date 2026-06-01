@@ -63,6 +63,7 @@ export async function PATCH(
     end?: string;
     eventType?: string;
     location?: string;
+    caseId?: string | null;
   };
 
   const event = await prisma.event.findFirst({ where: orgId ? { id, orgId } : { id, userId } });
@@ -80,6 +81,7 @@ export async function PATCH(
       ...(body.end !== undefined && { endTime: new Date(body.end) }),
       ...(safeEventType !== undefined && { eventType: safeEventType }),
       ...(body.location !== undefined && { location: body.location || null }),
+      ...("caseId" in body && { caseId: body.caseId || null }),
     },
   });
 

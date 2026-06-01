@@ -37,6 +37,8 @@ function toTimeInputValue(d: Date) {
   return d.toTimeString().slice(0, 5);
 }
 
+interface CaseOption { id: string; title: string; caseNumber: string | null; }
+
 export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated }: Props) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState("");
@@ -46,9 +48,15 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
   const [endTime, setEndTime] = useState("");
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
+  const [caseId, setCaseId] = useState("");
+  const [cases, setCases] = useState<CaseOption[]>([]);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/cases").then((r) => r.json()).then((d) => setCases(d.cases ?? [])).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (event) {
@@ -66,6 +74,7 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
     setEndTime(toTimeInputValue(event.end));
     setLocation(event.location ?? "");
     setDescription(event.description ?? "");
+    setCaseId(event.caseId ?? "");
     setError(null);
     setEditing(true);
   }
@@ -97,7 +106,7 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
       const res = await fetch(`/api/calendar/events/${event.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, description, start: startISO, end: endISO, eventType, location }),
+        body: JSON.stringify({ title, description, start: startISO, end: endISO, eventType, location, caseId: caseId || null }),
       });
       if (!res.ok) throw new Error();
       onUpdated();
@@ -224,6 +233,25 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
                 ))}
               </select>
             </div>
+
+            {cases.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="ep-case">Case</Label>
+                <select
+                  id="ep-case"
+                  value={caseId}
+                  onChange={(e) => setCaseId(e.target.value)}
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="">— No case —</option>
+                  {cases.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.title}{c.caseNumber ? ` (#${c.caseNumber})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="ep-date">Date</Label>
