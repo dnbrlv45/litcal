@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
   ]);
 
   return NextResponse.json({
-    events: events.map((e) => ({
+    events: events.map((e: (typeof events)[number]) => ({
       id: e.id,
       title: e.title,
       description: e.description,
