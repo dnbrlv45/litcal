@@ -25,6 +25,8 @@ export interface CalEvent {
   allDay: boolean;
   eventType: EventType;
   location?: string;
+  caseId?: string;
+  caseTitle?: string;
 }
 
 export const EVENT_TYPE_COLORS: Record<EventType, { bg: string; text: string; dot: string }> = {

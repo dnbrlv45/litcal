@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
       where: orgId
         ? { orgId, startTime: timeFilter }
         : { userId, orgId: null, startTime: timeFilter },
-      include: { googleSync: true },
+      include: { googleSync: true, case: { select: { id: true, title: true } } },
       orderBy: { startTime: "asc" },
     }),
     prisma.userCalendarConnection.findFirst({
@@ -63,6 +63,8 @@ export async function GET(request: NextRequest) {
       allDay: e.allDay,
       eventType: e.eventType,
       location: e.location,
+      caseId: e.caseId,
+      caseTitle: e.case?.title ?? null,
     })),
     connected: !!connection,
   });
@@ -74,7 +76,7 @@ export async function POST(request: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json();
-  const { title, description, start, end, timeZone, eventType, location } = body as {
+  const { title, description, start, end, timeZone, eventType, location, caseId } = body as {
     title: string;
     description?: string;
     start: string;
@@ -82,6 +84,7 @@ export async function POST(request: NextRequest) {
     timeZone: string;
     eventType?: string;
     location?: string;
+    caseId?: string;
   };
 
   if (!title?.trim() || !start || !end)
@@ -104,6 +107,7 @@ export async function POST(request: NextRequest) {
       timeZone: timeZone ?? "UTC",
       eventType: safeEventType,
       location: location || null,
+      caseId: caseId || null,
     },
   });
 
@@ -161,6 +165,7 @@ export async function POST(request: NextRequest) {
       allDay: event.allDay,
       eventType: event.eventType,
       location: event.location,
+      caseId: event.caseId,
     },
     googlePush,
   });

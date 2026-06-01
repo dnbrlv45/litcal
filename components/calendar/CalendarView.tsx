@@ -81,6 +81,8 @@ export default function CalendarView() {
           start: new Date(e.start),
           end: new Date(e.end),
           eventType: e.eventType ?? "OTHER",
+          caseId: e.caseId ?? undefined,
+          caseTitle: e.caseTitle ?? undefined,
         }))
       );
     } catch { /* silently fail */ }

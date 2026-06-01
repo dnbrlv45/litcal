@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { EventType } from "@/lib/google-calendar";
+import { useEffect } from "react";
 
 const EVENT_TYPES: { value: EventType; label: string }[] = [
   { value: "HEARING",    label: "Hearing" },
@@ -45,6 +46,8 @@ function addHour(d: Date) {
   return new Date(d.getTime() + 60 * 60 * 1000);
 }
 
+interface CaseOption { id: string; title: string; caseNumber: string | null; }
+
 export default function EventModal({ open, onClose, defaultStart, googleConnected, onCreated }: Props) {
   const now = defaultStart ?? new Date();
   const [title, setTitle] = useState("");
@@ -54,8 +57,18 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
   const [endTime, setEndTime] = useState(toTimeInputValue(addHour(now)));
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
+  const [caseId, setCaseId] = useState("");
+  const [cases, setCases] = useState<CaseOption[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fetchedRef = useRef(false);
+
+  useEffect(() => {
+    if (!fetchedRef.current) {
+      fetchedRef.current = true;
+      fetch("/api/cases").then((r) => r.json()).then((d) => setCases(d.cases ?? [])).catch(() => {});
+    }
+  }, []);
 
   useEffect(() => {
     if (open) {
@@ -67,6 +80,7 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
       setEndTime(toTimeInputValue(addHour(base)));
       setLocation("");
       setDescription("");
+      setCaseId("");
       setError(null);
     }
   }, [open, defaultStart]);
@@ -91,7 +105,7 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
       const res = await fetch("/api/calendar/events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, description, start: startISO, end: endISO, timeZone, eventType, location }),
+        body: JSON.stringify({ title, description, start: startISO, end: endISO, timeZone, eventType, location, caseId: caseId || undefined }),
       });
       if (!res.ok) { setError("Failed to create event. Please try again."); return; }
       onCreated();
@@ -143,6 +157,25 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
               ))}
             </select>
           </div>
+
+          {cases.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="event-case">Case <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <select
+                id="event-case"
+                value={caseId}
+                onChange={(e) => setCaseId(e.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="">— No case —</option>
+                {cases.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.title}{c.caseNumber ? ` (#${c.caseNumber})` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="event-date">Date</Label>

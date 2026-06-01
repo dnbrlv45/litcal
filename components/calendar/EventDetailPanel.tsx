@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, MapPin, Calendar, Clock, Pencil, Trash2, Check } from "lucide-react";
+import { X, MapPin, Calendar, Clock, Pencil, Trash2, Check, Briefcase } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import Link from "next/link";
 import type { CalEvent, EventType } from "@/lib/google-calendar";
 import { EVENT_TYPE_COLORS } from "@/lib/google-calendar";
 
@@ -180,6 +181,16 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
                     Directions
                   </a>
                 </div>
+              </div>
+            )}
+
+            {/* Case link */}
+            {event.caseId && event.caseTitle && (
+              <div className="flex items-center gap-2.5 text-sm">
+                <Briefcase className="w-4 h-4 shrink-0 text-muted-foreground" />
+                <Link href={`/cases/${event.caseId}`} className="text-indigo-600 hover:underline font-medium truncate">
+                  {event.caseTitle}
+                </Link>
               </div>
             )}
 
