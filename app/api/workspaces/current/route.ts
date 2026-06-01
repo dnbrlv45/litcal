@@ -22,8 +22,12 @@ export async function GET() {
     },
     orderBy: [{ role: "asc" }, { createdAt: "asc" }],
   });
+  const invitations = await prisma.workspaceInvitation.findMany({
+    where: { workspaceId: workspace.id, acceptedAt: null },
+    orderBy: { createdAt: "desc" },
+  });
 
-  return NextResponse.json({ workspace, membership, members });
+  return NextResponse.json({ workspace, membership, members, invitations });
 }
 
 export async function PATCH(request: NextRequest) {

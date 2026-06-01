@@ -20,10 +20,22 @@ export async function POST(request: NextRequest) {
 
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user) {
-    return NextResponse.json(
-      { error: "That person needs to sign in to LitCal once before you can add them to a team." },
-      { status: 404 }
-    );
+    const invitation = await prisma.workspaceInvitation.upsert({
+      where: { workspaceId_email: { workspaceId: workspace.id, email } },
+      create: {
+        workspaceId: workspace.id,
+        email,
+        role,
+        invitedBy: userId,
+      },
+      update: {
+        role,
+        invitedBy: userId,
+        acceptedAt: null,
+      },
+    });
+
+    return NextResponse.json({ invitation }, { status: 202 });
   }
 
   const existingMember = await prisma.workspaceMember.findUnique({

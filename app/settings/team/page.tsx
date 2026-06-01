@@ -23,6 +23,10 @@ export default async function TeamPage() {
     },
     orderBy: [{ role: "asc" }, { createdAt: "asc" }],
   });
+  const invitations = await prisma.workspaceInvitation.findMany({
+    where: { workspaceId: workspace.id, acceptedAt: null },
+    orderBy: { createdAt: "desc" },
+  });
 
   return (
     <TeamClient
@@ -31,6 +35,12 @@ export default async function TeamPage() {
         id: member.id,
         role: member.role,
         user: member.user,
+      }))}
+      initialInvitations={invitations.map((invitation) => ({
+        id: invitation.id,
+        email: invitation.email,
+        role: invitation.role,
+        createdAt: invitation.createdAt.toISOString(),
       }))}
       currentRole={membership.role}
     />

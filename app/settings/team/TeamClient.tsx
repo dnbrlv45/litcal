@@ -24,9 +24,17 @@ interface Workspace {
   name: string;
 }
 
+interface TeamInvitation {
+  id: string;
+  email: string;
+  role: Role;
+  createdAt: string;
+}
+
 interface Props {
   initialWorkspace: Workspace;
   initialMembers: TeamMember[];
+  initialInvitations: TeamInvitation[];
   currentRole: Role;
 }
 
@@ -35,9 +43,10 @@ function displayName(member: TeamMember) {
   return name || member.user.email;
 }
 
-export default function TeamClient({ initialWorkspace, initialMembers, currentRole }: Props) {
+export default function TeamClient({ initialWorkspace, initialMembers, initialInvitations, currentRole }: Props) {
   const [workspace, setWorkspace] = useState(initialWorkspace);
   const [members, setMembers] = useState(initialMembers);
+  const [invitations, setInvitations] = useState(initialInvitations);
   const [name, setName] = useState(initialWorkspace.name);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Role>("MEMBER");
@@ -83,13 +92,22 @@ export default function TeamClient({ initialWorkspace, initialMembers, currentRo
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to add member.");
-      setMembers((current) => {
-        const withoutExisting = current.filter((member) => member.id !== data.member.id);
-        return [...withoutExisting, data.member];
-      });
+      if (data.member) {
+        setMembers((current) => {
+          const withoutExisting = current.filter((member) => member.id !== data.member.id);
+          return [...withoutExisting, data.member];
+        });
+        setMessage("Member added.");
+      }
+      if (data.invitation) {
+        setInvitations((current) => {
+          const withoutExisting = current.filter((invitation) => invitation.id !== data.invitation.id);
+          return [data.invitation, ...withoutExisting];
+        });
+        setMessage("Invitation created. They will join this team automatically after signing in with that email.");
+      }
       setEmail("");
       setRole("MEMBER");
-      setMessage("Member added.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add member.");
     } finally {
@@ -137,7 +155,10 @@ export default function TeamClient({ initialWorkspace, initialMembers, currentRo
             <Users className="size-5 text-teal-700" />
             <div>
               <h2 className="font-semibold">Members</h2>
-              <p className="text-sm text-muted-foreground">{workspace.name} has {members.length} member{members.length === 1 ? "" : "s"}.</p>
+              <p className="text-sm text-muted-foreground">
+                {workspace.name} has {members.length} member{members.length === 1 ? "" : "s"}
+                {invitations.length > 0 ? ` and ${invitations.length} pending invite${invitations.length === 1 ? "" : "s"}.` : "."}
+              </p>
             </div>
           </div>
 
@@ -155,14 +176,35 @@ export default function TeamClient({ initialWorkspace, initialMembers, currentRo
               </div>
             ))}
           </div>
+
+          {invitations.length > 0 && (
+            <div className="mt-4">
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">Pending invites</h3>
+              <div className="divide-y divide-border rounded-lg border border-border">
+                {invitations.map((invitation) => (
+                  <div key={invitation.id} className="flex items-center justify-between gap-4 px-4 py-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{invitation.email}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        Invited {new Date(invitation.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                      {invitation.role.toLowerCase()} pending
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
 
         <section className="rounded-xl border border-border bg-card p-5">
           <div className="mb-4 flex items-center gap-3">
             <Mail className="size-5 text-teal-700" />
             <div>
-              <h2 className="font-semibold">Add Existing User</h2>
-              <p className="text-sm text-muted-foreground">The user must sign in to LitCal once before they can be added.</p>
+              <h2 className="font-semibold">Invite Team Member</h2>
+              <p className="text-sm text-muted-foreground">Add an existing user or create a pending invite for someone new.</p>
             </div>
           </div>
           <form onSubmit={addMember} className="grid max-w-2xl grid-cols-[1fr_140px_auto] items-end gap-3">

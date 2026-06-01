@@ -28,6 +28,30 @@ export async function ensureUser(userId: string) {
 export async function getCurrentWorkspace(userId: string) {
   const user = await ensureUser(userId);
 
+  const pendingInvite = await prisma.workspaceInvitation.findFirst({
+    where: {
+      email: user.email.toLowerCase(),
+      acceptedAt: null,
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  if (pendingInvite) {
+    await prisma.workspaceMember.upsert({
+      where: { workspaceId_userId: { workspaceId: pendingInvite.workspaceId, userId } },
+      create: {
+        workspaceId: pendingInvite.workspaceId,
+        userId,
+        role: pendingInvite.role,
+      },
+      update: {},
+    });
+    await prisma.workspaceInvitation.update({
+      where: { id: pendingInvite.id },
+      data: { acceptedAt: new Date() },
+    });
+  }
+
   const membership = await prisma.workspaceMember.findFirst({
     where: { userId },
     include: {

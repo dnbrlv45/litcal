@@ -37,6 +37,7 @@ model Workspace {
   updatedAt DateTime @updatedAt
 
   members   WorkspaceMember[]
+  invitations WorkspaceInvitation[]
   cases     Case[]
   events    Event[]
 
@@ -56,6 +57,22 @@ model WorkspaceMember {
 
   @@unique([workspaceId, userId])
   @@index([userId])
+}
+
+model WorkspaceInvitation {
+  id          String        @id @default(cuid())
+  workspaceId String
+  email       String
+  role        WorkspaceRole @default(MEMBER)
+  invitedBy   String
+  acceptedAt  DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, email])
+  @@index([email])
 }
 
 enum WorkspaceRole {
