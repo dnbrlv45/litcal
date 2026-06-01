@@ -5,7 +5,7 @@ import type { CalEvent } from "@/lib/google-calendar";
 import { EVENT_TYPE_COLORS } from "@/lib/google-calendar";
 
 const ROW_HEIGHT = 64;
-const HOURS = Array.from({ length: 10 }, (_, i) => i + 8);
+const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
 function formatHour(h: number) {
   if (h === 0) return "12 AM";

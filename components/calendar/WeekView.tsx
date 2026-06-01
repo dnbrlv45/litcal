@@ -6,7 +6,7 @@ import { EVENT_TYPE_COLORS } from "@/lib/google-calendar";
 
 const ROW_HEIGHT = 64;
 const DAY_ABBR = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-const HOURS = Array.from({ length: 10 }, (_, i) => i + 8);
+const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
 function formatHour(h: number) {
   if (h === 0) return "12 AM";
@@ -54,7 +54,7 @@ export default function WeekView({ date, today, events, onCellClick, onSelectDay
   const allDayEvents = events.filter((e) => e.allDay);
 
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+    if (scrollRef.current) scrollRef.current.scrollTop = 7 * ROW_HEIGHT;
   }, []);
 
   function handleColumnClick(day: Date, e: React.MouseEvent<HTMLDivElement>) {

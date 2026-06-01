@@ -9,12 +9,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Command,
-  FileText,
   Plus,
   Search,
   SlidersHorizontal,
-  Sparkles,
-  TriangleAlert,
 } from "lucide-react";
 import { UserButton } from "@clerk/nextjs";
 import MonthView from "./MonthView";
@@ -154,7 +151,6 @@ export default function CalendarView() {
         <div className="flex items-center gap-3 text-slate-700">
           <button className="relative grid size-9 place-items-center rounded-lg hover:bg-slate-100">
             <Bell className="size-4" />
-            <span className="absolute right-1.5 top-1.5 grid size-4 place-items-center rounded-full bg-teal-700 text-[10px] font-semibold text-white">3</span>
           </button>
           <button className="grid size-9 place-items-center rounded-lg hover:bg-slate-100">
             <CalendarDays className="size-4" />
@@ -240,42 +236,6 @@ export default function CalendarView() {
               onEventClick={(ev) => setSelectedEvent(ev)}
             />
           )}
-          <div className="hidden min-h-[72px] shrink-0 items-center gap-5 rounded-xl border border-slate-200 bg-white px-6 shadow-sm xl:flex">
-            <div className="flex min-w-48 items-center gap-3 border-r border-slate-200 pr-6">
-              <Sparkles className="size-5 text-slate-950" />
-              <span className="text-sm font-semibold text-slate-950">4 Items Need Attention</span>
-            </div>
-            <div className="grid flex-1 grid-cols-4 gap-4 text-xs">
-              <div className="flex items-center gap-3">
-                <TriangleAlert className="size-5 text-rose-500" />
-                <div>
-                  <p className="font-semibold text-slate-800">Remote appearance due tomorrow</p>
-                  <p className="text-slate-500">Lopez v. Progressive</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="grid size-5 place-items-center rounded-full border border-orange-400 text-orange-500">!</span>
-                <div>
-                  <p className="font-semibold text-slate-800">Discovery responses due in 3 days</p>
-                  <p className="text-slate-500">Garcia v. State Farm</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <FileText className="size-5 text-teal-700" />
-                <div>
-                  <p className="font-semibold text-slate-800">New court order received</p>
-                  <p className="text-slate-500">Smith v. Jones</p>
-                </div>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-slate-800">Calendar conflict detected</p>
-                  <p className="text-slate-500">Thursday, June 12 at 10:00 AM</p>
-                </div>
-                <button className="font-semibold text-teal-700 hover:text-teal-800">View All</button>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Right detail panel */}
