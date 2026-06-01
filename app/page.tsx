@@ -15,7 +15,7 @@ export default async function HomePage() {
           </div>
           <div className="flex flex-col gap-1">
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-              Veritas Litigation
+              LitCal
             </h1>
             <p className="text-sm text-slate-500 max-w-xs">
               Calendar-first litigation management. Track deadlines, hearings, and case events — all in one place.

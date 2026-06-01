@@ -51,8 +51,7 @@ export default function Sidebar() {
           V
         </div>
         <div className="leading-tight">
-          <div className="text-[13px] font-extrabold tracking-[0.24em] text-slate-950 uppercase">Veritas</div>
-          <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.32em]">Litigation</div>
+          <div className="text-[15px] font-extrabold tracking-[0.12em] text-slate-950 uppercase">LitCal</div>
         </div>
       </div>
 

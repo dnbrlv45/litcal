@@ -126,7 +126,7 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 py-2">
           {!googleConnected && (
             <div className="rounded-md bg-muted border border-border px-3 py-2 text-xs text-muted-foreground">
-              Events are saved to Veritas Litigation.{" "}
+              Events are saved to LitCal.{" "}
               <a href="/settings/calendar" className="underline">Connect Google Calendar</a>{" "}
               to also push them there.
             </div>
