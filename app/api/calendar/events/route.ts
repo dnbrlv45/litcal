@@ -28,7 +28,7 @@ async function ensureUser(userId: string) {
 
 // GET /api/calendar/events?start=ISO&end=ISO
 export async function GET(request: NextRequest) {
-  const { userId } = await auth();
+  const { userId, orgId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
@@ -38,12 +38,13 @@ export async function GET(request: NextRequest) {
 
   await ensureUser(userId);
 
+  const timeFilter = { gte: new Date(start), lte: new Date(end) };
+
   const [events, connection] = await Promise.all([
     prisma.event.findMany({
-      where: {
-        userId,
-        startTime: { gte: new Date(start), lte: new Date(end) },
-      },
+      where: orgId
+        ? { orgId, startTime: timeFilter }
+        : { userId, orgId: null, startTime: timeFilter },
       include: { googleSync: true },
       orderBy: { startTime: "asc" },
     }),
@@ -69,7 +70,7 @@ export async function GET(request: NextRequest) {
 
 // POST /api/calendar/events  body: { title, description?, start, end, timeZone }
 export async function POST(request: NextRequest) {
-  const { userId } = await auth();
+  const { userId, orgId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json();
@@ -95,6 +96,7 @@ export async function POST(request: NextRequest) {
   const event = await prisma.event.create({
     data: {
       userId,
+      orgId: orgId ?? null,
       title: title.trim(),
       description: description || null,
       startTime: new Date(start),

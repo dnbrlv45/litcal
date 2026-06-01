@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { UserButton } from "@clerk/nextjs";
+import { UserButton, OrganizationSwitcher } from "@clerk/nextjs";
 import {
   CalendarDays,
   Briefcase,
@@ -12,6 +12,7 @@ import {
   Users,
   BarChart2,
   Settings,
+  Building2,
   ChevronLeft,
 } from "lucide-react";
 import { EVENT_TYPE_COLORS, EventType } from "@/lib/google-calendar";
@@ -23,8 +24,9 @@ const NAV_ITEMS = [
   { label: "Inbox",     href: "/inbox",     icon: Inbox },
   { label: "Documents", href: "/documents", icon: FileText },
   { label: "Contacts",  href: "/contacts",  icon: Users },
-  { label: "Reports",   href: "/reports",   icon: BarChart2 },
-  { label: "Settings",  href: "/settings",  icon: Settings },
+  { label: "Reports",   href: "/reports",      icon: BarChart2 },
+  { label: "Team",      href: "/settings/team", icon: Building2 },
+  { label: "Settings",  href: "/settings",     icon: Settings },
 ];
 
 const MY_CALENDARS: { label: string; type: EventType }[] = [
@@ -43,7 +45,7 @@ export default function Sidebar() {
   return (
     <aside className="w-56 shrink-0 flex flex-col bg-slate-900 text-slate-100 h-full">
       {/* Logo */}
-      <div className="flex items-center gap-2.5 px-5 py-5 border-b border-slate-700/60">
+      <div className="flex items-center gap-2.5 px-5 py-4 border-b border-slate-700/60 shrink-0">
         <div className="w-7 h-7 rounded-md bg-indigo-500 flex items-center justify-center text-white font-bold text-sm shrink-0">
           V
         </div>
@@ -51,6 +53,24 @@ export default function Sidebar() {
           <div className="text-xs font-bold tracking-wide text-white uppercase">Veritas</div>
           <div className="text-[10px] text-slate-400 uppercase tracking-widest">Litigation</div>
         </div>
+      </div>
+
+      {/* Org switcher */}
+      <div className="px-3 py-2.5 border-b border-slate-700/60 shrink-0">
+        <OrganizationSwitcher
+          hidePersonal={false}
+          afterCreateOrganizationUrl="/"
+          afterSelectOrganizationUrl="/"
+          afterLeaveOrganizationUrl="/"
+          appearance={{
+            elements: {
+              rootBox: "w-full",
+              organizationSwitcherTrigger:
+                "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm text-slate-200 hover:bg-slate-800 transition-colors",
+              organizationSwitcherTriggerIcon: "text-slate-400",
+            },
+          }}
+        />
       </div>
 
       {/* Nav */}

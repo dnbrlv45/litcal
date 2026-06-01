@@ -8,14 +8,14 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { userId } = await auth();
+  const { userId, orgId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
 
   // Fetch event with its Google sync record before deleting
   const event = await prisma.event.findFirst({
-    where: { id, userId },
+    where: orgId ? { id, orgId } : { id, userId },
     include: { googleSync: true },
   });
 
@@ -51,10 +51,11 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { userId } = await auth();
+  const { userId, orgId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
+
   const body = await request.json() as {
     title?: string;
     description?: string;
@@ -64,7 +65,7 @@ export async function PATCH(
     location?: string;
   };
 
-  const event = await prisma.event.findFirst({ where: { id, userId } });
+  const event = await prisma.event.findFirst({ where: orgId ? { id, orgId } : { id, userId } });
   if (!event) return NextResponse.json({ error: "Event not found" }, { status: 404 });
 
   const validTypes = ["DEADLINE","HEARING","DEPOSITION","TRIAL","CONFERENCE","MEETING","REMINDER","OTHER"];

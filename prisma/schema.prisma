@@ -68,6 +68,8 @@ model Event {
   timeZone    String      @default("UTC")
   allDay      Boolean     @default(false)
 
+  orgId       String?     // Clerk org ID — null for personal events
+
   eventType   EventType   @default(OTHER)
   status      EventStatus @default(SCHEDULED)
   location    String?
@@ -80,6 +82,7 @@ model Event {
 
   @@index([userId, startTime])
   @@index([userId, startTime, endTime])
+  @@index([orgId, startTime])
 }
 
 enum EventType {
