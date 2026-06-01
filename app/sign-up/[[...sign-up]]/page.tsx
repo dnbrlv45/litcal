@@ -1,9 +1,5 @@
-import { SignUp } from "@clerk/nextjs";
+import LitCalGoogleAuth from "@/components/auth/LitCalGoogleAuth";
 
 export default function SignUpPage() {
-  return (
-    <div className="flex min-h-screen items-center justify-center">
-      <SignUp />
-    </div>
-  );
+  return <LitCalGoogleAuth mode="sign-up" />;
 }

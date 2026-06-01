@@ -1,8 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import CalendarView from "@/components/calendar/CalendarView";
-import { SignInButton, SignUpButton } from "@clerk/nextjs";
-import { Button } from "@/components/ui/button";
 import Image from "next/image";
+import Link from "next/link";
 
 export default async function HomePage() {
   const { userId } = await auth();
@@ -22,14 +21,12 @@ export default async function HomePage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <SignInButton mode="modal">
-            <Button variant="outline" className="min-w-28">Sign In</Button>
-          </SignInButton>
-          <SignUpButton mode="modal">
-            <Button className="min-w-28 bg-teal-700 hover:bg-teal-800 text-white border-0">
-              Get Started
-            </Button>
-          </SignUpButton>
+          <Link href="/sign-in" className="inline-flex h-8 min-w-28 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 hover:bg-slate-50">
+            Sign In
+          </Link>
+          <Link href="/sign-up" className="inline-flex h-8 min-w-28 items-center justify-center rounded-lg bg-teal-700 px-3 text-sm font-medium text-white hover:bg-teal-800">
+            Get Started
+          </Link>
         </div>
       </div>
     );
