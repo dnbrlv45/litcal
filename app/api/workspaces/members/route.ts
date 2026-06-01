@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
             },
           },
         },
-      },
+      });
 
   return NextResponse.json({ member }, { status: 201 });
 }
