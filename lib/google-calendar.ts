@@ -47,6 +47,7 @@ export function mapGoogleEvent(e: GoogleCalEvent): CalEvent {
     start: new Date(e.start.dateTime ?? e.start.date ?? ""),
     end: new Date(e.end.dateTime ?? e.end.date ?? ""),
     allDay,
+    eventType: "OTHER",
   };
 }
 
