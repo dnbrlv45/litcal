@@ -60,6 +60,8 @@ export async function GET(request: NextRequest) {
       start: e.startTime.toISOString(),
       end: e.endTime.toISOString(),
       allDay: e.allDay,
+      eventType: e.eventType,
+      location: e.location,
     })),
     connected: !!connection,
   });
@@ -71,18 +73,23 @@ export async function POST(request: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json();
-  const { title, description, start, end, timeZone } = body as {
+  const { title, description, start, end, timeZone, eventType, location } = body as {
     title: string;
     description?: string;
     start: string;
     end: string;
     timeZone: string;
+    eventType?: string;
+    location?: string;
   };
 
   if (!title?.trim() || !start || !end)
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
 
   await ensureUser(userId);
+
+  const validTypes = ["DEADLINE","HEARING","DEPOSITION","TRIAL","CONFERENCE","MEETING","REMINDER","OTHER"];
+  const safeEventType = validTypes.includes(eventType ?? "") ? eventType as never : "OTHER";
 
   // Create the event in Supabase (source of truth)
   const event = await prisma.event.create({
@@ -93,6 +100,8 @@ export async function POST(request: NextRequest) {
       startTime: new Date(start),
       endTime: new Date(end),
       timeZone: timeZone ?? "UTC",
+      eventType: safeEventType,
+      location: location || null,
     },
   });
 
@@ -148,6 +157,8 @@ export async function POST(request: NextRequest) {
       start: event.startTime.toISOString(),
       end: event.endTime.toISOString(),
       allDay: event.allDay,
+      eventType: event.eventType,
+      location: event.location,
     },
     googlePush,
   });

@@ -60,10 +60,15 @@ export async function PATCH(
     description?: string;
     start?: string;
     end?: string;
+    eventType?: string;
+    location?: string;
   };
 
   const event = await prisma.event.findFirst({ where: { id, userId } });
   if (!event) return NextResponse.json({ error: "Event not found" }, { status: 404 });
+
+  const validTypes = ["DEADLINE","HEARING","DEPOSITION","TRIAL","CONFERENCE","MEETING","REMINDER","OTHER"];
+  const safeEventType = body.eventType && validTypes.includes(body.eventType) ? body.eventType as never : undefined;
 
   const updated = await prisma.event.update({
     where: { id },
@@ -72,6 +77,8 @@ export async function PATCH(
       ...(body.description !== undefined && { description: body.description || null }),
       ...(body.start !== undefined && { startTime: new Date(body.start) }),
       ...(body.end !== undefined && { endTime: new Date(body.end) }),
+      ...(safeEventType !== undefined && { eventType: safeEventType }),
+      ...(body.location !== undefined && { location: body.location || null }),
     },
   });
 
@@ -83,6 +90,8 @@ export async function PATCH(
       start: updated.startTime.toISOString(),
       end: updated.endTime.toISOString(),
       allDay: updated.allDay,
+      eventType: updated.eventType,
+      location: updated.location,
     },
   });
 }

@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useRef } from "react";
 import type { CalEvent } from "@/lib/google-calendar";
+import { EVENT_TYPE_COLORS } from "@/lib/google-calendar";
 
 const ROW_HEIGHT = 56;
 const DAY_ABBR = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -127,22 +128,28 @@ export default function WeekView({ date, today, events, onCellClick, onSelectDay
                 ))}
 
                 {/* Events */}
-                {dayEvents.map((ev) => (
-                  <div
-                    key={ev.id}
-                    onClick={(e) => { e.stopPropagation(); onEventClick(ev); }}
-                    className="absolute left-1 right-1 rounded bg-primary/80 text-primary-foreground text-xs px-1.5 py-0.5 overflow-hidden z-10 cursor-pointer hover:brightness-110 transition-[filter]"
-                    style={{ top: eventTop(ev), height: eventHeight(ev) }}
-                    title={ev.title}
-                  >
-                    <span className="font-medium truncate block">{ev.title}</span>
-                    {eventHeight(ev) > 30 && (
-                      <span className="opacity-80">
-                        {ev.start.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-                      </span>
-                    )}
-                  </div>
-                ))}
+                {dayEvents.map((ev) => {
+                  const colors = EVENT_TYPE_COLORS[ev.eventType ?? "OTHER"];
+                  return (
+                    <div
+                      key={ev.id}
+                      onClick={(e) => { e.stopPropagation(); onEventClick(ev); }}
+                      className={`absolute left-1 right-1 rounded text-xs px-1.5 py-0.5 overflow-hidden z-10 cursor-pointer hover:brightness-95 transition-[filter] border-l-2 ${colors.bg} ${colors.text}`}
+                      style={{ top: eventTop(ev), height: eventHeight(ev), borderLeftColor: undefined }}
+                      title={ev.title}
+                    >
+                      <span className="font-semibold truncate block">{ev.title}</span>
+                      {eventHeight(ev) > 30 && ev.location && (
+                        <span className="opacity-70 truncate block">{ev.location}</span>
+                      )}
+                      {eventHeight(ev) > 44 && (
+                        <span className="opacity-70">
+                          {ev.start.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             );
           })}

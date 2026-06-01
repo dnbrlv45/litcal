@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
+import { ChevronLeft, ChevronRight, SlidersHorizontal, Plus } from "lucide-react";
 import MonthView from "./MonthView";
 import WeekView from "./WeekView";
 import DayView from "./DayView";
 import EventModal from "./EventModal";
-import EventDetailModal from "./EventDetailModal";
+import EventDetailPanel from "./EventDetailPanel";
 import type { CalEvent } from "@/lib/google-calendar";
 
 type CalView = "month" | "week" | "day";
@@ -57,13 +58,13 @@ function getDateRange(view: CalView, date: Date): { start: Date; end: Date } {
 
 export default function CalendarView() {
   const today = new Date();
-  const [view, setView] = useState<CalView>("month");
+  const [view, setView] = useState<CalView>("week");
   const [date, setDate] = useState(new Date(today));
   const [events, setEvents] = useState<CalEvent[]>([]);
   const [googleConnected, setGoogleConnected] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalDefaultStart, setModalDefaultStart] = useState<Date | undefined>();
-  const [detailEvent, setDetailEvent] = useState<CalEvent | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<CalEvent | null>(null);
 
   const fetchEvents = useCallback(async () => {
     const { start, end } = getDateRange(view, date);
@@ -79,6 +80,7 @@ export default function CalendarView() {
           ...e,
           start: new Date(e.start),
           end: new Date(e.end),
+          eventType: e.eventType ?? "OTHER",
         }))
       );
     } catch { /* silently fail */ }
@@ -121,24 +123,35 @@ export default function CalendarView() {
       : `${DAY_NAMES[date.getDay()]}, ${MONTH_NAMES[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
 
   return (
-    <div className="flex flex-col flex-1 min-h-0">
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-6 py-4 shrink-0">
-        <h1 className="text-lg font-semibold">{periodLabel}</h1>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={prev}>‹</Button>
-          <Button variant="outline" size="sm" onClick={goToToday}>Today</Button>
-          <Button variant="outline" size="sm" onClick={next}>›</Button>
+      <div className="flex items-center justify-between px-6 py-3.5 border-b border-border shrink-0 bg-background">
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-semibold tracking-tight">{periodLabel}</h1>
+          <div className="flex items-center gap-1">
+            <button onClick={prev} className="p-1.5 rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-foreground">
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button onClick={next} className="p-1.5 rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-foreground">
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+          <Button variant="outline" size="sm" onClick={goToToday} className="text-xs h-7 px-3">
+            Today
+          </Button>
+        </div>
 
-          <div className="flex rounded-md border border-border overflow-hidden ml-1">
-            {(["month", "week", "day"] as CalView[]).map((v) => (
+        <div className="flex items-center gap-2">
+          {/* View tabs */}
+          <div className="flex rounded-lg border border-border overflow-hidden bg-muted/30">
+            {(["day", "week", "month"] as CalView[]).map((v) => (
               <button
                 key={v}
                 onClick={() => setView(v)}
-                className={`px-3 py-1.5 text-sm capitalize transition-colors ${
+                className={`px-3.5 py-1.5 text-sm capitalize transition-colors ${
                   view === v
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-background text-muted-foreground hover:text-foreground hover:bg-accent/50"
+                    ? "bg-background text-foreground font-medium shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 {v}
@@ -146,41 +159,59 @@ export default function CalendarView() {
             ))}
           </div>
 
-          <Button size="sm" onClick={() => openModal()} className="ml-1">
-            + New Event
+          <button className="p-1.5 rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-foreground border border-border">
+            <SlidersHorizontal className="w-4 h-4" />
+          </button>
+
+          <Button size="sm" onClick={() => openModal()} className="gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white border-0">
+            <Plus className="w-4 h-4" />
+            New Event
           </Button>
         </div>
       </div>
 
-      {/* View */}
-      <div className="flex-1 min-h-0 px-6 pb-6">
-        {view === "month" && (
-          <MonthView
-            date={date}
-            today={today}
-            events={events}
-            onCellClick={(d) => openModal(d)}
-            onSelectDay={(d) => { setDate(d); setView("day"); }}
-            onEventClick={(ev) => setDetailEvent(ev)}
-          />
-        )}
-        {view === "week" && (
-          <WeekView
-            date={date}
-            today={today}
-            events={events}
-            onCellClick={(d) => openModal(d)}
-            onSelectDay={(d) => { setDate(d); setView("day"); }}
-            onEventClick={(ev) => setDetailEvent(ev)}
-          />
-        )}
-        {view === "day" && (
-          <DayView
-            date={date}
-            today={today}
-            events={events}
-            onCellClick={(d) => openModal(d)}
-            onEventClick={(ev) => setDetailEvent(ev)}
+      {/* Main content row */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* Calendar */}
+        <div className="flex-1 min-w-0 px-6 py-4 overflow-hidden flex flex-col">
+          {view === "month" && (
+            <MonthView
+              date={date}
+              today={today}
+              events={events}
+              onCellClick={(d) => openModal(d)}
+              onSelectDay={(d) => { setDate(d); setView("day"); }}
+              onEventClick={(ev) => setSelectedEvent(ev)}
+            />
+          )}
+          {view === "week" && (
+            <WeekView
+              date={date}
+              today={today}
+              events={events}
+              onCellClick={(d) => openModal(d)}
+              onSelectDay={(d) => { setDate(d); setView("day"); }}
+              onEventClick={(ev) => setSelectedEvent(ev)}
+            />
+          )}
+          {view === "day" && (
+            <DayView
+              date={date}
+              today={today}
+              events={events}
+              onCellClick={(d) => openModal(d)}
+              onEventClick={(ev) => setSelectedEvent(ev)}
+            />
+          )}
+        </div>
+
+        {/* Right detail panel */}
+        {selectedEvent && (
+          <EventDetailPanel
+            event={selectedEvent}
+            onClose={() => setSelectedEvent(null)}
+            onDeleted={() => { fetchEvents(); setSelectedEvent(null); }}
+            onUpdated={() => { fetchEvents(); setSelectedEvent(null); }}
           />
         )}
       </div>
@@ -191,13 +222,6 @@ export default function CalendarView() {
         defaultStart={modalDefaultStart}
         googleConnected={googleConnected}
         onCreated={fetchEvents}
-      />
-
-      <EventDetailModal
-        event={detailEvent}
-        onClose={() => setDetailEvent(null)}
-        onDeleted={fetchEvents}
-        onUpdated={fetchEvents}
       />
     </div>
   );

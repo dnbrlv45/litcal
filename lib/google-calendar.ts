@@ -6,6 +6,16 @@ export interface GoogleCalEvent {
   end: { dateTime?: string; date?: string; timeZone?: string };
 }
 
+export type EventType =
+  | "DEADLINE"
+  | "HEARING"
+  | "DEPOSITION"
+  | "TRIAL"
+  | "CONFERENCE"
+  | "MEETING"
+  | "REMINDER"
+  | "OTHER";
+
 export interface CalEvent {
   id: string;
   title: string;
@@ -13,7 +23,20 @@ export interface CalEvent {
   start: Date;
   end: Date;
   allDay: boolean;
+  eventType: EventType;
+  location?: string;
 }
+
+export const EVENT_TYPE_COLORS: Record<EventType, { bg: string; text: string; dot: string }> = {
+  HEARING:    { bg: "bg-orange-100",  text: "text-orange-700",  dot: "bg-orange-500" },
+  DEPOSITION: { bg: "bg-purple-100",  text: "text-purple-700",  dot: "bg-purple-500" },
+  TRIAL:      { bg: "bg-green-100",   text: "text-green-700",   dot: "bg-green-500" },
+  CONFERENCE: { bg: "bg-blue-100",    text: "text-blue-700",    dot: "bg-blue-500" },
+  MEETING:    { bg: "bg-sky-100",     text: "text-sky-700",     dot: "bg-sky-500" },
+  DEADLINE:   { bg: "bg-red-100",     text: "text-red-700",     dot: "bg-red-500" },
+  REMINDER:   { bg: "bg-yellow-100",  text: "text-yellow-700",  dot: "bg-yellow-500" },
+  OTHER:      { bg: "bg-slate-100",   text: "text-slate-700",   dot: "bg-slate-400" },
+};
 
 export function mapGoogleEvent(e: GoogleCalEvent): CalEvent {
   const allDay = !e.start.dateTime;

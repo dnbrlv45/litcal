@@ -1,6 +1,7 @@
 "use client";
 
 import type { CalEvent } from "@/lib/google-calendar";
+import { EVENT_TYPE_COLORS } from "@/lib/google-calendar";
 
 const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -86,16 +87,20 @@ export default function MonthView({ date, today, events, onCellClick, onSelectDa
                       {day}
                     </button>
                   )}
-                  {dayEvents.slice(0, 3).map((ev) => (
-                    <div
-                      key={ev.id}
-                      onClick={(e) => { e.stopPropagation(); onEventClick(ev); }}
-                      className="truncate text-xs rounded px-1 py-0.5 bg-primary/15 text-primary font-medium hover:bg-primary/25 cursor-pointer transition-colors"
-                      title={ev.title}
-                    >
-                      {ev.title}
-                    </div>
-                  ))}
+                  {dayEvents.slice(0, 3).map((ev) => {
+                    const colors = EVENT_TYPE_COLORS[ev.eventType ?? "OTHER"];
+                    return (
+                      <div
+                        key={ev.id}
+                        onClick={(e) => { e.stopPropagation(); onEventClick(ev); }}
+                        className={`truncate text-xs rounded px-1.5 py-0.5 font-medium cursor-pointer transition-colors hover:brightness-95 ${colors.bg} ${colors.text}`}
+                        title={ev.title}
+                      >
+                        <span className={`inline-block w-1.5 h-1.5 rounded-full ${colors.dot} mr-1 align-middle`} />
+                        {ev.title}
+                      </div>
+                    );
+                  })}
                   {dayEvents.length > 3 && (
                     <div className="text-xs text-muted-foreground px-1">+{dayEvents.length - 3} more</div>
                   )}

@@ -2,7 +2,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { shadcn } from "@clerk/ui/themes";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import TopNav from "@/components/nav/TopNav";
+import Sidebar from "@/components/nav/Sidebar";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Litigation Calendar",
+  title: "Veritas Litigation",
   description: "Calendar-first litigation management",
 };
 
@@ -30,10 +30,10 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-background text-foreground">
+      <body className="h-full flex bg-background text-foreground overflow-hidden">
         <ClerkProvider appearance={{ theme: shadcn }}>
-          <TopNav />
-          <main className="flex-1 flex flex-col">{children}</main>
+          <Sidebar />
+          <main className="flex-1 flex flex-col min-w-0 overflow-hidden">{children}</main>
         </ClerkProvider>
       </body>
     </html>
