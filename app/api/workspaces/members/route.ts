@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
+import { sendWorkspaceInviteEmail } from "@/lib/google-mail";
 import { prisma } from "@/lib/prisma";
 import { canManageWorkspace, getCurrentWorkspace } from "@/lib/workspaces";
+
+function appUrl(request: NextRequest) {
+  return process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin;
+}
+
+function userDisplayName(user: { email: string; firstName: string | null; lastName: string | null }) {
+  return [user.firstName, user.lastName].filter(Boolean).join(" ").trim() || user.email;
+}
 
 export async function POST(request: NextRequest) {
   const currentUser = await requireUser();
@@ -36,7 +45,23 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ invitation }, { status: 202 });
+    let emailDelivery: { ok: boolean; reason: string; detail?: string } = {
+      ok: false,
+      reason: "not_attempted",
+    };
+    try {
+      emailDelivery = await sendWorkspaceInviteEmail(userId, {
+        inviterName: userDisplayName(currentUser),
+        inviterEmail: currentUser.email,
+        recipientEmail: email,
+        workspaceName: workspace.name,
+        inviteUrl: new URL(`/sign-in?invite=${invitation.id}`, appUrl(request)).toString(),
+      });
+    } catch (err) {
+      emailDelivery = { ok: false, reason: "send_failed", detail: String(err) };
+    }
+
+    return NextResponse.json({ invitation, emailDelivery }, { status: 202 });
   }
 
   const existingMember = await prisma.workspaceMember.findUnique({
@@ -72,5 +97,21 @@ export async function POST(request: NextRequest) {
         },
       });
 
-  return NextResponse.json({ member }, { status: 201 });
+  let emailDelivery: { ok: boolean; reason: string; detail?: string } = {
+    ok: false,
+    reason: "not_attempted",
+  };
+  try {
+    emailDelivery = await sendWorkspaceInviteEmail(userId, {
+      inviterName: userDisplayName(currentUser),
+      inviterEmail: currentUser.email,
+      recipientEmail: user.email,
+      workspaceName: workspace.name,
+      inviteUrl: new URL("/", appUrl(request)).toString(),
+    });
+  } catch (err) {
+    emailDelivery = { ok: false, reason: "send_failed", detail: String(err) };
+  }
+
+  return NextResponse.json({ member, emailDelivery }, { status: 201 });
 }

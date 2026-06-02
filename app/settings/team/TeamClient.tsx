@@ -97,14 +97,18 @@ export default function TeamClient({ initialWorkspace, initialMembers, initialIn
           const withoutExisting = current.filter((member) => member.id !== data.member.id);
           return [...withoutExisting, data.member];
         });
-        setMessage("Member added.");
+        setMessage(data.emailDelivery?.ok ? "Member added and invite email sent." : "Member added. Connect Google again in Calendar settings to send invite emails from Gmail.");
       }
       if (data.invitation) {
         setInvitations((current) => {
           const withoutExisting = current.filter((invitation) => invitation.id !== data.invitation.id);
           return [data.invitation, ...withoutExisting];
         });
-        setMessage("Invitation created. They will join this team automatically after signing in with that email.");
+        setMessage(
+          data.emailDelivery?.ok
+            ? "Invitation created and email sent."
+            : "Invitation created. Connect Google again in Calendar settings to send invite emails from Gmail."
+        );
       }
       setEmail("");
       setRole("MEMBER");

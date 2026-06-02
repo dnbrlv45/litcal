@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { requireUser } from "@/lib/auth";
 
-const SCOPES = ["https://www.googleapis.com/auth/calendar"].join(" ");
+const SCOPES = [
+  "https://www.googleapis.com/auth/calendar",
+  "https://www.googleapis.com/auth/gmail.send",
+].join(" ");
 
 export async function GET(request: Request) {
   const user = await requireUser();

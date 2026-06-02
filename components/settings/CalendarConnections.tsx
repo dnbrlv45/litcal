@@ -24,7 +24,7 @@ export default function CalendarConnections({ googleConnected }: Props) {
           <div className="flex flex-col gap-0.5">
             <span className="text-sm font-medium">Google Calendar</span>
             <span className="text-xs text-muted-foreground">
-              Push your litigation events and deadlines to Google Calendar.
+              Push events to Google Calendar and send branded team invites from Gmail.
             </span>
           </div>
 
@@ -34,6 +34,11 @@ export default function CalendarConnections({ googleConnected }: Props) {
                 <Badge variant="secondary" className="text-green-700 bg-green-50 border-green-200">
                   Connected
                 </Badge>
+                <form method="GET" action="/api/auth/google">
+                  <Button variant="outline" size="sm" type="submit">
+                    Reconnect
+                  </Button>
+                </form>
                 <form method="POST" action="/api/auth/google/disconnect">
                   <Button variant="ghost" size="sm" type="submit">
                     Disconnect
