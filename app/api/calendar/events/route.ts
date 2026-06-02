@@ -1,5 +1,5 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
+import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getAccessToken, createGoogleEvent, createLitCalCalendar } from "@/lib/google-calendar";
 import type { GoogleCalEvent } from "@/lib/google-calendar";
@@ -7,8 +7,9 @@ import { getCurrentWorkspace } from "@/lib/workspaces";
 
 // GET /api/calendar/events?start=ISO&end=ISO
 export async function GET(request: NextRequest) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const currentUser = await requireUser();
+  if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = currentUser.id;
   const { workspace } = await getCurrentWorkspace(userId);
 
   const { searchParams } = new URL(request.url);
@@ -54,8 +55,9 @@ export async function GET(request: NextRequest) {
 
 // POST /api/calendar/events  body: { title, description?, start, end, timeZone }
 export async function POST(request: NextRequest) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const currentUser = await requireUser();
+  if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = currentUser.id;
   const { workspace } = await getCurrentWorkspace(userId);
 
   const body = await request.json();

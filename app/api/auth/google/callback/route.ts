@@ -1,14 +1,14 @@
-import { auth, clerkClient } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
+import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-
 export async function GET(request: NextRequest) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.redirect(new URL("/sign-in", BASE_URL));
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin;
+  const user = await requireUser();
+  if (!user) {
+    return NextResponse.redirect(new URL("/sign-in", baseUrl));
   }
+  const userId = user.id;
 
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
@@ -16,16 +16,16 @@ export async function GET(request: NextRequest) {
   const error = searchParams.get("error");
 
   if (error) {
-    return NextResponse.redirect(new URL("/settings/calendar?error=denied", BASE_URL));
+    return NextResponse.redirect(new URL("/settings/calendar?error=denied", baseUrl));
   }
 
   const savedState = request.cookies.get("google_oauth_state")?.value;
   if (!state || !savedState || state !== savedState) {
-    return NextResponse.redirect(new URL("/settings/calendar?error=invalid_state", BASE_URL));
+    return NextResponse.redirect(new URL("/settings/calendar?error=invalid_state", baseUrl));
   }
 
   if (!code) {
-    return NextResponse.redirect(new URL("/settings/calendar?error=no_code", BASE_URL));
+    return NextResponse.redirect(new URL("/settings/calendar?error=no_code", baseUrl));
   }
 
   // Exchange authorization code for tokens
@@ -36,43 +36,22 @@ export async function GET(request: NextRequest) {
       code,
       client_id: process.env.GOOGLE_CLIENT_ID!,
       client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-      redirect_uri: process.env.GOOGLE_REDIRECT_URI ?? "http://localhost:3000/api/auth/google/callback",
+      redirect_uri: process.env.GOOGLE_REDIRECT_URI ?? new URL("/api/auth/google/callback", request.url).toString(),
       grant_type: "authorization_code",
     }),
   });
 
   if (!tokenRes.ok) {
     console.error("Google token exchange failed:", await tokenRes.text());
-    return NextResponse.redirect(new URL("/settings/calendar?error=token_exchange", BASE_URL));
+    return NextResponse.redirect(new URL("/settings/calendar?error=token_exchange", baseUrl));
   }
 
   const tokens = await tokenRes.json();
 
   if (!tokens.refresh_token) {
     console.error("No refresh_token in Google response:", tokens);
-    return NextResponse.redirect(new URL("/settings/calendar?error=no_refresh_token", BASE_URL));
+    return NextResponse.redirect(new URL("/settings/calendar?error=no_refresh_token", baseUrl));
   }
-
-  // Get user info from Clerk to ensure the User row exists in Supabase
-  const clerk = await clerkClient();
-  const clerkUser = await clerk.users.getUser(userId);
-  const email = clerkUser.emailAddresses[0]?.emailAddress ?? "";
-
-  // Upsert the User shadow record
-  await prisma.user.upsert({
-    where: { id: userId },
-    create: {
-      id: userId,
-      email,
-      firstName: clerkUser.firstName ?? null,
-      lastName: clerkUser.lastName ?? null,
-    },
-    update: {
-      email,
-      firstName: clerkUser.firstName ?? null,
-      lastName: clerkUser.lastName ?? null,
-    },
-  });
 
   // Upsert the Google Calendar connection
   // If they're reconnecting, update the existing row and clear the cached calendar ID
@@ -95,7 +74,7 @@ export async function GET(request: NextRequest) {
     },
   });
 
-  const response = NextResponse.redirect(new URL("/settings/calendar?connected=google", BASE_URL));
+  const response = NextResponse.redirect(new URL("/settings/calendar?connected=google", baseUrl));
   response.cookies.delete("google_oauth_state");
   return response;
 }

@@ -7,13 +7,13 @@ generator client {
 }
 
 // ─── USERS ────────────────────────────────────────────────────────────────────
-// Shadow record of the Clerk user. Created/upserted lazily on first API call.
-// Clerk owns identity (name, email, avatar, sessions).
+// LitCal user account. Google OAuth owns identity proof; LitCal owns sessions/data.
 // Supabase owns all application data.
 
 model User {
-  id        String   @id // Clerk userId — used directly as PK
+  id        String   @id @default(cuid())
   email     String   @unique
+  googleSub String?  @unique
   firstName String?
   lastName  String?
   timeZone  String   @default("UTC")
@@ -24,10 +24,24 @@ model User {
   calendarConnections UserCalendarConnection[]
   cases               Case[]
   workspaceMemberships WorkspaceMember[]
+  sessions            AuthSession[]
+}
+
+model AuthSession {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 // ─── WORKSPACES / TEAMS ──────────────────────────────────────────────────────
-// First-party LitCal teams. Clerk owns sign-in only; LitCal owns team membership.
+// First-party LitCal teams. LitCal owns team membership.
 
 model Workspace {
   id        String   @id @default(cuid())
@@ -83,7 +97,7 @@ enum WorkspaceRole {
 
 // ─── CALENDAR CONNECTIONS ─────────────────────────────────────────────────────
 // One row per OAuth provider per user.
-// Replaces: googleRefreshToken, googleConnectedAt, googleLitCalId in Clerk metadata.
+// Replaces the previous Google Calendar token metadata store.
 
 model UserCalendarConnection {
   id                 String           @id @default(cuid())
@@ -112,7 +126,7 @@ enum CalendarProvider {
 
 // ─── EVENTS ───────────────────────────────────────────────────────────────────
 // Source of truth for all calendar events.
-// Replaces: litcalEvents[] JSON array in Clerk metadata.
+// Replaces the previous JSON event metadata store.
 
 model Event {
   id          String      @id @default(cuid())
@@ -125,7 +139,7 @@ model Event {
   timeZone    String      @default("UTC")
   allDay      Boolean     @default(false)
 
-  orgId       String?     // Clerk org ID — null for personal events
+  orgId       String?     // Legacy organization ID; retained for old rows only.
   workspaceId String?
   caseId      String?
 

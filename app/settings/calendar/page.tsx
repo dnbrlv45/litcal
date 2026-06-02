@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import CalendarConnections from "@/components/settings/CalendarConnections";
 
@@ -7,14 +7,14 @@ interface PageProps {
 }
 
 export default async function CalendarSettingsPage({ searchParams }: PageProps) {
-  const { userId } = await auth();
+  const user = await getCurrentUser();
   const params = await searchParams;
 
   let googleConnected = false;
 
-  if (userId) {
+  if (user) {
     const connection = await prisma.userCalendarConnection.findFirst({
-      where: { userId, provider: "GOOGLE", isActive: true },
+      where: { userId: user.id, provider: "GOOGLE", isActive: true },
     });
     googleConnected = !!connection;
   }

@@ -1,5 +1,3 @@
-import { ClerkProvider } from "@clerk/nextjs";
-import { shadcn } from "@clerk/ui/themes";
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import Sidebar from "@/components/nav/Sidebar";
@@ -27,10 +25,8 @@ export default function RootLayout({
       className={`${jakarta.variable} h-full antialiased`}
     >
       <body className="h-full flex bg-background text-foreground overflow-hidden">
-        <ClerkProvider appearance={{ theme: shadcn }}>
-          <Sidebar />
-          <main className="flex-1 flex flex-col min-w-0 overflow-hidden">{children}</main>
-        </ClerkProvider>
+        <Sidebar />
+        <main className="flex-1 flex flex-col min-w-0 overflow-hidden">{children}</main>
       </body>
     </html>
   );

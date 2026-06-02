@@ -1,6 +1,5 @@
 "use client";
 
-import { Show, UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -43,19 +42,11 @@ export default function TopNav() {
         })}
       </nav>
 
-      <div className="flex items-center gap-2">
-        <Show when="signed-out">
-          <Link href="/sign-in" className="inline-flex h-7 items-center rounded-lg px-2.5 text-[0.8rem] font-medium text-slate-700 hover:bg-slate-100">
-            Sign In
-          </Link>
-          <Link href="/sign-up" className="inline-flex h-7 items-center rounded-lg bg-slate-950 px-2.5 text-[0.8rem] font-medium text-white hover:bg-slate-800">
-            Sign Up
-          </Link>
-        </Show>
-        <Show when="signed-in">
-          <UserButton />
-        </Show>
-      </div>
+      <form action="/api/auth/sign-out" method="post">
+        <button className="inline-flex h-7 items-center rounded-lg px-2.5 text-[0.8rem] font-medium text-slate-700 hover:bg-slate-100">
+          Sign Out
+        </button>
+      </form>
     </header>
   );
 }

@@ -13,7 +13,6 @@ import {
   Search,
   SlidersHorizontal,
 } from "lucide-react";
-import { UserButton } from "@clerk/nextjs";
 import MonthView from "./MonthView";
 import WeekView from "./WeekView";
 import DayView from "./DayView";
@@ -155,7 +154,11 @@ export default function CalendarView() {
           <button className="grid size-9 place-items-center rounded-lg hover:bg-slate-100">
             <CalendarDays className="size-4" />
           </button>
-          <UserButton appearance={{ elements: { avatarBox: "size-9" } }} />
+          <form action="/api/auth/sign-out" method="post">
+            <button className="h-9 rounded-lg px-3 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-950">
+              Sign Out
+            </button>
+          </form>
         </div>
       </div>
 

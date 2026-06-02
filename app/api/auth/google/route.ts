@@ -1,15 +1,15 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import crypto from "crypto";
+import { requireUser } from "@/lib/auth";
 
 const SCOPES = ["https://www.googleapis.com/auth/calendar"].join(" ");
 
-export async function GET() {
-  const { userId } = await auth();
+export async function GET(request: Request) {
+  const user = await requireUser();
 
-  if (!userId) {
+  if (!user) {
     return NextResponse.redirect(
-      new URL("/sign-in", process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000")
+      new URL("/sign-in", process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin)
     );
   }
 
@@ -19,7 +19,7 @@ export async function GET() {
   }
 
   const redirectUri =
-    process.env.GOOGLE_REDIRECT_URI ?? "http://localhost:3000/api/auth/google/callback";
+    process.env.GOOGLE_REDIRECT_URI ?? new URL("/api/auth/google/callback", request.url).toString();
 
   const state = crypto.randomUUID();
 

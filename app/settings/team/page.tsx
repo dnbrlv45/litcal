@@ -1,12 +1,13 @@
-import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCurrentWorkspace } from "@/lib/workspaces";
 import TeamClient from "./TeamClient";
 
 export default async function TeamPage() {
-  const { userId } = await auth();
-  if (!userId) redirect("/sign-in");
+  const user = await getCurrentUser();
+  if (!user) redirect("/sign-in");
+  const userId = user.id;
 
   const { workspace, membership } = await getCurrentWorkspace(userId);
   const members = await prisma.workspaceMember.findMany({

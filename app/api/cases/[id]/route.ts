@@ -1,5 +1,5 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
+import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getAccessToken, deleteGoogleEvent } from "@/lib/google-calendar";
 import { getCurrentWorkspace } from "@/lib/workspaces";
@@ -8,8 +8,9 @@ type Params = { params: Promise<{ id: string }> };
 
 // GET /api/cases/[id]
 export async function GET(_req: NextRequest, { params }: Params) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const currentUser = await requireUser();
+  if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = currentUser.id;
   const { workspace } = await getCurrentWorkspace(userId);
 
   const { id } = await params;
@@ -34,8 +35,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
 // PATCH /api/cases/[id]
 export async function PATCH(request: NextRequest, { params }: Params) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const currentUser = await requireUser();
+  if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = currentUser.id;
   const { workspace } = await getCurrentWorkspace(userId);
 
   const { id } = await params;
@@ -117,8 +119,9 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
 // DELETE /api/cases/[id]
 export async function DELETE(_req: NextRequest, { params }: Params) {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const currentUser = await requireUser();
+  if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = currentUser.id;
   const { workspace } = await getCurrentWorkspace(userId);
 
   const { id } = await params;

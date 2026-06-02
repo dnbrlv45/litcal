@@ -1,28 +1,10 @@
-import { clerkClient } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 
 export async function ensureUser(userId: string) {
   const existing = await prisma.user.findUnique({ where: { id: userId } });
   if (existing) return existing;
 
-  const clerk = await clerkClient();
-  const clerkUser = await clerk.users.getUser(userId);
-  const email = clerkUser.emailAddresses[0]?.emailAddress ?? "";
-
-  return prisma.user.upsert({
-    where: { id: userId },
-    create: {
-      id: userId,
-      email,
-      firstName: clerkUser.firstName ?? null,
-      lastName: clerkUser.lastName ?? null,
-    },
-    update: {
-      email,
-      firstName: clerkUser.firstName ?? null,
-      lastName: clerkUser.lastName ?? null,
-    },
-  });
+  throw new Error("Authenticated user record was not found.");
 }
 
 export async function getCurrentWorkspace(userId: string) {

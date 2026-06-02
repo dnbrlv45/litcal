@@ -1,12 +1,12 @@
-import { auth } from "@clerk/nextjs/server";
 import CalendarView from "@/components/calendar/CalendarView";
 import Image from "next/image";
 import Link from "next/link";
+import { getCurrentUser } from "@/lib/auth";
 
 export default async function HomePage() {
-  const { userId } = await auth();
+  const user = await getCurrentUser();
 
-  if (!userId) {
+  if (!user) {
     return (
       <div className="flex flex-col flex-1 items-center justify-center gap-8 text-center px-4 bg-slate-50">
         <div className="flex flex-col items-center gap-3">

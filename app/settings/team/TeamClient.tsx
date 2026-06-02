@@ -121,7 +121,7 @@ export default function TeamClient({ initialWorkspace, initialMembers, initialIn
         <div>
           <h1 className="text-xl font-semibold">Team</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Manage LitCal-owned teams without Clerk organization seat limits.
+            Manage LitCal-owned teams without external organization seat limits.
           </p>
         </div>
 

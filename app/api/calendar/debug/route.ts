@@ -1,19 +1,21 @@
-import { auth, clerkClient } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { requireUser } from "@/lib/auth";
 import { getAccessToken } from "@/lib/google-calendar";
+import { prisma } from "@/lib/prisma";
 
 /** GET /api/calendar/debug
  *  Returns the full Google Calendar connection status and any errors.
  *  Remove or protect this route before going to production. */
 export async function GET() {
-  const { userId } = await auth();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const user = await requireUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const clerk = await clerkClient();
-  const user = await clerk.users.getUser(userId);
+  const connection = await prisma.userCalendarConnection.findFirst({
+    where: { userId: user.id, provider: "GOOGLE", isActive: true },
+  });
 
-  const refreshToken = user.privateMetadata?.googleRefreshToken as string | undefined;
-  const googleLitCalId = user.privateMetadata?.googleLitCalId as string | undefined;
+  const refreshToken = connection?.refreshToken;
+  const googleLitCalId = connection?.providerCalendarId;
 
   if (!refreshToken) {
     return NextResponse.json({ connected: false, message: "No refresh token stored — Google Calendar not connected." });

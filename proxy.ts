@@ -1,17 +1,43 @@
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { NextResponse, type NextRequest } from "next/server";
 
-const isPublicRoute = createRouteMatcher(["/", "/sign-in(.*)", "/sign-up(.*)", "/sso-callback(.*)", "/cases", "/inbox", "/tasks", "/settings(.*)", "/calendar"]);
+const SESSION_COOKIE = "litcal_session";
 
-export default clerkMiddleware(async (auth, request) => {
-  if (!isPublicRoute(request)) {
-    await auth.protect();
+const publicRoutes = [
+  /^\/$/,
+  /^\/sign-in(?:\/.*)?$/,
+  /^\/sign-up(?:\/.*)?$/,
+  /^\/api\/auth\/google\/sign-in(?:\/.*)?$/,
+  /^\/api\/auth\/sign-out$/,
+];
+
+function isPublicRoute(pathname: string) {
+  return publicRoutes.some((route) => route.test(pathname));
+}
+
+export default function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  if (isPublicRoute(pathname)) {
+    return NextResponse.next();
   }
-});
+
+  const hasSession = Boolean(request.cookies.get(SESSION_COOKIE)?.value);
+
+  if (pathname.startsWith("/api/")) {
+    if (hasSession) return NextResponse.next();
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!hasSession) {
+    return NextResponse.redirect(new URL("/sign-in", request.url));
+  }
+
+  return NextResponse.next();
+}
 
 export const config = {
   matcher: [
     "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
     "/(api|trpc)(.*)",
-    "/__clerk/(.*)",
   ],
 };
