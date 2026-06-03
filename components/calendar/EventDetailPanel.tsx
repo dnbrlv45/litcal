@@ -50,6 +50,7 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
   const [description, setDescription] = useState("");
   const [caseId, setCaseId] = useState("");
   const [cases, setCases] = useState<CaseOption[]>([]);
+  const [allDay, setAllDay] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,6 +72,7 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
     if (!event) return;
     setTitle(event.title);
     setEventType(event.eventType);
+    setAllDay(event.allDay);
     setDate(toDateInputValue(event.start));
     setStartTime(toTimeInputValue(event.start));
     setEndTime(toTimeInputValue(event.end));
@@ -99,16 +101,16 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     if (!event || !title.trim()) { setError("Title is required."); return; }
-    const startISO = new Date(`${date}T${startTime}`).toISOString();
-    const endISO = new Date(`${date}T${endTime}`).toISOString();
-    if (new Date(endISO) <= new Date(startISO)) { setError("End time must be after start time."); return; }
+    const startISO = allDay ? new Date(`${date}T00:00:00`).toISOString() : new Date(`${date}T${startTime}`).toISOString();
+    const endISO   = allDay ? new Date(`${date}T23:59:59`).toISOString() : new Date(`${date}T${endTime}`).toISOString();
+    if (!allDay && new Date(endISO) <= new Date(startISO)) { setError("End time must be after start time."); return; }
     setSaving(true);
     setError(null);
     try {
       const res = await fetch(`/api/calendar/events/${event.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, description, start: startISO, end: endISO, eventType, location, caseId: caseId || null }),
+        body: JSON.stringify({ title, description, start: startISO, end: endISO, eventType, location, caseId: caseId || null, allDay }),
       });
       if (!res.ok) throw new Error();
       const data = await res.json();
@@ -317,16 +319,28 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
               <Input id="ep-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="ep-start">Start</Label>
-                <Input id="ep-start" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={allDay}
+                onChange={(e) => setAllDay(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 accent-slate-900"
+              />
+              <span className="text-sm text-slate-700">All day</span>
+            </label>
+
+            {!allDay && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="ep-start">Start</Label>
+                  <Input id="ep-start" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="ep-end">End</Label>
+                  <Input id="ep-end" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+                </div>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="ep-end">End</Label>
-                <Input id="ep-end" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
-              </div>
-            </div>
+            )}
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="ep-loc">Location</Label>

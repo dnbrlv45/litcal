@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
   const { workspace } = await getCurrentWorkspace(userId);
 
   const body = await request.json();
-  const { title, description, start, end, timeZone, eventType, location, caseId } = body as {
+  const { title, description, start, end, timeZone, eventType, location, caseId, allDay } = body as {
     title: string;
     description?: string;
     start: string;
@@ -81,6 +81,7 @@ export async function POST(request: NextRequest) {
     eventType?: string;
     location?: string;
     caseId?: string;
+    allDay?: boolean;
   };
 
   if (!title?.trim() || !start || !end)
@@ -116,6 +117,7 @@ export async function POST(request: NextRequest) {
       startTime: startDate,
       endTime: endDate,
       timeZone: timeZone ?? "UTC",
+      allDay: allDay ?? false,
       eventType: safeEventType,
       location: location || null,
       caseId: caseId || null,

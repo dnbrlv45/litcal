@@ -76,6 +76,7 @@ export async function PATCH(
     eventType?: string;
     location?: string;
     caseId?: string | null;
+    allDay?: boolean;
   };
 
   const event = await prisma.event.findFirst({
@@ -102,6 +103,7 @@ export async function PATCH(
       ...(safeEventType !== undefined && { eventType: safeEventType }),
       ...(body.location !== undefined && { location: body.location || null }),
       ...("caseId" in body && { caseId: body.caseId || null }),
+      ...(body.allDay !== undefined && { allDay: body.allDay }),
     },
     include: { assignedAttorney: { select: { id: true } } },
   });

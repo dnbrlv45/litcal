@@ -64,6 +64,7 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
   const [description, setDescription] = useState("");
   const [caseId, setCaseId] = useState("");
   const [cases, setCases] = useState<CaseOption[]>([]);
+  const [allDay, setAllDay] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conflicts, setConflicts] = useState<ConflictDetail[]>([]);
@@ -83,6 +84,7 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
       setDate(toDateInputValue(defaultStart ?? new Date()));
       setStartTime(DEFAULT_START);
       setEndTime(DEFAULT_END);
+      setAllDay(false);
       setLocation("");
       setDescription("");
       setCaseId("");
@@ -112,8 +114,8 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
     if (!title.trim()) { setError("Title is required."); return; }
 
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const startISO = new Date(`${date}T${startTime}`).toISOString();
-    const endISO = new Date(`${date}T${endTime}`).toISOString();
+    const startISO = allDay ? new Date(`${date}T00:00:00`).toISOString() : new Date(`${date}T${startTime}`).toISOString();
+    const endISO   = allDay ? new Date(`${date}T23:59:59`).toISOString() : new Date(`${date}T${endTime}`).toISOString();
 
     setSaving(true);
     setError(null);
@@ -122,7 +124,7 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
       const res = await fetch("/api/calendar/events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, description, start: startISO, end: endISO, timeZone, eventType, location, caseId: caseId || undefined }),
+        body: JSON.stringify({ title, description, start: startISO, end: endISO, timeZone, eventType, location, caseId: caseId || undefined, allDay }),
       });
       if (!res.ok) { setError("Failed to create event. Please try again."); return; }
       const data = await res.json();
@@ -205,16 +207,28 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
             <Input id="event-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="event-start">Start time</Label>
-              <Input id="event-start" type="time" value={startTime} onChange={(e) => handleStartChange(e.target.value)} />
+          <label className="flex items-center gap-2.5 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={allDay}
+              onChange={(e) => setAllDay(e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300 accent-slate-900"
+            />
+            <span className="text-sm text-slate-700">All day</span>
+          </label>
+
+          {!allDay && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="event-start">Start time</Label>
+                <Input id="event-start" type="time" value={startTime} onChange={(e) => handleStartChange(e.target.value)} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="event-end">End time</Label>
+                <Input id="event-end" type="time" value={endTime} onChange={(e) => handleEndChange(e.target.value)} />
+              </div>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="event-end">End time</Label>
-              <Input id="event-end" type="time" value={endTime} onChange={(e) => handleEndChange(e.target.value)} />
-            </div>
-          </div>
+          )}
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="event-location">Location <span className="text-muted-foreground font-normal">(optional)</span></Label>
