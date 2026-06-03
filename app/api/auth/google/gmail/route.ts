@@ -2,11 +2,8 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { requireUser } from "@/lib/auth";
 
-const SCOPES = "https://www.googleapis.com/auth/calendar";
-
 export async function GET(request: Request) {
   const user = await requireUser();
-
   if (!user) {
     return NextResponse.redirect(
       new URL("/sign-in", process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin)
@@ -14,12 +11,11 @@ export async function GET(request: Request) {
   }
 
   const clientId = process.env.GOOGLE_CLIENT_ID;
-  if (!clientId) {
-    return NextResponse.json({ error: "Google OAuth not configured" }, { status: 500 });
-  }
+  if (!clientId) return NextResponse.json({ error: "Google OAuth not configured" }, { status: 500 });
 
   const redirectUri =
-    process.env.GOOGLE_REDIRECT_URI ?? new URL("/api/auth/google/callback", request.url).toString();
+    process.env.GOOGLE_GMAIL_REDIRECT_URI ??
+    new URL("/api/auth/google/gmail/callback", process.env.NEXT_PUBLIC_APP_URL ?? request.url).toString();
 
   const state = crypto.randomUUID();
 
@@ -27,9 +23,9 @@ export async function GET(request: Request) {
     client_id: clientId,
     redirect_uri: redirectUri,
     response_type: "code",
-    scope: SCOPES,
+    scope: "https://www.googleapis.com/auth/gmail.send",
     access_type: "offline",
-    prompt: "consent", // force consent so we always get a refresh_token
+    prompt: "consent",
     state,
   });
 
@@ -37,12 +33,11 @@ export async function GET(request: Request) {
     `https://accounts.google.com/o/oauth2/v2/auth?${params}`
   );
 
-  // Store state in httpOnly cookie for CSRF validation in callback
-  response.cookies.set("google_oauth_state", state, {
+  response.cookies.set("google_gmail_oauth_state", state, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    maxAge: 600, // 10 minutes
+    maxAge: 600,
     path: "/",
   });
 

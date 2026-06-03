@@ -121,6 +121,9 @@ model UserCalendarConnection {
   refreshToken       String           // store encrypted in production
   providerCalendarId String?          // Google: the dedicated LitCal calendar ID
 
+  gmailRefreshToken  String?          // Google: separate Gmail send-only grant
+  gmailConnectedAt   DateTime?
+
   connectedAt        DateTime         @default(now())
   disconnectedAt     DateTime?
   isActive           Boolean          @default(true)

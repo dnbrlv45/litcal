@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
-import { ArrowLeft, Calendar, MapPin, Pencil, Check, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, Calendar, MapPin, Pencil, Trash2, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -61,12 +62,15 @@ function memberLabel(m: WorkspaceMember) {
 }
 
 export default function CaseDetailClient({ id }: { id: string }) {
+  const router = useRouter();
   const [caseData, setCaseData] = useState<CaseData | null>(null);
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingAssignment, setSavingAssignment] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const membersFetched = useRef(false);
 
@@ -117,6 +121,19 @@ export default function CaseDetailClient({ id }: { id: string }) {
       setError("Failed to update assignment.");
     } finally {
       setSavingAssignment(false);
+    }
+  }
+
+  async function deleteCase() {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/cases/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      router.push("/cases");
+    } catch {
+      setError("Failed to delete case.");
+      setDeleting(false);
+      setConfirmingDelete(false);
     }
   }
 
@@ -227,10 +244,23 @@ export default function CaseDetailClient({ id }: { id: string }) {
                 <Check className="w-3.5 h-3.5 mr-1" /> {saving ? "Saving…" : "Save"}
               </Button>
             </>
+          ) : confirmingDelete ? (
+            <>
+              <span className="text-xs text-muted-foreground">Delete this case?</span>
+              <Button size="sm" variant="ghost" onClick={() => setConfirmingDelete(false)}>Cancel</Button>
+              <Button size="sm" variant="destructive" onClick={deleteCase} disabled={deleting}>
+                {deleting ? "Deleting…" : "Yes, delete"}
+              </Button>
+            </>
           ) : (
-            <Button size="sm" variant="outline" onClick={startEdit}>
-              <Pencil className="w-3.5 h-3.5 mr-1.5" /> Edit
-            </Button>
+            <>
+              <Button size="sm" variant="ghost" onClick={() => setConfirmingDelete(true)} className="text-muted-foreground hover:text-rose-600">
+                <Trash2 className="w-3.5 h-3.5" />
+              </Button>
+              <Button size="sm" variant="outline" onClick={startEdit}>
+                <Pencil className="w-3.5 h-3.5 mr-1.5" /> Edit
+              </Button>
+            </>
           )}
         </div>
       </div>

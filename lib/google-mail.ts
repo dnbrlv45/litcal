@@ -129,14 +129,14 @@ function buildInviteEmail({
 
 export async function sendWorkspaceInviteEmail(userId: string, options: InviteEmailOptions) {
   const connection = await prisma.userCalendarConnection.findFirst({
-    where: { userId, provider: "GOOGLE", isActive: true },
+    where: { userId, provider: "GOOGLE", gmailRefreshToken: { not: null } },
   });
 
-  if (!connection) {
-    return { ok: false, reason: "google_not_connected" as const };
+  if (!connection?.gmailRefreshToken) {
+    return { ok: false, reason: "gmail_not_connected" as const };
   }
 
-  const accessToken = await getAccessToken(connection.refreshToken);
+  const accessToken = await getAccessToken(connection.gmailRefreshToken);
   const raw = base64Url(buildInviteEmail(options));
   const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
     method: "POST",
