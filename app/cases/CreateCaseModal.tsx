@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,16 +18,6 @@ const CASE_TYPES = [
   { value: "OTHER",               label: "Other" },
 ];
 
-interface WorkspaceMember {
-  id: string;
-  user: { id: string; firstName: string | null; lastName: string | null; email: string };
-}
-
-function memberLabel(m: WorkspaceMember) {
-  const name = [m.user.firstName, m.user.lastName].filter(Boolean).join(" ").trim();
-  return name || m.user.email;
-}
-
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -38,22 +28,12 @@ const EMPTY = {
   title: "", caseNumber: "", caseType: "AUTO_ACCIDENT",
   county: "", court: "",
   defendant: "", defenseFirm: "", defenseAttorney: "",
-  assignedAttorneyId: "", assignedParalegalId: "", assignedAssistantId: "",
 };
 
 export default function CreateCaseModal({ open, onClose, onCreated }: Props) {
   const [fields, setFields] = useState(EMPTY);
-  const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const fetchedRef = useRef(false);
-
-  useEffect(() => {
-    if (!fetchedRef.current) {
-      fetchedRef.current = true;
-      fetch("/api/workspaces/members").then((r) => r.json()).then((d) => setMembers(d.members ?? [])).catch(() => {});
-    }
-  }, []);
 
   function set(key: keyof typeof EMPTY) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -70,12 +50,7 @@ export default function CreateCaseModal({ open, onClose, onCreated }: Props) {
       const res = await fetch("/api/cases", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...fields,
-          assignedAttorneyId:  fields.assignedAttorneyId  || null,
-          assignedParalegalId: fields.assignedParalegalId || null,
-          assignedAssistantId: fields.assignedAssistantId || null,
-        }),
+        body: JSON.stringify(fields),
       });
       if (!res.ok) throw new Error();
       onCreated();
@@ -131,36 +106,6 @@ export default function CreateCaseModal({ open, onClose, onCreated }: Props) {
               <Input id="case-court" placeholder="e.g. Superior Court" value={fields.court} onChange={set("court")} />
             </div>
           </div>
-
-          {/* Assignments */}
-          {members.length > 0 && (
-            <div className="border-t border-border pt-3 flex flex-col gap-3">
-              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Assignments</p>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="case-attorney">Attorney</Label>
-                <select id="case-attorney" value={fields.assignedAttorneyId} onChange={set("assignedAttorneyId")} className={select}>
-                  <option value="">— Unassigned —</option>
-                  {members.map((m) => <option key={m.user.id} value={m.user.id}>{memberLabel(m)}</option>)}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="case-paralegal">Paralegal <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                  <select id="case-paralegal" value={fields.assignedParalegalId} onChange={set("assignedParalegalId")} className={select}>
-                    <option value="">— Unassigned —</option>
-                    {members.map((m) => <option key={m.user.id} value={m.user.id}>{memberLabel(m)}</option>)}
-                  </select>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="case-assistant">Assistant <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                  <select id="case-assistant" value={fields.assignedAssistantId} onChange={set("assignedAssistantId")} className={select}>
-                    <option value="">— Unassigned —</option>
-                    {members.map((m) => <option key={m.user.id} value={m.user.id}>{memberLabel(m)}</option>)}
-                  </select>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Defense */}
           <div className="border-t border-border pt-3 flex flex-col gap-3">
