@@ -182,7 +182,7 @@ export default function TeamClient({ initialWorkspace, initialMembers, initialIn
     try {
       const res = await fetch("/api/workspaces/current", { method: "DELETE" });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
-      window.location.href = "/";
+      window.location.href = "/setup";
     } catch (err) {
       flash(err instanceof Error ? err.message : "Failed to delete workspace.", true);
       setDeletingWorkspace(false);

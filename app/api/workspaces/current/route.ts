@@ -43,7 +43,15 @@ export async function DELETE() {
     return NextResponse.json({ error: "Only the owner can delete the workspace" }, { status: 403 });
   }
 
-  await prisma.workspace.delete({ where: { id: workspace.id } });
+  const workspaceId = workspace.id;
+
+  // Explicitly clean up before deletion to avoid FK constraint issues
+  await prisma.event.updateMany({ where: { workspaceId }, data: { workspaceId: null } });
+  await prisma.case.updateMany({ where: { workspaceId }, data: { workspaceId: null } });
+  await prisma.workspaceInvitation.deleteMany({ where: { workspaceId } });
+  await prisma.workspaceMember.deleteMany({ where: { workspaceId } });
+  await prisma.workspace.delete({ where: { id: workspaceId } });
+
   return NextResponse.json({ ok: true });
 }
 
