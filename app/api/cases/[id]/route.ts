@@ -125,6 +125,14 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     },
   });
 
+  // Propagate attorney change to all existing events on this case
+  if (attorneyId !== undefined && attorneyId !== existing.assignedAttorneyId) {
+    await prisma.event.updateMany({
+      where: { caseId: id },
+      data: { assignedAttorneyId: attorneyId },
+    });
+  }
+
   // When closing/archiving, delete all associated events from DB and Google Calendar
   if (isClosing) {
     const events = await prisma.event.findMany({
