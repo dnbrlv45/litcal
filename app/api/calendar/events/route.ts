@@ -75,11 +75,13 @@ export async function POST(request: NextRequest) {
   if (!title?.trim() || !start || !end)
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
 
+  let inheritedAttorneyId: string | null = null;
   if (caseId) {
-    const linkedCase = await prisma.case.findUnique({ where: { id: caseId }, select: { status: true } });
+    const linkedCase = await prisma.case.findUnique({ where: { id: caseId }, select: { status: true, assignedAttorneyId: true } });
     if (!linkedCase) return NextResponse.json({ error: "Case not found" }, { status: 404 });
     if (linkedCase.status === "ARCHIVED" || linkedCase.status === "CLOSED")
       return NextResponse.json({ error: "Cannot add events to an archived or closed case" }, { status: 422 });
+    inheritedAttorneyId = linkedCase.assignedAttorneyId;
   }
 
   const validTypes = ["DEADLINE","HEARING","DEPOSITION","TRIAL","CONFERENCE","MEETING","REMINDER","OTHER"];
@@ -99,6 +101,7 @@ export async function POST(request: NextRequest) {
       eventType: safeEventType,
       location: location || null,
       caseId: caseId || null,
+      assignedAttorneyId: inheritedAttorneyId,
     },
   });
 

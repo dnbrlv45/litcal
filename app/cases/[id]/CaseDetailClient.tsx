@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
-import { ArrowLeft, Calendar, MapPin, Pencil, Trash2, Check, X } from "lucide-react";
+import { ArrowLeft, Calendar, MapPin, Pencil, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,39 +30,44 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
   REMINDER: "Reminder", OTHER: "Other",
 };
 
+interface AssignedUser { id: string; firstName: string | null; lastName: string | null; email: string; }
+interface WorkspaceMember { id: string; user: AssignedUser; }
+
 interface CaseEvent {
-  id: string;
-  title: string;
-  startTime: string;
-  endTime: string;
-  allDay: boolean;
-  eventType: EventType;
-  location: string | null;
+  id: string; title: string; startTime: string; endTime: string;
+  allDay: boolean; eventType: EventType; location: string | null;
 }
 
 interface CaseData {
-  id: string;
-  title: string;
-  caseNumber: string | null;
-  status: keyof typeof STATUS_COLORS;
-  caseType: string;
-  court: string | null;
-  county: string | null;
-  judge: string | null;
-  description: string | null;
-  defendant: string | null;
-  defenseFirm: string | null;
-  defenseAttorney: string | null;
-  filingDate: string | null;
+  id: string; title: string; caseNumber: string | null;
+  status: keyof typeof STATUS_COLORS; caseType: string;
+  court: string | null; county: string | null; judge: string | null;
+  description: string | null; filingDate: string | null;
+  defendant: string | null; defenseFirm: string | null; defenseAttorney: string | null;
+  assignedAttorney:  AssignedUser | null;
+  assignedParalegal: AssignedUser | null;
+  assignedAssistant: AssignedUser | null;
   events: CaseEvent[];
+}
+
+function userName(u: AssignedUser | null) {
+  if (!u) return null;
+  const name = [u.firstName, u.lastName].filter(Boolean).join(" ").trim();
+  return name || u.email;
+}
+
+function memberLabel(m: WorkspaceMember) {
+  return userName(m.user) ?? m.user.email;
 }
 
 export default function CaseDetailClient({ id }: { id: string }) {
   const [caseData, setCaseData] = useState<CaseData | null>(null);
+  const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const membersFetched = useRef(false);
 
   // Edit state
   const [editTitle, setEditTitle] = useState("");
@@ -75,6 +80,9 @@ export default function CaseDetailClient({ id }: { id: string }) {
   const [editDefendant, setEditDefendant] = useState("");
   const [editDefenseFirm, setEditDefenseFirm] = useState("");
   const [editDefenseAttorney, setEditDefenseAttorney] = useState("");
+  const [editAttorneyId, setEditAttorneyId] = useState("");
+  const [editParalegalId, setEditParalegalId] = useState("");
+  const [editAssistantId, setEditAssistantId] = useState("");
 
   const fetchCase = useCallback(async () => {
     setLoading(true);
@@ -102,8 +110,16 @@ export default function CaseDetailClient({ id }: { id: string }) {
     setEditDefendant(caseData.defendant ?? "");
     setEditDefenseFirm(caseData.defenseFirm ?? "");
     setEditDefenseAttorney(caseData.defenseAttorney ?? "");
+    setEditAttorneyId(caseData.assignedAttorney?.id ?? "");
+    setEditParalegalId(caseData.assignedParalegal?.id ?? "");
+    setEditAssistantId(caseData.assignedAssistant?.id ?? "");
     setError(null);
     setEditing(true);
+
+    if (!membersFetched.current) {
+      membersFetched.current = true;
+      fetch("/api/workspaces/members").then((r) => r.json()).then((d) => setMembers(d.members ?? [])).catch(() => {});
+    }
   }
 
   async function handleSave() {
@@ -118,6 +134,9 @@ export default function CaseDetailClient({ id }: { id: string }) {
           court: editCourt, county: editCounty, judge: editJudge,
           description: editDescription,
           defendant: editDefendant, defenseFirm: editDefenseFirm, defenseAttorney: editDefenseAttorney,
+          assignedAttorneyId:  editAttorneyId  || null,
+          assignedParalegalId: editParalegalId || null,
+          assignedAssistantId: editAssistantId || null,
         }),
       });
       if (!res.ok) throw new Error();
@@ -144,6 +163,9 @@ export default function CaseDetailClient({ id }: { id: string }) {
 
   const upcomingEvents = caseData.events.filter((e) => new Date(e.startTime) >= new Date());
   const pastEvents = caseData.events.filter((e) => new Date(e.startTime) < new Date());
+
+  const hasAssignments = caseData.assignedAttorney || caseData.assignedParalegal || caseData.assignedAssistant;
+  const select = "flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -202,9 +224,48 @@ export default function CaseDetailClient({ id }: { id: string }) {
       <div className="px-8 py-6 grid grid-cols-3 gap-6 max-w-5xl">
         {/* Left: case info */}
         <div className="col-span-1 flex flex-col gap-5">
+
+          {/* Assignments */}
+          {(editing || hasAssignments) && (
+            <div className="rounded-xl border border-border p-4 flex flex-col gap-3">
+              <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Assignments</h2>
+              {editing ? (
+                <>
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-xs text-muted-foreground">Attorney</Label>
+                    <select value={editAttorneyId} onChange={(e) => setEditAttorneyId(e.target.value)} className={select}>
+                      <option value="">— Unassigned —</option>
+                      {members.map((m) => <option key={m.user.id} value={m.user.id}>{memberLabel(m)}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-xs text-muted-foreground">Paralegal</Label>
+                    <select value={editParalegalId} onChange={(e) => setEditParalegalId(e.target.value)} className={select}>
+                      <option value="">— Unassigned —</option>
+                      {members.map((m) => <option key={m.user.id} value={m.user.id}>{memberLabel(m)}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-xs text-muted-foreground">Assistant</Label>
+                    <select value={editAssistantId} onChange={(e) => setEditAssistantId(e.target.value)} className={select}>
+                      <option value="">— Unassigned —</option>
+                      {members.map((m) => <option key={m.user.id} value={m.user.id}>{memberLabel(m)}</option>)}
+                    </select>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {caseData.assignedAttorney  && <Field label="Attorney"  editing={false} display={userName(caseData.assignedAttorney)}  input={null} />}
+                  {caseData.assignedParalegal && <Field label="Paralegal" editing={false} display={userName(caseData.assignedParalegal)} input={null} />}
+                  {caseData.assignedAssistant && <Field label="Assistant" editing={false} display={userName(caseData.assignedAssistant)} input={null} />}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Case Info */}
           <div className="rounded-xl border border-border p-4 flex flex-col gap-3">
             <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Case Info</h2>
-
             <Field label="County" editing={editing}
               display={caseData.county}
               input={<Input value={editCounty} onChange={(e) => setEditCounty(e.target.value)} placeholder="e.g. Los Angeles" />}
@@ -226,7 +287,7 @@ export default function CaseDetailClient({ id }: { id: string }) {
             {caseData.filingDate && (
               <Field label="Filed" editing={false}
                 display={new Date(caseData.filingDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
-                input={<></>}
+                input={null}
               />
             )}
           </div>
@@ -250,7 +311,7 @@ export default function CaseDetailClient({ id }: { id: string }) {
             </div>
           )}
 
-          {/* Description */}
+          {/* Notes */}
           <div className="rounded-xl border border-border p-4 flex flex-col gap-2">
             <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Notes</h2>
             {editing ? (

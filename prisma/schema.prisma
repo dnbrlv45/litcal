@@ -26,6 +26,11 @@ model User {
   cases               Case[]
   workspaceMemberships WorkspaceMember[]
   sessions            AuthSession[]
+
+  assignedCasesAsAttorney  Case[] @relation("CaseAttorney")
+  assignedCasesAsParalegal Case[] @relation("CaseParalegal")
+  assignedCasesAsAssistant Case[] @relation("CaseAssistant")
+  assignedEvents           Event[] @relation("EventAttorney")
 }
 
 model AuthSession {
@@ -143,6 +148,7 @@ model Event {
   orgId       String?     // Legacy organization ID; retained for old rows only.
   workspaceId String?
   caseId      String?
+  assignedAttorneyId String?
 
   eventType   EventType   @default(OTHER)
   status      EventStatus @default(SCHEDULED)
@@ -151,16 +157,18 @@ model Event {
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
-  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace   Workspace?          @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
-  caseRef     Case?               @relation(fields: [caseId], references: [id], onDelete: SetNull)
-  googleSync  GoogleCalendarSync?
+  user             User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace        Workspace?          @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  caseRef          Case?               @relation(fields: [caseId], references: [id], onDelete: SetNull)
+  assignedAttorney User?               @relation("EventAttorney", fields: [assignedAttorneyId], references: [id], onDelete: SetNull)
+  googleSync       GoogleCalendarSync?
 
   @@index([userId, startTime])
   @@index([userId, startTime, endTime])
   @@index([workspaceId, startTime])
   @@index([orgId, startTime])
   @@index([caseId])
+  @@index([assignedAttorneyId])
 }
 
 enum EventType {
@@ -231,14 +239,21 @@ model Case {
   defenseFirm     String?
   defenseAttorney String?
 
+  assignedAttorneyId  String?
+  assignedParalegalId String?
+  assignedAssistantId String?
+
   filingDate   DateTime?
   closedDate   DateTime?
 
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
-  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace    Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace         Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  assignedAttorney  User?      @relation("CaseAttorney",  fields: [assignedAttorneyId],  references: [id], onDelete: SetNull)
+  assignedParalegal User?      @relation("CaseParalegal", fields: [assignedParalegalId], references: [id], onDelete: SetNull)
+  assignedAssistant User?      @relation("CaseAssistant", fields: [assignedAssistantId], references: [id], onDelete: SetNull)
   parties      CaseParty[]
   events       Event[]
 
@@ -246,6 +261,9 @@ model Case {
   @@index([workspaceId])
   @@index([userId])
   @@index([status])
+  @@index([assignedAttorneyId])
+  @@index([assignedParalegalId])
+  @@index([assignedAssistantId])
 }
 
 enum CaseStatus {

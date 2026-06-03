@@ -12,6 +12,20 @@ function userDisplayName(user: { email: string; firstName: string | null; lastNa
   return [user.firstName, user.lastName].filter(Boolean).join(" ").trim() || user.email;
 }
 
+export async function GET() {
+  const currentUser = await requireUser();
+  if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { workspace } = await getCurrentWorkspace(currentUser.id);
+
+  const members = await prisma.workspaceMember.findMany({
+    where: { workspaceId: workspace.id },
+    include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return NextResponse.json({ members });
+}
+
 export async function POST(request: NextRequest) {
   const currentUser = await requireUser();
   if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

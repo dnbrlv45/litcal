@@ -55,6 +55,9 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     defendant?: string;
     defenseFirm?: string;
     defenseAttorney?: string;
+    assignedAttorneyId?: string | null;
+    assignedParalegalId?: string | null;
+    assignedAssistantId?: string | null;
   };
 
   const existing = await prisma.case.findFirst({
@@ -68,12 +71,27 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  async function resolveAssignment(id: string | null | undefined): Promise<string | null> {
+    if (id === null) return null;
+    if (!id) return undefined as unknown as null; // not provided — skip field
+    const member = await prisma.workspaceMember.findFirst({ where: { workspaceId: workspace.id, userId: id } });
+    return member ? id : null;
+  }
+
   const validTypes = ["AUTO_ACCIDENT","SLIP_AND_FALL","GOVERNMENT_CLAIM","DOG_BITE","PREMISES_LIABILITY","MEDICAL_MALPRACTICE","WRONGFUL_DEATH","PRODUCT_LIABILITY","OTHER"];
   const validStatuses = ["ACTIVE","CLOSED","ARCHIVED","PENDING"];
   const closingStatuses = ["CLOSED", "ARCHIVED"];
 
   const newStatus = body.status && validStatuses.includes(body.status) ? body.status : null;
   const isClosing = newStatus && closingStatuses.includes(newStatus) && !closingStatuses.includes(existing.status);
+
+  const [attorneyId, paralegalId, assistantId] = await Promise.all([
+    body.assignedAttorneyId  !== undefined ? resolveAssignment(body.assignedAttorneyId)  : Promise.resolve(undefined),
+    body.assignedParalegalId !== undefined ? resolveAssignment(body.assignedParalegalId) : Promise.resolve(undefined),
+    body.assignedAssistantId !== undefined ? resolveAssignment(body.assignedAssistantId) : Promise.resolve(undefined),
+  ]);
+
+  const ASSIGNMENT_INCLUDE = { select: { id: true, firstName: true, lastName: true, email: true } } as const;
 
   const updated = await prisma.case.update({
     where: { id },
@@ -91,8 +109,17 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       ...(body.defendant !== undefined && { defendant: body.defendant?.trim() || null }),
       ...(body.defenseFirm !== undefined && { defenseFirm: body.defenseFirm?.trim() || null }),
       ...(body.defenseAttorney !== undefined && { defenseAttorney: body.defenseAttorney?.trim() || null }),
+      ...(attorneyId  !== undefined && { assignedAttorneyId:  attorneyId }),
+      ...(paralegalId !== undefined && { assignedParalegalId: paralegalId }),
+      ...(assistantId !== undefined && { assignedAssistantId: assistantId }),
     },
-    include: { parties: true, _count: { select: { events: true } } },
+    include: {
+      parties: true,
+      _count: { select: { events: true } },
+      assignedAttorney:  ASSIGNMENT_INCLUDE,
+      assignedParalegal: ASSIGNMENT_INCLUDE,
+      assignedAssistant: ASSIGNMENT_INCLUDE,
+    },
   });
 
   // When closing/archiving, delete all associated events from DB and Google Calendar
