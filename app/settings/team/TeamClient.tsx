@@ -88,7 +88,7 @@ export default function TeamClient({ initialWorkspace, initialMembers, initialIn
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to update team.");
-      setWorkspace(data.workspace);
+      setWorkspace((prev) => ({ ...prev, name: name.trim() }));
       flash("Team updated.");
     } catch (err) {
       flash(err instanceof Error ? err.message : "Failed to update team.", true);
@@ -392,7 +392,7 @@ export default function TeamClient({ initialWorkspace, initialMembers, initialIn
               <Input value={confirmDelete} onChange={(e) => setConfirmDelete(e.target.value)} placeholder={workspace.name} />
               <Button
                 variant="destructive"
-                disabled={confirmDelete !== workspace.name || deletingWorkspace}
+                disabled={confirmDelete.trim() !== workspace.name.trim() || deletingWorkspace}
                 onClick={deleteWorkspace}
                 className="w-fit"
               >
