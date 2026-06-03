@@ -201,7 +201,7 @@ export default function CalendarView() {
     setDate((d) => {
       const next = new Date(d);
       if (view === "month") next.setMonth(d.getMonth() - 1);
-      else if (view === "week") next.setDate(d.getDate() - 7);
+      else if (view === "week" || view === "team") next.setDate(d.getDate() - 7);
       else next.setDate(d.getDate() - 1);
       return next;
     });
@@ -211,7 +211,7 @@ export default function CalendarView() {
     setDate((d) => {
       const next = new Date(d);
       if (view === "month") next.setMonth(d.getMonth() + 1);
-      else if (view === "week") next.setDate(d.getDate() + 7);
+      else if (view === "week" || view === "team") next.setDate(d.getDate() + 7);
       else next.setDate(d.getDate() + 1);
       return next;
     });
