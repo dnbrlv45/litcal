@@ -44,6 +44,7 @@ export default async function TeamPage() {
         createdAt: invitation.createdAt.toISOString(),
       }))}
       currentRole={membership.role}
+      currentUserId={userId}
     />
   );
 }

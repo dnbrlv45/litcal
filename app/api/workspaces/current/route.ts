@@ -31,6 +31,20 @@ export async function GET() {
   return NextResponse.json({ workspace, membership, members, invitations });
 }
 
+export async function DELETE() {
+  const currentUser = await requireUser();
+  if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = currentUser.id;
+
+  const { workspace, membership } = await getCurrentWorkspace(userId);
+  if (membership.role !== "OWNER") {
+    return NextResponse.json({ error: "Only the owner can delete the workspace" }, { status: 403 });
+  }
+
+  await prisma.workspace.delete({ where: { id: workspace.id } });
+  return NextResponse.json({ ok: true });
+}
+
 export async function PATCH(request: NextRequest) {
   const currentUser = await requireUser();
   if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
