@@ -33,27 +33,33 @@ interface Props {
   onCreated: () => void;
 }
 
+const DEFAULT_START = "09:00";
+const DEFAULT_END   = "10:00";
+
 function toDateInputValue(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
-function toTimeInputValue(d: Date) {
-  return d.toTimeString().slice(0, 5);
+// "HH:MM" → minutes since midnight
+function timeToMinutes(t: string) {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
 }
 
-function addHour(d: Date) {
-  return new Date(d.getTime() + 60 * 60 * 1000);
+// minutes since midnight → "HH:MM"
+function minutesToTime(mins: number) {
+  const clamped = ((mins % 1440) + 1440) % 1440;
+  return `${String(Math.floor(clamped / 60)).padStart(2, "0")}:${String(clamped % 60).padStart(2, "0")}`;
 }
 
 interface CaseOption { id: string; title: string; caseNumber: string | null; status: string; }
 
 export default function EventModal({ open, onClose, defaultStart, googleConnected, onCreated }: Props) {
-  const now = defaultStart ?? new Date();
   const [title, setTitle] = useState("");
   const [eventType, setEventType] = useState<EventType>("HEARING");
-  const [date, setDate] = useState(toDateInputValue(now));
-  const [startTime, setStartTime] = useState(toTimeInputValue(now));
-  const [endTime, setEndTime] = useState(toTimeInputValue(addHour(now)));
+  const [date, setDate] = useState(toDateInputValue(defaultStart ?? new Date()));
+  const [startTime, setStartTime] = useState(DEFAULT_START);
+  const [endTime, setEndTime] = useState(DEFAULT_END);
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
   const [caseId, setCaseId] = useState("");
@@ -71,18 +77,33 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
 
   useEffect(() => {
     if (open) {
-      const base = defaultStart ?? new Date();
       setTitle("");
       setEventType("HEARING");
-      setDate(toDateInputValue(base));
-      setStartTime(toTimeInputValue(base));
-      setEndTime(toTimeInputValue(addHour(base)));
+      setDate(toDateInputValue(defaultStart ?? new Date()));
+      setStartTime(DEFAULT_START);
+      setEndTime(DEFAULT_END);
       setLocation("");
       setDescription("");
       setCaseId("");
       setError(null);
     }
   }, [open, defaultStart]);
+
+  function handleStartChange(newStart: string) {
+    const oldStartMins = timeToMinutes(startTime);
+    const oldEndMins   = timeToMinutes(endTime);
+    const duration     = oldEndMins > oldStartMins ? oldEndMins - oldStartMins : 60;
+    const newStartMins = timeToMinutes(newStart);
+    setStartTime(newStart);
+    setEndTime(minutesToTime(newStartMins + duration));
+  }
+
+  function handleEndChange(newEnd: string) {
+    const startMins = timeToMinutes(startTime);
+    const endMins   = timeToMinutes(newEnd);
+    // If end <= start, push end to start + 1 hour
+    setEndTime(endMins > startMins ? newEnd : minutesToTime(startMins + 60));
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -91,11 +112,6 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const startISO = new Date(`${date}T${startTime}`).toISOString();
     const endISO = new Date(`${date}T${endTime}`).toISOString();
-
-    if (new Date(endISO) <= new Date(startISO)) {
-      setError("End time must be after start time.");
-      return;
-    }
 
     setSaving(true);
     setError(null);
@@ -184,11 +200,11 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="event-start">Start time</Label>
-              <Input id="event-start" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+              <Input id="event-start" type="time" value={startTime} onChange={(e) => handleStartChange(e.target.value)} />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="event-end">End time</Label>
-              <Input id="event-end" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+              <Input id="event-end" type="time" value={endTime} onChange={(e) => handleEndChange(e.target.value)} />
             </div>
           </div>
 
