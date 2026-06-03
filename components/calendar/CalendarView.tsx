@@ -28,18 +28,17 @@ const MONTH_NAMES = [
 ];
 const DAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 
-const EVENT_TYPE_OPTIONS: { value: EventType | ""; label: string }[] = [
-  { value: "",           label: "All Types" },
-  { value: "HEARING",   label: "Hearing" },
-  { value: "DEPOSITION",label: "Deposition" },
-  { value: "TRIAL",     label: "Trial" },
-  { value: "DEADLINE",  label: "Deadline" },
-  { value: "CONFERENCE",label: "Conference" },
-  { value: "MEDIATION", label: "Mediation" },
-  { value: "MEETING",   label: "Meeting" },
-  { value: "REMINDER",  label: "Reminder" },
-  { value: "OTHER",     label: "Other" },
-];
+const EVENT_TYPE_LABELS: Record<EventType, string> = {
+  HEARING:    "Hearing",
+  DEPOSITION: "Deposition",
+  TRIAL:      "Trial",
+  DEADLINE:   "Deadline",
+  CONFERENCE: "Conference",
+  MEDIATION:  "Mediation",
+  MEETING:    "Meeting",
+  REMINDER:   "Reminder",
+  OTHER:      "Other",
+};
 
 interface WorkspaceMember {
   id: string;
@@ -320,15 +319,18 @@ export default function CalendarView() {
           </select>
         )}
 
-        {/* Event type */}
+        {/* Event type — only types present in current view */}
         <select
           value={filterEventType}
           onChange={(e) => setFilterEventType(e.target.value)}
           className={`${selectClass} ${filterEventType ? activeSelectClass : ""}`}
         >
-          {EVENT_TYPE_OPTIONS.map(({ value, label }) => (
-            <option key={value} value={value}>{label}</option>
-          ))}
+          <option value="">All Types</option>
+          {(Array.from(new Set(events.map((e) => e.eventType))) as EventType[])
+            .sort()
+            .map((type) => (
+              <option key={type} value={type}>{EVENT_TYPE_LABELS[type] ?? type}</option>
+            ))}
         </select>
 
         {/* Case status */}
