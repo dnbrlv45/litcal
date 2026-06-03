@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import type { CalEvent } from "@/lib/google-calendar";
 import { EVENT_TYPE_COLORS } from "@/lib/google-calendar";
+import { layoutDayEvents } from "@/lib/calendar-layout";
 
 const ROW_HEIGHT = 64;
 const DAY_ABBR = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
@@ -133,7 +134,7 @@ export default function WeekView({ date, today, events, onCellClick, onSelectDay
           {/* Day columns */}
           {days.map((day, di) => {
             const isToday = isSameDay(day, today);
-            const dayEvents = events.filter((e) => isSameDay(e.start, day) && !e.allDay);
+            const dayEvents = layoutDayEvents(events.filter((e) => isSameDay(e.start, day) && !e.allDay));
             return (
               <div
                 key={di}
@@ -152,12 +153,18 @@ export default function WeekView({ date, today, events, onCellClick, onSelectDay
                 {/* Events */}
                 {dayEvents.map((ev) => {
                   const colors = EVENT_TYPE_COLORS[ev.eventType ?? "OTHER"];
+                  const colWidth = 100 / ev.numCols;
                   return (
                     <div
                       key={ev.id}
                       onClick={(e) => { e.stopPropagation(); onEventClick(ev); }}
-                      className={`absolute left-1.5 right-1.5 z-10 cursor-pointer overflow-hidden rounded-lg border px-2.5 py-2 text-xs shadow-sm ring-1 transition hover:-translate-y-0.5 hover:shadow-md ${colors.bg} ${colors.text} ${ev.hasConflict ? "border-amber-400 ring-amber-200" : `${colors.border} ${colors.ring}`}`}
-                      style={{ top: eventTop(ev) - HOURS[0] * ROW_HEIGHT, height: eventHeight(ev) }}
+                      className={`absolute z-10 cursor-pointer overflow-hidden rounded-lg border px-2.5 py-2 text-xs shadow-sm ring-1 transition hover:-translate-y-0.5 hover:shadow-md ${colors.bg} ${colors.text} ${ev.hasConflict ? "border-amber-400 ring-amber-200" : `${colors.border} ${colors.ring}`}`}
+                      style={{
+                        top: eventTop(ev) - HOURS[0] * ROW_HEIGHT,
+                        height: eventHeight(ev),
+                        left: `calc(${ev.col * colWidth}% + 3px)`,
+                        width: `calc(${colWidth}% - 6px)`,
+                      }}
                       title={ev.title}
                     >
                       <span className="mb-0.5 flex items-center gap-1 text-[11px] font-medium opacity-80">
