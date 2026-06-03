@@ -66,6 +66,7 @@ export default function CaseDetailClient({ id }: { id: string }) {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingAssignment, setSavingAssignment] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const membersFetched = useRef(false);
 
@@ -80,9 +81,6 @@ export default function CaseDetailClient({ id }: { id: string }) {
   const [editDefendant, setEditDefendant] = useState("");
   const [editDefenseFirm, setEditDefenseFirm] = useState("");
   const [editDefenseAttorney, setEditDefenseAttorney] = useState("");
-  const [editAttorneyId, setEditAttorneyId] = useState("");
-  const [editParalegalId, setEditParalegalId] = useState("");
-  const [editAssistantId, setEditAssistantId] = useState("");
 
   const fetchCase = useCallback(async () => {
     setLoading(true);
@@ -98,6 +96,30 @@ export default function CaseDetailClient({ id }: { id: string }) {
 
   useEffect(() => { fetchCase(); }, [fetchCase]);
 
+  useEffect(() => {
+    if (!membersFetched.current) {
+      membersFetched.current = true;
+      fetch("/api/workspaces/members").then((r) => r.json()).then((d) => setMembers(d.members ?? [])).catch(() => {});
+    }
+  }, []);
+
+  async function updateAssignment(field: "assignedAttorneyId" | "assignedParalegalId" | "assignedAssistantId", value: string) {
+    setSavingAssignment(true);
+    try {
+      const res = await fetch(`/api/cases/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: value || null }),
+      });
+      if (!res.ok) throw new Error();
+      await fetchCase();
+    } catch {
+      setError("Failed to update assignment.");
+    } finally {
+      setSavingAssignment(false);
+    }
+  }
+
   function startEdit() {
     if (!caseData) return;
     setEditTitle(caseData.title);
@@ -110,16 +132,8 @@ export default function CaseDetailClient({ id }: { id: string }) {
     setEditDefendant(caseData.defendant ?? "");
     setEditDefenseFirm(caseData.defenseFirm ?? "");
     setEditDefenseAttorney(caseData.defenseAttorney ?? "");
-    setEditAttorneyId(caseData.assignedAttorney?.id ?? "");
-    setEditParalegalId(caseData.assignedParalegal?.id ?? "");
-    setEditAssistantId(caseData.assignedAssistant?.id ?? "");
     setError(null);
     setEditing(true);
-
-    if (!membersFetched.current) {
-      membersFetched.current = true;
-      fetch("/api/workspaces/members").then((r) => r.json()).then((d) => setMembers(d.members ?? [])).catch(() => {});
-    }
   }
 
   async function handleSave() {
@@ -134,9 +148,6 @@ export default function CaseDetailClient({ id }: { id: string }) {
           court: editCourt, county: editCounty, judge: editJudge,
           description: editDescription,
           defendant: editDefendant, defenseFirm: editDefenseFirm, defenseAttorney: editDefenseAttorney,
-          assignedAttorneyId:  editAttorneyId  || null,
-          assignedParalegalId: editParalegalId || null,
-          assignedAssistantId: editAssistantId || null,
         }),
       });
       if (!res.ok) throw new Error();
@@ -164,8 +175,8 @@ export default function CaseDetailClient({ id }: { id: string }) {
   const upcomingEvents = caseData.events.filter((e) => new Date(e.startTime) >= new Date());
   const pastEvents = caseData.events.filter((e) => new Date(e.startTime) < new Date());
 
-  const hasAssignments = caseData.assignedAttorney || caseData.assignedParalegal || caseData.assignedAssistant;
-  const select = "flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
+  const canAssign = caseData.status === "ACTIVE";
+  const select = "flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed";
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -225,43 +236,50 @@ export default function CaseDetailClient({ id }: { id: string }) {
         {/* Left: case info */}
         <div className="col-span-1 flex flex-col gap-5">
 
-          {/* Assignments */}
-          {(editing || hasAssignments) && (
-            <div className="rounded-xl border border-border p-4 flex flex-col gap-3">
+          {/* Assignments — always visible, inline save, active-only */}
+          <div className="rounded-xl border border-border p-4 flex flex-col gap-3">
+            <div className="flex items-center justify-between">
               <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Assignments</h2>
-              {editing ? (
-                <>
-                  <div className="flex flex-col gap-1">
-                    <Label className="text-xs text-muted-foreground">Attorney</Label>
-                    <select value={editAttorneyId} onChange={(e) => setEditAttorneyId(e.target.value)} className={select}>
-                      <option value="">— Unassigned —</option>
-                      {members.map((m) => <option key={m.user.id} value={m.user.id}>{memberLabel(m)}</option>)}
-                    </select>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <Label className="text-xs text-muted-foreground">Paralegal</Label>
-                    <select value={editParalegalId} onChange={(e) => setEditParalegalId(e.target.value)} className={select}>
-                      <option value="">— Unassigned —</option>
-                      {members.map((m) => <option key={m.user.id} value={m.user.id}>{memberLabel(m)}</option>)}
-                    </select>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <Label className="text-xs text-muted-foreground">Assistant</Label>
-                    <select value={editAssistantId} onChange={(e) => setEditAssistantId(e.target.value)} className={select}>
-                      <option value="">— Unassigned —</option>
-                      {members.map((m) => <option key={m.user.id} value={m.user.id}>{memberLabel(m)}</option>)}
-                    </select>
-                  </div>
-                </>
-              ) : (
-                <>
-                  {caseData.assignedAttorney  && <Field label="Attorney"  editing={false} display={userName(caseData.assignedAttorney)}  input={null} />}
-                  {caseData.assignedParalegal && <Field label="Paralegal" editing={false} display={userName(caseData.assignedParalegal)} input={null} />}
-                  {caseData.assignedAssistant && <Field label="Assistant" editing={false} display={userName(caseData.assignedAssistant)} input={null} />}
-                </>
-              )}
+              {savingAssignment && <span className="text-xs text-muted-foreground">Saving…</span>}
+              {!canAssign && <span className="text-xs text-muted-foreground italic">Case must be active to assign</span>}
             </div>
-          )}
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs text-muted-foreground">Attorney</Label>
+              <select
+                value={caseData.assignedAttorney?.id ?? ""}
+                onChange={(e) => updateAssignment("assignedAttorneyId", e.target.value)}
+                disabled={!canAssign || savingAssignment}
+                className={select}
+              >
+                <option value="">— Unassigned —</option>
+                {members.map((m) => <option key={m.user.id} value={m.user.id}>{memberLabel(m)}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs text-muted-foreground">Paralegal</Label>
+              <select
+                value={caseData.assignedParalegal?.id ?? ""}
+                onChange={(e) => updateAssignment("assignedParalegalId", e.target.value)}
+                disabled={!canAssign || savingAssignment}
+                className={select}
+              >
+                <option value="">— Unassigned —</option>
+                {members.map((m) => <option key={m.user.id} value={m.user.id}>{memberLabel(m)}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs text-muted-foreground">Assistant</Label>
+              <select
+                value={caseData.assignedAssistant?.id ?? ""}
+                onChange={(e) => updateAssignment("assignedAssistantId", e.target.value)}
+                disabled={!canAssign || savingAssignment}
+                className={select}
+              >
+                <option value="">— Unassigned —</option>
+                {members.map((m) => <option key={m.user.id} value={m.user.id}>{memberLabel(m)}</option>)}
+              </select>
+            </div>
+          </div>
 
           {/* Case Info */}
           <div className="rounded-xl border border-border p-4 flex flex-col gap-3">
