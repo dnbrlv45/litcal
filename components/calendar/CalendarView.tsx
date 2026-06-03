@@ -16,11 +16,12 @@ import {
 import MonthView from "./MonthView";
 import WeekView from "./WeekView";
 import DayView from "./DayView";
+import TeamView from "./TeamView";
 import EventModal from "./EventModal";
 import EventDetailPanel from "./EventDetailPanel";
 import type { CalEvent, EventType } from "@/lib/google-calendar";
 
-type CalView = "month" | "week" | "day";
+type CalView = "month" | "week" | "day" | "team";
 
 const MONTH_NAMES = [
   "January","February","March","April","May","June",
@@ -76,7 +77,7 @@ function getDateRange(view: CalView, date: Date): { start: Date; end: Date } {
       end: new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59),
     };
   }
-  if (view === "week") {
+  if (view === "week" || view === "team") {
     const start = startOfWeek(date);
     const end = new Date(start);
     end.setDate(end.getDate() + 6);
@@ -219,7 +220,7 @@ export default function CalendarView() {
   const periodLabel =
     view === "month"
       ? `${MONTH_NAMES[date.getMonth()]} ${date.getFullYear()}`
-      : view === "week"
+      : view === "week" || view === "team"
       ? formatWeekLabel(date)
       : `${DAY_NAMES[date.getDay()]}, ${MONTH_NAMES[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
 
@@ -270,7 +271,7 @@ export default function CalendarView() {
           <h1 className="text-2xl font-bold tracking-tight text-slate-950">{periodLabel}</h1>
           <ChevronDown className="size-4 text-slate-500" />
           <div className="ml-4 flex rounded-lg border border-slate-200 bg-white p-0.5 shadow-sm">
-            {(["day", "week", "month"] as CalView[]).map((v) => (
+            {(["day", "week", "month", "team"] as CalView[]).map((v) => (
               <button
                 key={v}
                 onClick={() => setView(v)}
@@ -433,6 +434,19 @@ export default function CalendarView() {
               events={filteredEvents}
               onCellClick={(d) => openModal(d)}
               onEventClick={(ev) => setSelectedEvent(ev)}
+            />
+          )}
+          {view === "team" && (
+            <TeamView
+              date={date}
+              today={today}
+              events={filteredEvents}
+              attorneys={attorneys.map((m) => ({
+                id: m.user.id,
+                name: [m.user.firstName, m.user.lastName].filter(Boolean).join(" ") || m.user.email,
+              }))}
+              onEventClick={(ev) => setSelectedEvent(ev)}
+              onSelectDay={(d) => { setDate(d); setView("day"); }}
             />
           )}
         </div>
