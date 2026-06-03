@@ -93,6 +93,9 @@ export default function CalendarView() {
           eventType: e.eventType ?? "OTHER",
           caseId: e.caseId ?? undefined,
           caseTitle: e.caseTitle ?? undefined,
+          assignedAttorneyId: e.assignedAttorneyId ?? undefined,
+          assignedAttorneyName: e.assignedAttorneyName ?? undefined,
+          hasConflict: e.hasConflict ?? false,
         }))
       );
     } catch { /* silently fail */ }

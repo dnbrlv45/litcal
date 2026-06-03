@@ -180,6 +180,7 @@ model Event {
   @@index([orgId, startTime])
   @@index([caseId])
   @@index([assignedAttorneyId])
+  @@index([assignedAttorneyId, startTime, endTime])
 }
 
 enum EventType {

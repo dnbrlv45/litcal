@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getAccessToken, deleteGoogleEvent } from "@/lib/google-calendar";
 import { getCurrentWorkspace } from "@/lib/workspaces";
+import { detectConflicts } from "@/lib/conflicts";
 
 // DELETE /api/calendar/events/[id]
 export async function DELETE(
@@ -102,7 +103,15 @@ export async function PATCH(
       ...(body.location !== undefined && { location: body.location || null }),
       ...("caseId" in body && { caseId: body.caseId || null }),
     },
+    include: { assignedAttorney: { select: { id: true } } },
   });
+
+  // Check conflicts against the saved state (non-blocking)
+  const newStart = updated.startTime;
+  const newEnd = updated.endTime;
+  const conflicts = updated.assignedAttorney
+    ? await detectConflicts(updated.assignedAttorney.id, newStart, newEnd, id)
+    : [];
 
   return NextResponse.json({
     event: {
@@ -115,5 +124,12 @@ export async function PATCH(
       eventType: updated.eventType,
       location: updated.location,
     },
+    conflicts: conflicts.map((c) => ({
+      eventId: c.eventId,
+      title: c.title,
+      startTime: c.startTime.toISOString(),
+      endTime: c.endTime.toISOString(),
+      attorneyName: c.attorneyName,
+    })),
   });
 }

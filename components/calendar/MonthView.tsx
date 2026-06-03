@@ -93,11 +93,15 @@ export default function MonthView({ date, today, events, onCellClick, onSelectDa
                       <div
                         key={ev.id}
                         onClick={(e) => { e.stopPropagation(); onEventClick(ev); }}
-                        className={`truncate rounded-md border px-2 py-1 text-xs font-semibold cursor-pointer shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${colors.bg} ${colors.text} ${colors.border}`}
+                        className={`truncate rounded-md border px-2 py-1 text-xs font-semibold cursor-pointer shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${colors.bg} ${colors.text} ${ev.hasConflict ? "border-amber-400" : colors.border}`}
                         title={ev.title}
                       >
-                        <span className={`inline-block w-1.5 h-1.5 rounded-full ${colors.dot} mr-1 align-middle`} />
+                        {ev.hasConflict
+                          ? <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 mr-1 align-middle" />
+                          : <span className={`inline-block w-1.5 h-1.5 rounded-full ${colors.dot} mr-1 align-middle`} />
+                        }
                         {ev.title}
+                        {ev.hasConflict && <span className="ml-1 text-amber-600">⚠</span>}
                       </div>
                     );
                   })}

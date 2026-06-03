@@ -16,6 +16,14 @@ export type EventType =
   | "REMINDER"
   | "OTHER";
 
+export interface ConflictDetail {
+  eventId: string;
+  title: string;
+  startTime: string;
+  endTime: string;
+  attorneyName: string;
+}
+
 export interface CalEvent {
   id: string;
   title: string;
@@ -27,6 +35,10 @@ export interface CalEvent {
   location?: string;
   caseId?: string;
   caseTitle?: string;
+  assignedAttorneyId?: string;
+  assignedAttorneyName?: string;
+  hasConflict?: boolean;
+  conflicts?: ConflictDetail[];
 }
 
 export const EVENT_TYPE_COLORS: Record<EventType, { bg: string; text: string; dot: string; border: string; ring: string }> = {

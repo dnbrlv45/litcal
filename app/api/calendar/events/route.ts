@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getAccessToken, createGoogleEvent, createLitCalCalendar } from "@/lib/google-calendar";
 import type { GoogleCalEvent } from "@/lib/google-calendar";
 import { getCurrentWorkspace } from "@/lib/workspaces";
+import { detectConflicts, getConflictedEventIds } from "@/lib/conflicts";
 
 // GET /api/calendar/events?start=ISO&end=ISO
 export async function GET(request: NextRequest) {
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest) {
 
   const timeFilter = { gte: new Date(start), lte: new Date(end) };
 
-  const [events, connection] = await Promise.all([
+  const [events, connection, conflictedIds] = await Promise.all([
     prisma.event.findMany({
       where: {
         startTime: timeFilter,
@@ -28,12 +29,17 @@ export async function GET(request: NextRequest) {
           { userId, workspaceId: null },
         ],
       },
-      include: { googleSync: true, caseRef: { select: { id: true, title: true } } },
+      include: {
+        googleSync: true,
+        caseRef: { select: { id: true, title: true } },
+        assignedAttorney: { select: { id: true, firstName: true, lastName: true } },
+      },
       orderBy: { startTime: "asc" },
     }),
     prisma.userCalendarConnection.findFirst({
       where: { userId, provider: "GOOGLE", isActive: true },
     }),
+    getConflictedEventIds(workspace.id),
   ]);
 
   return NextResponse.json({
@@ -48,6 +54,11 @@ export async function GET(request: NextRequest) {
       location: e.location,
       caseId: e.caseId,
       caseTitle: e.caseRef?.title ?? null,
+      assignedAttorneyId: e.assignedAttorney?.id ?? null,
+      assignedAttorneyName: e.assignedAttorney
+        ? [e.assignedAttorney.firstName, e.assignedAttorney.lastName].filter(Boolean).join(" ") || null
+        : null,
+      hasConflict: conflictedIds.has(e.id),
     })),
     connected: !!connection,
   });
@@ -87,6 +98,13 @@ export async function POST(request: NextRequest) {
   const validTypes = ["DEADLINE","HEARING","DEPOSITION","TRIAL","CONFERENCE","MEETING","REMINDER","OTHER"];
   const safeEventType = validTypes.includes(eventType ?? "") ? eventType as never : "OTHER";
 
+  // Check conflicts before creating (non-blocking)
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  const preConflicts = inheritedAttorneyId
+    ? await detectConflicts(inheritedAttorneyId, startDate, endDate)
+    : [];
+
   // Create the event in Supabase (source of truth)
   const event = await prisma.event.create({
     data: {
@@ -95,8 +113,8 @@ export async function POST(request: NextRequest) {
       orgId: null,
       title: title.trim(),
       description: description || null,
-      startTime: new Date(start),
-      endTime: new Date(end),
+      startTime: startDate,
+      endTime: endDate,
       timeZone: timeZone ?? "UTC",
       eventType: safeEventType,
       location: location || null,
@@ -162,5 +180,12 @@ export async function POST(request: NextRequest) {
       caseId: event.caseId,
     },
     googlePush,
+    conflicts: preConflicts.map((c) => ({
+      eventId: c.eventId,
+      title: c.title,
+      startTime: c.startTime.toISOString(),
+      endTime: c.endTime.toISOString(),
+      attorneyName: c.attorneyName,
+    })),
   });
 }

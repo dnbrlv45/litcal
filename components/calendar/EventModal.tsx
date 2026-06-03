@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import type { EventType } from "@/lib/google-calendar";
+import type { EventType, ConflictDetail } from "@/lib/google-calendar";
 
 const EVENT_TYPES: { value: EventType; label: string }[] = [
   { value: "HEARING",    label: "Hearing" },
@@ -66,6 +66,7 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
   const [cases, setCases] = useState<CaseOption[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [conflicts, setConflicts] = useState<ConflictDetail[]>([]);
   const fetchedRef = useRef(false);
 
   useEffect(() => {
@@ -86,6 +87,7 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
       setDescription("");
       setCaseId("");
       setError(null);
+      setConflicts([]);
     }
   }, [open, defaultStart]);
 
@@ -123,8 +125,14 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
         body: JSON.stringify({ title, description, start: startISO, end: endISO, timeZone, eventType, location, caseId: caseId || undefined }),
       });
       if (!res.ok) { setError("Failed to create event. Please try again."); return; }
+      const data = await res.json();
       onCreated();
-      onClose();
+      if (data.conflicts?.length > 0) {
+        setConflicts(data.conflicts);
+        // Keep modal open to show conflicts — user can close manually
+      } else {
+        onClose();
+      }
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {
@@ -229,13 +237,31 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
             />
           </div>
 
+          {conflicts.length > 0 && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-3 text-xs flex flex-col gap-2">
+              <p className="font-semibold text-amber-900">Event saved — scheduling conflict detected</p>
+              {conflicts.map((c) => (
+                <div key={c.eventId} className="text-amber-800 leading-5">
+                  <span className="font-semibold">{c.attorneyName}</span> is already assigned to{" "}
+                  <span className="font-semibold">{c.title}</span>{" "}
+                  ({new Date(c.startTime).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                  {" – "}
+                  {new Date(c.endTime).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })},{" "}
+                  {new Date(c.startTime).toLocaleDateString("en-US", { month: "short", day: "numeric" })})
+                </div>
+              ))}
+            </div>
+          )}
+
           {error && <p className="text-xs text-destructive">{error}</p>}
 
           <DialogFooter className="mt-2">
-            <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={saving}>
-              {saving ? "Saving…" : "Create Event"}
-            </Button>
+            <Button type="button" variant="ghost" onClick={onClose}>{conflicts.length > 0 ? "Close" : "Cancel"}</Button>
+            {conflicts.length === 0 && (
+              <Button type="submit" disabled={saving}>
+                {saving ? "Saving…" : "Create Event"}
+              </Button>
+            )}
           </DialogFooter>
         </form>
       </DialogContent>

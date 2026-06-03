@@ -114,12 +114,13 @@ export default function DayView({ date, today, events, onCellClick, onEventClick
                 <div
                   key={ev.id}
                   onClick={(e) => { e.stopPropagation(); onEventClick(ev); }}
-                  className={`absolute left-2 right-3 z-10 cursor-pointer overflow-hidden rounded-lg border px-3 py-2 text-xs shadow-sm ring-1 transition hover:-translate-y-0.5 hover:shadow-md ${colors.bg} ${colors.text} ${colors.border} ${colors.ring}`}
+                  className={`absolute left-2 right-3 z-10 cursor-pointer overflow-hidden rounded-lg border px-3 py-2 text-xs shadow-sm ring-1 transition hover:-translate-y-0.5 hover:shadow-md ${colors.bg} ${colors.text} ${ev.hasConflict ? "border-amber-400 ring-amber-200" : `${colors.border} ${colors.ring}`}`}
                   style={{ top: eventTop(ev) - HOURS[0] * ROW_HEIGHT, height: eventHeight(ev) }}
                   title={ev.title}
                 >
-                  <span className="mb-0.5 block text-[11px] font-medium opacity-80">
+                  <span className="mb-0.5 flex items-center gap-1 text-[11px] font-medium opacity-80">
                     {ev.start.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                    {ev.hasConflict && <span className="text-amber-600 font-bold leading-none">⚠</span>}
                   </span>
                   <span className="font-semibold block truncate">{ev.title}</span>
                   {eventHeight(ev) > 44 && ev.location && (

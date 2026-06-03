@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, MapPin, Calendar, Clock, Pencil, Trash2, Check, Briefcase, ChevronRight, FileText, Sparkles } from "lucide-react";
+import { X, MapPin, Calendar, Clock, Pencil, Trash2, Check, Briefcase, ChevronRight, FileText, Sparkles, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import Link from "next/link";
-import type { CalEvent, EventType } from "@/lib/google-calendar";
+import type { CalEvent, EventType, ConflictDetail } from "@/lib/google-calendar";
 import { EVENT_TYPE_COLORS } from "@/lib/google-calendar";
 
 const EVENT_TYPE_LABELS: Record<EventType, string> = {
@@ -53,6 +53,7 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [conflicts, setConflicts] = useState<ConflictDetail[]>([]);
 
   useEffect(() => {
     fetch("/api/cases").then((r) => r.json()).then((d) => setCases(d.cases ?? [])).catch(() => {});
@@ -62,6 +63,7 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
     if (event) {
       setEditing(false);
       setError(null);
+      setConflicts([]);
     }
   }, [event?.id]);
 
@@ -109,8 +111,14 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
         body: JSON.stringify({ title, description, start: startISO, end: endISO, eventType, location, caseId: caseId || null }),
       });
       if (!res.ok) throw new Error();
+      const data = await res.json();
       onUpdated();
-      onClose();
+      if (data.conflicts?.length > 0) {
+        setConflicts(data.conflicts);
+        setEditing(false);
+      } else {
+        onClose();
+      }
     } catch {
       setError("Failed to save event.");
     } finally {
@@ -173,6 +181,30 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
                 </div>
               )}
             </div>
+
+            {/* Conflict warning */}
+            {(conflicts.length > 0 || event.hasConflict) && (
+              <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-3 text-xs flex flex-col gap-2">
+                <p className="flex items-center gap-1.5 font-semibold text-amber-900">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  Scheduling conflict
+                </p>
+                {conflicts.length > 0 ? conflicts.map((c) => (
+                  <div key={c.eventId} className="text-amber-800 leading-5">
+                    <span className="font-semibold">{c.attorneyName}</span> is also assigned to{" "}
+                    <span className="font-semibold">{c.title}</span>{" "}
+                    ({new Date(c.startTime).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                    {" – "}
+                    {new Date(c.endTime).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })},{" "}
+                    {new Date(c.startTime).toLocaleDateString("en-US", { month: "short", day: "numeric" })})
+                  </div>
+                )) : (
+                  <p className="text-amber-800 leading-5">
+                    This event overlaps with another event assigned to the same attorney.
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Location */}
             {event.location && (
@@ -309,7 +341,7 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
             {error && <p className="text-xs text-destructive">{error}</p>}
 
             <div className="flex gap-2 pt-1">
-              <Button type="button" variant="ghost" size="sm" className="flex-1" onClick={() => { setEditing(false); setError(null); }}>
+              <Button type="button" variant="ghost" size="sm" className="flex-1" onClick={() => { setEditing(false); setError(null); setConflicts([]); }}>
                 Cancel
               </Button>
               <Button type="submit" size="sm" className="flex-1" disabled={saving}>
