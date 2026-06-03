@@ -90,7 +90,7 @@ export async function PATCH(
   });
   if (!event) return NextResponse.json({ error: "Event not found" }, { status: 404 });
 
-  const validTypes = ["DEADLINE","HEARING","DEPOSITION","TRIAL","CONFERENCE","MEETING","REMINDER","OTHER"];
+  const validTypes = ["DEADLINE","HEARING","DEPOSITION","TRIAL","CONFERENCE","MEETING","MEDIATION","REMINDER","OTHER"];
   const safeEventType = body.eventType && validTypes.includes(body.eventType) ? body.eventType as never : undefined;
 
   const updated = await prisma.event.update({

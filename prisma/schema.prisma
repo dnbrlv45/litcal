@@ -190,6 +190,7 @@ enum EventType {
   TRIAL       // trial dates and sessions
   CONFERENCE  // status conference, scheduling conference
   MEETING     // client meeting, co-counsel meeting
+  MEDIATION   // mediation session
   REMINDER
   OTHER
 }

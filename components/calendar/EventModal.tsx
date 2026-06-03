@@ -19,6 +19,7 @@ const EVENT_TYPES: { value: EventType; label: string }[] = [
   { value: "DEPOSITION", label: "Deposition" },
   { value: "TRIAL",      label: "Trial" },
   { value: "CONFERENCE", label: "Conference" },
+  { value: "MEDIATION",  label: "Mediation" },
   { value: "MEETING",    label: "Meeting" },
   { value: "DEADLINE",   label: "Deadline" },
   { value: "REMINDER",   label: "Reminder" },

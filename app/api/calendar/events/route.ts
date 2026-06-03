@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
       },
       include: {
         googleSync: true,
-        caseRef: { select: { id: true, title: true } },
+        caseRef: { select: { id: true, title: true, status: true } },
         assignedAttorney: { select: { id: true, firstName: true, lastName: true } },
       },
       orderBy: { startTime: "asc" },
@@ -54,6 +54,7 @@ export async function GET(request: NextRequest) {
       location: e.location,
       caseId: e.caseId,
       caseTitle: e.caseRef?.title ?? null,
+      caseStatus: e.caseRef?.status ?? null,
       assignedAttorneyId: e.assignedAttorney?.id ?? null,
       assignedAttorneyName: e.assignedAttorney
         ? [e.assignedAttorney.firstName, e.assignedAttorney.lastName].filter(Boolean).join(" ") || null
@@ -96,7 +97,7 @@ export async function POST(request: NextRequest) {
     inheritedAttorneyId = linkedCase.assignedAttorneyId;
   }
 
-  const validTypes = ["DEADLINE","HEARING","DEPOSITION","TRIAL","CONFERENCE","MEETING","REMINDER","OTHER"];
+  const validTypes = ["DEADLINE","HEARING","DEPOSITION","TRIAL","CONFERENCE","MEETING","MEDIATION","REMINDER","OTHER"];
   const safeEventType = validTypes.includes(eventType ?? "") ? eventType as never : "OTHER";
 
   // Check conflicts before creating (non-blocking)

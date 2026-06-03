@@ -15,13 +15,14 @@ const EVENT_TYPE_LABELS: Record<EventType, string> = {
   DEPOSITION: "Deposition",
   TRIAL: "Trial",
   CONFERENCE: "Conference",
+  MEDIATION: "Mediation",
   MEETING: "Meeting",
   DEADLINE: "Deadline",
   REMINDER: "Reminder",
   OTHER: "Other",
 };
 
-const EVENT_TYPES: EventType[] = ["HEARING","DEPOSITION","TRIAL","CONFERENCE","MEETING","DEADLINE","REMINDER","OTHER"];
+const EVENT_TYPES: EventType[] = ["HEARING","DEPOSITION","TRIAL","CONFERENCE","MEDIATION","MEETING","DEADLINE","REMINDER","OTHER"];
 
 interface Props {
   event: CalEvent | null;
