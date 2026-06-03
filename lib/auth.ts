@@ -13,6 +13,13 @@ export interface GoogleIdentity {
   family_name?: string;
 }
 
+export interface MicrosoftIdentity {
+  sub: string;
+  email: string;
+  given_name?: string;
+  family_name?: string;
+}
+
 function hashToken(token: string) {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
@@ -71,6 +78,39 @@ export async function upsertGoogleUser(identity: GoogleIdentity) {
     data: {
       email,
       googleSub: identity.sub,
+      firstName: identity.given_name ?? null,
+      lastName: identity.family_name ?? null,
+    },
+  });
+}
+
+export async function upsertMicrosoftUser(identity: MicrosoftIdentity) {
+  const email = identity.email.trim().toLowerCase();
+  const existing = await prisma.user.findFirst({
+    where: {
+      OR: [
+        { microsoftSub: identity.sub },
+        { email },
+      ],
+    },
+  });
+
+  if (existing) {
+    return prisma.user.update({
+      where: { id: existing.id },
+      data: {
+        email,
+        microsoftSub: identity.sub,
+        firstName: identity.given_name ?? existing.firstName,
+        lastName: identity.family_name ?? existing.lastName,
+      },
+    });
+  }
+
+  return prisma.user.create({
+    data: {
+      email,
+      microsoftSub: identity.sub,
       firstName: identity.given_name ?? null,
       lastName: identity.family_name ?? null,
     },

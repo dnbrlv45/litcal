@@ -18,9 +18,11 @@ const STATUS_COLORS = {
   ARCHIVED: "bg-slate-100 text-slate-400",
 };
 const TYPE_LABELS: Record<string, string> = {
-  CIVIL: "Civil", CRIMINAL: "Criminal", FAMILY: "Family",
-  BANKRUPTCY: "Bankruptcy", IMMIGRATION: "Immigration",
-  ADMINISTRATIVE: "Administrative", OTHER: "Other",
+  AUTO_ACCIDENT: "Auto Accident", SLIP_AND_FALL: "Slip & Fall",
+  GOVERNMENT_CLAIM: "Government Claim", DOG_BITE: "Dog Bite",
+  PREMISES_LIABILITY: "Premises Liability", MEDICAL_MALPRACTICE: "Medical Malpractice",
+  WRONGFUL_DEATH: "Wrongful Death", PRODUCT_LIABILITY: "Product Liability",
+  OTHER: "Other",
 };
 const EVENT_TYPE_LABELS: Record<string, string> = {
   HEARING: "Hearing", DEPOSITION: "Deposition", TRIAL: "Trial",
@@ -45,9 +47,12 @@ interface CaseData {
   status: keyof typeof STATUS_COLORS;
   caseType: string;
   court: string | null;
+  county: string | null;
   judge: string | null;
-  jurisdiction: string | null;
   description: string | null;
+  defendant: string | null;
+  defenseFirm: string | null;
+  defenseAttorney: string | null;
   filingDate: string | null;
   events: CaseEvent[];
 }
@@ -64,9 +69,12 @@ export default function CaseDetailClient({ id }: { id: string }) {
   const [editCaseNumber, setEditCaseNumber] = useState("");
   const [editStatus, setEditStatus] = useState<string>("ACTIVE");
   const [editCourt, setEditCourt] = useState("");
+  const [editCounty, setEditCounty] = useState("");
   const [editJudge, setEditJudge] = useState("");
-  const [editJurisdiction, setEditJurisdiction] = useState("");
   const [editDescription, setEditDescription] = useState("");
+  const [editDefendant, setEditDefendant] = useState("");
+  const [editDefenseFirm, setEditDefenseFirm] = useState("");
+  const [editDefenseAttorney, setEditDefenseAttorney] = useState("");
 
   const fetchCase = useCallback(async () => {
     setLoading(true);
@@ -88,9 +96,12 @@ export default function CaseDetailClient({ id }: { id: string }) {
     setEditCaseNumber(caseData.caseNumber ?? "");
     setEditStatus(caseData.status);
     setEditCourt(caseData.court ?? "");
+    setEditCounty(caseData.county ?? "");
     setEditJudge(caseData.judge ?? "");
-    setEditJurisdiction(caseData.jurisdiction ?? "");
     setEditDescription(caseData.description ?? "");
+    setEditDefendant(caseData.defendant ?? "");
+    setEditDefenseFirm(caseData.defenseFirm ?? "");
+    setEditDefenseAttorney(caseData.defenseAttorney ?? "");
     setError(null);
     setEditing(true);
   }
@@ -104,8 +115,9 @@ export default function CaseDetailClient({ id }: { id: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: editTitle, caseNumber: editCaseNumber, status: editStatus,
-          court: editCourt, judge: editJudge, jurisdiction: editJurisdiction,
+          court: editCourt, county: editCounty, judge: editJudge,
           description: editDescription,
+          defendant: editDefendant, defenseFirm: editDefenseFirm, defenseAttorney: editDefenseAttorney,
         }),
       });
       if (!res.ok) throw new Error();
@@ -193,17 +205,17 @@ export default function CaseDetailClient({ id }: { id: string }) {
           <div className="rounded-xl border border-border p-4 flex flex-col gap-3">
             <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Case Info</h2>
 
+            <Field label="County" editing={editing}
+              display={caseData.county}
+              input={<Input value={editCounty} onChange={(e) => setEditCounty(e.target.value)} placeholder="e.g. Los Angeles" />}
+            />
             <Field label="Court" editing={editing}
               display={caseData.court}
-              input={<Input value={editCourt} onChange={(e) => setEditCourt(e.target.value)} placeholder="Court name" />}
+              input={<Input value={editCourt} onChange={(e) => setEditCourt(e.target.value)} placeholder="e.g. Superior Court" />}
             />
             <Field label="Judge" editing={editing}
               display={caseData.judge}
               input={<Input value={editJudge} onChange={(e) => setEditJudge(e.target.value)} placeholder="Judge name" />}
-            />
-            <Field label="Jurisdiction" editing={editing}
-              display={caseData.jurisdiction}
-              input={<Input value={editJurisdiction} onChange={(e) => setEditJurisdiction(e.target.value)} placeholder="e.g. California" />}
             />
             {editing && (
               <div className="flex flex-col gap-1">
@@ -218,6 +230,25 @@ export default function CaseDetailClient({ id }: { id: string }) {
               />
             )}
           </div>
+
+          {/* Defense */}
+          {(editing || caseData.defendant || caseData.defenseFirm || caseData.defenseAttorney) && (
+            <div className="rounded-xl border border-border p-4 flex flex-col gap-3">
+              <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Defense</h2>
+              <Field label="Defendant" editing={editing}
+                display={caseData.defendant}
+                input={<Input value={editDefendant} onChange={(e) => setEditDefendant(e.target.value)} placeholder="e.g. John Doe" />}
+              />
+              <Field label="Defense Firm" editing={editing}
+                display={caseData.defenseFirm}
+                input={<Input value={editDefenseFirm} onChange={(e) => setEditDefenseFirm(e.target.value)} placeholder="e.g. Smith & Associates" />}
+              />
+              <Field label="Defense Attorney" editing={editing}
+                display={caseData.defenseAttorney}
+                input={<Input value={editDefenseAttorney} onChange={(e) => setEditDefenseAttorney(e.target.value)} placeholder="e.g. Jane Smith, Esq." />}
+              />
+            </div>
+          )}
 
           {/* Description */}
           <div className="rounded-xl border border-border p-4 flex flex-col gap-2">

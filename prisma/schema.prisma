@@ -11,10 +11,11 @@ generator client {
 // Supabase owns all application data.
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  googleSub String?  @unique
-  firstName String?
+  id           String   @id @default(cuid())
+  email        String   @unique
+  googleSub    String?  @unique
+  microsoftSub String?  @unique
+  firstName    String?
   lastName  String?
   timeZone  String   @default("UTC")
   createdAt DateTime @default(now())
@@ -220,11 +221,15 @@ model Case {
   title        String
   description  String?
   status       CaseStatus @default(ACTIVE)
-  caseType     CaseType   @default(CIVIL)
+  caseType     CaseType   @default(AUTO_ACCIDENT)
 
   court        String?
   judge        String?
-  jurisdiction String?
+  county       String?
+
+  defendant       String?
+  defenseFirm     String?
+  defenseAttorney String?
 
   filingDate   DateTime?
   closedDate   DateTime?
@@ -251,12 +256,14 @@ enum CaseStatus {
 }
 
 enum CaseType {
-  CIVIL
-  CRIMINAL
-  FAMILY
-  BANKRUPTCY
-  IMMIGRATION
-  ADMINISTRATIVE
+  AUTO_ACCIDENT
+  SLIP_AND_FALL
+  GOVERNMENT_CLAIM
+  DOG_BITE
+  PREMISES_LIABILITY
+  MEDICAL_MALPRACTICE
+  WRONGFUL_DEATH
+  PRODUCT_LIABILITY
   OTHER
 }
 

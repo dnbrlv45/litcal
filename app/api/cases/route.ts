@@ -39,17 +39,20 @@ export async function POST(request: NextRequest) {
     caseNumber?: string;
     caseType?: string;
     court?: string;
+    county?: string;
     judge?: string;
-    jurisdiction?: string;
     description?: string;
     filingDate?: string;
+    defendant?: string;
+    defenseFirm?: string;
+    defenseAttorney?: string;
   };
 
   if (!body.title?.trim())
     return NextResponse.json({ error: "Title is required" }, { status: 400 });
 
-  const validTypes = ["CIVIL","CRIMINAL","FAMILY","BANKRUPTCY","IMMIGRATION","ADMINISTRATIVE","OTHER"];
-  const caseType = validTypes.includes(body.caseType ?? "") ? body.caseType as never : "CIVIL";
+  const validTypes = ["AUTO_ACCIDENT","SLIP_AND_FALL","GOVERNMENT_CLAIM","DOG_BITE","PREMISES_LIABILITY","MEDICAL_MALPRACTICE","WRONGFUL_DEATH","PRODUCT_LIABILITY","OTHER"];
+  const caseType = validTypes.includes(body.caseType ?? "") ? body.caseType as never : "AUTO_ACCIDENT";
 
   const newCase = await prisma.case.create({
     data: {
@@ -60,10 +63,13 @@ export async function POST(request: NextRequest) {
       caseNumber: body.caseNumber?.trim() || null,
       caseType,
       court: body.court?.trim() || null,
+      county: body.county?.trim() || null,
       judge: body.judge?.trim() || null,
-      jurisdiction: body.jurisdiction?.trim() || null,
       description: body.description?.trim() || null,
       filingDate: body.filingDate ? new Date(body.filingDate) : null,
+      defendant: body.defendant?.trim() || null,
+      defenseFirm: body.defenseFirm?.trim() || null,
+      defenseAttorney: body.defenseAttorney?.trim() || null,
     },
     include: { parties: true, _count: { select: { events: true } } },
   });

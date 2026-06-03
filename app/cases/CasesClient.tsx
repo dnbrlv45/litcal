@@ -15,9 +15,11 @@ const STATUS_COLORS = {
 };
 
 const TYPE_LABELS: Record<string, string> = {
-  CIVIL: "Civil", CRIMINAL: "Criminal", FAMILY: "Family",
-  BANKRUPTCY: "Bankruptcy", IMMIGRATION: "Immigration",
-  ADMINISTRATIVE: "Administrative", OTHER: "Other",
+  AUTO_ACCIDENT: "Auto Accident", SLIP_AND_FALL: "Slip & Fall",
+  GOVERNMENT_CLAIM: "Government Claim", DOG_BITE: "Dog Bite",
+  PREMISES_LIABILITY: "Premises Liability", MEDICAL_MALPRACTICE: "Medical Malpractice",
+  WRONGFUL_DEATH: "Wrongful Death", PRODUCT_LIABILITY: "Product Liability",
+  OTHER: "Other",
 };
 
 interface Case {

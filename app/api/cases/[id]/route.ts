@@ -47,11 +47,14 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     caseType?: string;
     status?: string;
     court?: string;
+    county?: string;
     judge?: string;
-    jurisdiction?: string;
     description?: string;
     filingDate?: string | null;
     closedDate?: string | null;
+    defendant?: string;
+    defenseFirm?: string;
+    defenseAttorney?: string;
   };
 
   const existing = await prisma.case.findFirst({
@@ -65,7 +68,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const validTypes = ["CIVIL","CRIMINAL","FAMILY","BANKRUPTCY","IMMIGRATION","ADMINISTRATIVE","OTHER"];
+  const validTypes = ["AUTO_ACCIDENT","SLIP_AND_FALL","GOVERNMENT_CLAIM","DOG_BITE","PREMISES_LIABILITY","MEDICAL_MALPRACTICE","WRONGFUL_DEATH","PRODUCT_LIABILITY","OTHER"];
   const validStatuses = ["ACTIVE","CLOSED","ARCHIVED","PENDING"];
   const closingStatuses = ["CLOSED", "ARCHIVED"];
 
@@ -80,11 +83,14 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       ...(body.caseType && validTypes.includes(body.caseType) && { caseType: body.caseType as never }),
       ...(newStatus && { status: newStatus as never }),
       ...(body.court !== undefined && { court: body.court?.trim() || null }),
+      ...(body.county !== undefined && { county: body.county?.trim() || null }),
       ...(body.judge !== undefined && { judge: body.judge?.trim() || null }),
-      ...(body.jurisdiction !== undefined && { jurisdiction: body.jurisdiction?.trim() || null }),
       ...(body.description !== undefined && { description: body.description?.trim() || null }),
       ...(body.filingDate !== undefined && { filingDate: body.filingDate ? new Date(body.filingDate) : null }),
       ...(body.closedDate !== undefined && { closedDate: body.closedDate ? new Date(body.closedDate) : null }),
+      ...(body.defendant !== undefined && { defendant: body.defendant?.trim() || null }),
+      ...(body.defenseFirm !== undefined && { defenseFirm: body.defenseFirm?.trim() || null }),
+      ...(body.defenseAttorney !== undefined && { defenseAttorney: body.defenseAttorney?.trim() || null }),
     },
     include: { parties: true, _count: { select: { events: true } } },
   });

@@ -13,8 +13,8 @@ export default function LitCalGoogleAuth({ mode }: Props) {
   const isSignIn = mode === "sign-in";
   const title = isSignIn ? "Sign in to LitCal" : "Create your LitCal account";
   const subtitle = isSignIn
-    ? "Use your Google account to access your litigation calendar."
-    : "Start with Google so your account and calendar connection stay simple.";
+    ? "Use your Google or Microsoft account to access your litigation calendar."
+    : "Sign up with Google or Microsoft to get started.";
   const alternateHref = isSignIn ? "/sign-up" : "/sign-in";
   const alternateText = isSignIn ? "Need an account?" : "Already have an account?";
   const alternateAction = isSignIn ? "Create one" : "Sign in";
@@ -28,13 +28,22 @@ export default function LitCalGoogleAuth({ mode }: Props) {
           <p className="mt-2 text-sm leading-6 text-slate-600">{subtitle}</p>
         </div>
 
-        <Link
-          href="/api/auth/google/sign-in"
-          className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50"
-        >
-          <span className="grid size-5 place-items-center rounded-full border border-slate-200 bg-white text-[13px] font-bold text-slate-700">G</span>
-          Continue with Google
-        </Link>
+        <div className="flex flex-col gap-3">
+          <Link
+            href="/api/auth/google/sign-in"
+            className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50"
+          >
+            <span className="grid size-5 place-items-center rounded-full border border-slate-200 bg-white text-[13px] font-bold text-slate-700">G</span>
+            Continue with Google
+          </Link>
+          <Link
+            href="/api/auth/microsoft/sign-in"
+            className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50"
+          >
+            <span className="grid size-5 place-items-center rounded-full border border-slate-200 bg-white text-[13px] font-bold text-[#0078d4]">M</span>
+            Continue with Microsoft
+          </Link>
+        </div>
 
         <p className="mt-6 text-center text-sm text-slate-600">
           {alternateText}{" "}

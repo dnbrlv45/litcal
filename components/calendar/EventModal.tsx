@@ -45,7 +45,7 @@ function addHour(d: Date) {
   return new Date(d.getTime() + 60 * 60 * 1000);
 }
 
-interface CaseOption { id: string; title: string; caseNumber: string | null; }
+interface CaseOption { id: string; title: string; caseNumber: string | null; status: string; }
 
 export default function EventModal({ open, onClose, defaultStart, googleConnected, onCreated }: Props) {
   const now = defaultStart ?? new Date();
@@ -157,7 +157,7 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
             </select>
           </div>
 
-          {cases.length > 0 && (
+          {cases.filter((c) => c.status !== "ARCHIVED" && c.status !== "CLOSED").length > 0 && (
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="event-case">Case <span className="text-muted-foreground font-normal">(optional)</span></Label>
               <select
@@ -167,7 +167,7 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
                 className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
                 <option value="">— No case —</option>
-                {cases.map((c) => (
+                {cases.filter((c) => c.status !== "ARCHIVED" && c.status !== "CLOSED").map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.title}{c.caseNumber ? ` (#${c.caseNumber})` : ""}
                   </option>
