@@ -12,13 +12,18 @@ function userDisplayName(user: { email: string; firstName: string | null; lastNa
   return [user.firstName, user.lastName].filter(Boolean).join(" ").trim() || user.email;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const currentUser = await requireUser();
   if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { workspace } = await getCurrentWorkspace(currentUser.id);
 
+  const title = new URL(request.url).searchParams.get("title");
+
   const members = await prisma.workspaceMember.findMany({
-    where: { workspaceId: workspace.id },
+    where: {
+      workspaceId: workspace.id,
+      ...(title ? { jobTitle: title as never } : {}),
+    },
     include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
     orderBy: { createdAt: "asc" },
   });

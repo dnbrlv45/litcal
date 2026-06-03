@@ -69,6 +69,7 @@ model WorkspaceMember {
   workspaceId String
   userId      String
   role        WorkspaceRole @default(MEMBER)
+  jobTitle    JobTitle?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
@@ -99,6 +100,13 @@ enum WorkspaceRole {
   OWNER
   ADMIN
   MEMBER
+}
+
+enum JobTitle {
+  ATTORNEY
+  PARALEGAL
+  ASSISTANT
+  STAFF
 }
 
 // ─── CALENDAR CONNECTIONS ─────────────────────────────────────────────────────

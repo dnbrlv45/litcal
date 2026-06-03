@@ -35,6 +35,7 @@ export default async function TeamPage() {
       initialMembers={members.map((member) => ({
         id: member.id,
         role: member.role,
+        jobTitle: member.jobTitle,
         user: member.user,
       }))}
       initialInvitations={invitations.map((invitation) => ({

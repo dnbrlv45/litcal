@@ -7,10 +7,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 type Role = "OWNER" | "ADMIN" | "MEMBER";
+type JobTitle = "ATTORNEY" | "PARALEGAL" | "ASSISTANT" | "STAFF" | null;
+
+const JOB_TITLE_OPTIONS: { value: JobTitle; label: string }[] = [
+  { value: null,        label: "— No title —" },
+  { value: "ATTORNEY",  label: "Attorney" },
+  { value: "PARALEGAL", label: "Paralegal" },
+  { value: "ASSISTANT", label: "Assistant" },
+  { value: "STAFF",     label: "Staff" },
+];
 
 interface TeamMember {
   id: string;
   role: Role;
+  jobTitle: JobTitle;
   user: {
     id: string;
     email: string;
@@ -19,10 +29,7 @@ interface TeamMember {
   };
 }
 
-interface Workspace {
-  id: string;
-  name: string;
-}
+interface Workspace { id: string; name: string; }
 
 interface TeamInvitation {
   id: string;
@@ -55,6 +62,7 @@ export default function TeamClient({ initialWorkspace, initialMembers, initialIn
   const [addingMember, setAddingMember] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [savingTitleId, setSavingTitleId] = useState<string | null>(null);
   const [deletingWorkspace, setDeletingWorkspace] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -124,6 +132,23 @@ export default function TeamClient({ initialWorkspace, initialMembers, initialIn
     }
   }
 
+  async function updateTitle(memberId: string, jobTitle: JobTitle) {
+    setSavingTitleId(memberId);
+    try {
+      const res = await fetch(`/api/workspaces/members/${memberId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobTitle }),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
+      setMembers((current) => current.map((m) => m.id === memberId ? { ...m, jobTitle } : m));
+    } catch (err) {
+      flash(err instanceof Error ? err.message : "Failed to update title.", true);
+    } finally {
+      setSavingTitleId(null);
+    }
+  }
+
   async function removeMember(memberId: string) {
     setRemovingId(memberId);
     try {
@@ -166,6 +191,46 @@ export default function TeamClient({ initialWorkspace, initialMembers, initialIn
 
   const select = "flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
 
+  // ── Non-admin view ──────────────────────────────────────────────────────────
+  if (!canManage) {
+    return (
+      <div className="flex-1 overflow-y-auto px-8 py-8">
+        <div className="mx-auto flex max-w-4xl flex-col gap-6">
+          <div>
+            <h1 className="text-xl font-semibold">Team</h1>
+            <p className="mt-1 text-sm text-muted-foreground">{workspace.name}</p>
+          </div>
+          <section className="rounded-xl border border-border bg-card p-5">
+            <div className="mb-4 flex items-center gap-3">
+              <Users className="size-5 text-teal-700" />
+              <h2 className="font-semibold">Members</h2>
+            </div>
+            <div className="divide-y divide-border rounded-lg border border-border">
+              {members.map((member) => (
+                <div key={member.id} className="flex items-center justify-between gap-4 px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{displayName(member)}</p>
+                    <p className="truncate text-xs text-muted-foreground">{member.user.email}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {member.jobTitle && (
+                      <span className="text-xs text-muted-foreground">{member.jobTitle.charAt(0) + member.jobTitle.slice(1).toLowerCase()}</span>
+                    )}
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                      <ShieldCheck className="size-3.5" />
+                      {member.role.toLowerCase()}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Admin / Owner view ──────────────────────────────────────────────────────
   return (
     <div className="flex-1 overflow-y-auto px-8 py-8">
       <div className="mx-auto flex max-w-4xl flex-col gap-6">
@@ -194,9 +259,9 @@ export default function TeamClient({ initialWorkspace, initialMembers, initialIn
           <form onSubmit={saveWorkspaceName} className="flex max-w-xl items-end gap-3">
             <div className="flex-1">
               <Label htmlFor="workspace-name">Team name</Label>
-              <Input id="workspace-name" value={name} onChange={(e) => setName(e.target.value)} disabled={!canManage} />
+              <Input id="workspace-name" value={name} onChange={(e) => setName(e.target.value)} />
             </div>
-            <Button type="submit" disabled={!canManage || savingName} className="bg-teal-700 text-white hover:bg-teal-800">
+            <Button type="submit" disabled={savingName} className="bg-teal-700 text-white hover:bg-teal-800">
               {savingName ? "Saving..." : "Save"}
             </Button>
           </form>
@@ -217,27 +282,36 @@ export default function TeamClient({ initialWorkspace, initialMembers, initialIn
 
           <div className="divide-y divide-border rounded-lg border border-border">
             {members.map((member) => (
-              <div key={member.id} className="flex items-center justify-between gap-4 px-4 py-3">
-                <div className="min-w-0">
+              <div key={member.id} className="flex items-center gap-4 px-4 py-3">
+                <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{displayName(member)}</p>
                   <p className="truncate text-xs text-muted-foreground">{member.user.email}</p>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
-                    <ShieldCheck className="size-3.5" />
-                    {member.role.toLowerCase()}
-                  </span>
-                  {canManage && member.role !== "OWNER" && member.user.id !== currentUserId && (
-                    <button
-                      onClick={() => removeMember(member.id)}
-                      disabled={removingId === member.id}
-                      className="p-1 rounded text-muted-foreground hover:text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-40"
-                      title="Remove member"
-                    >
-                      <X className="size-3.5" />
-                    </button>
-                  )}
-                </div>
+                {/* Title dropdown — inline save */}
+                <select
+                  value={member.jobTitle ?? ""}
+                  onChange={(e) => updateTitle(member.id, (e.target.value || null) as JobTitle)}
+                  disabled={savingTitleId === member.id}
+                  className="h-8 rounded-md border border-input bg-background px-2 py-0 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 w-32"
+                >
+                  {JOB_TITLE_OPTIONS.map(({ value, label }) => (
+                    <option key={value ?? ""} value={value ?? ""}>{label}</option>
+                  ))}
+                </select>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700 shrink-0">
+                  <ShieldCheck className="size-3.5" />
+                  {member.role.toLowerCase()}
+                </span>
+                {member.role !== "OWNER" && member.user.id !== currentUserId && (
+                  <button
+                    onClick={() => removeMember(member.id)}
+                    disabled={removingId === member.id}
+                    className="p-1 rounded text-muted-foreground hover:text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-40 shrink-0"
+                    title="Remove member"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -258,16 +332,14 @@ export default function TeamClient({ initialWorkspace, initialMembers, initialIn
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
                         {invitation.role.toLowerCase()} pending
                       </span>
-                      {canManage && (
-                        <button
-                          onClick={() => cancelInvitation(invitation.id)}
-                          disabled={cancellingId === invitation.id}
-                          className="p-1 rounded text-muted-foreground hover:text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-40"
-                          title="Cancel invitation"
-                        >
-                          <X className="size-3.5" />
-                        </button>
-                      )}
+                      <button
+                        onClick={() => cancelInvitation(invitation.id)}
+                        disabled={cancellingId === invitation.id}
+                        className="p-1 rounded text-muted-foreground hover:text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-40"
+                        title="Cancel invitation"
+                      >
+                        <X className="size-3.5" />
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -288,22 +360,16 @@ export default function TeamClient({ initialWorkspace, initialMembers, initialIn
           <form onSubmit={addMember} className="grid max-w-2xl grid-cols-[1fr_140px_auto] items-end gap-3">
             <div>
               <Label htmlFor="member-email">Email</Label>
-              <Input id="member-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={!canManage} placeholder="name@firm.com" />
+              <Input id="member-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@firm.com" />
             </div>
             <div>
               <Label htmlFor="member-role">Role</Label>
-              <select
-                id="member-role"
-                value={role}
-                onChange={(e) => setRole(e.target.value as Role)}
-                disabled={!canManage}
-                className={select}
-              >
+              <select id="member-role" value={role} onChange={(e) => setRole(e.target.value as Role)} className={select}>
                 <option value="MEMBER">Member</option>
                 <option value="ADMIN">Admin</option>
               </select>
             </div>
-            <Button type="submit" disabled={!canManage || addingMember} className="bg-teal-700 text-white hover:bg-teal-800">
+            <Button type="submit" disabled={addingMember} className="bg-teal-700 text-white hover:bg-teal-800">
               {addingMember ? "Adding..." : "Add"}
             </Button>
           </form>
@@ -323,11 +389,7 @@ export default function TeamClient({ initialWorkspace, initialMembers, initialIn
               <p className="text-sm text-muted-foreground">
                 Type <span className="font-mono font-semibold text-foreground">{workspace.name}</span> to confirm deletion.
               </p>
-              <Input
-                value={confirmDelete}
-                onChange={(e) => setConfirmDelete(e.target.value)}
-                placeholder={workspace.name}
-              />
+              <Input value={confirmDelete} onChange={(e) => setConfirmDelete(e.target.value)} placeholder={workspace.name} />
               <Button
                 variant="destructive"
                 disabled={confirmDelete !== workspace.name || deletingWorkspace}

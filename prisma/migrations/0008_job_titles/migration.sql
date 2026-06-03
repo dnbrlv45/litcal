@@ -1,0 +1,3 @@
+CREATE TYPE "JobTitle" AS ENUM ('ATTORNEY', 'PARALEGAL', 'ASSISTANT', 'STAFF');
+
+ALTER TABLE "WorkspaceMember" ADD COLUMN "jobTitle" "JobTitle";

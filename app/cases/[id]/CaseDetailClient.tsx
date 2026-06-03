@@ -31,7 +31,7 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
 };
 
 interface AssignedUser { id: string; firstName: string | null; lastName: string | null; email: string; }
-interface WorkspaceMember { id: string; user: AssignedUser; }
+interface WorkspaceMember { id: string; jobTitle: string | null; user: AssignedUser; }
 
 interface CaseEvent {
   id: string; title: string; startTime: string; endTime: string;
@@ -176,6 +176,9 @@ export default function CaseDetailClient({ id }: { id: string }) {
   const pastEvents = caseData.events.filter((e) => new Date(e.startTime) < new Date());
 
   const canAssign = caseData.status === "ACTIVE";
+  const attorneys  = members.filter((m) => m.jobTitle === "ATTORNEY");
+  const paralegals = members.filter((m) => m.jobTitle === "PARALEGAL");
+  const assistants = members.filter((m) => m.jobTitle === "ASSISTANT");
   const select = "flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed";
 
   return (
@@ -252,7 +255,7 @@ export default function CaseDetailClient({ id }: { id: string }) {
                 className={select}
               >
                 <option value="">— Unassigned —</option>
-                {members.map((m) => <option key={m.user.id} value={m.user.id}>{memberLabel(m)}</option>)}
+                {attorneys.map((m) => <option key={m.user.id} value={m.user.id}>{memberLabel(m)}</option>)}
               </select>
             </div>
             <div className="flex flex-col gap-1">
@@ -264,7 +267,7 @@ export default function CaseDetailClient({ id }: { id: string }) {
                 className={select}
               >
                 <option value="">— Unassigned —</option>
-                {members.map((m) => <option key={m.user.id} value={m.user.id}>{memberLabel(m)}</option>)}
+                {paralegals.map((m) => <option key={m.user.id} value={m.user.id}>{memberLabel(m)}</option>)}
               </select>
             </div>
             <div className="flex flex-col gap-1">
@@ -276,7 +279,7 @@ export default function CaseDetailClient({ id }: { id: string }) {
                 className={select}
               >
                 <option value="">— Unassigned —</option>
-                {members.map((m) => <option key={m.user.id} value={m.user.id}>{memberLabel(m)}</option>)}
+                {assistants.map((m) => <option key={m.user.id} value={m.user.id}>{memberLabel(m)}</option>)}
               </select>
             </div>
           </div>
