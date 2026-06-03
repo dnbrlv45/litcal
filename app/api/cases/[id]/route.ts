@@ -26,6 +26,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
     include: {
       parties: true,
       events: { orderBy: { startTime: "asc" } },
+      assignedAttorney:  { select: { id: true, firstName: true, lastName: true, email: true } },
+      assignedParalegal: { select: { id: true, firstName: true, lastName: true, email: true } },
+      assignedAssistant: { select: { id: true, firstName: true, lastName: true, email: true } },
     },
   });
 
