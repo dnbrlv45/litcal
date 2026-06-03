@@ -16,6 +16,7 @@ export async function GET(request: NextRequest) {
   const currentUser = await requireUser();
   if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { workspace } = await getCurrentWorkspace(currentUser.id);
+  if (!workspace) return NextResponse.json({ error: "No workspace" }, { status: 403 });
 
   const title = new URL(request.url).searchParams.get("title");
 
@@ -37,6 +38,7 @@ export async function POST(request: NextRequest) {
   const userId = currentUser.id;
 
   const { workspace, membership } = await getCurrentWorkspace(userId);
+  if (!workspace || !membership) return NextResponse.json({ error: "No workspace" }, { status: 403 });
   if (!canManageWorkspace(membership.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

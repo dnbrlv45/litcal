@@ -11,6 +11,7 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   const userId = currentUser.id;
 
   const { workspace, membership } = await getCurrentWorkspace(userId);
+  if (!workspace || !membership) return NextResponse.json({ error: "No workspace" }, { status: 403 });
   if (!canManageWorkspace(membership.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

@@ -12,6 +12,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = currentUser.id;
   const { workspace } = await getCurrentWorkspace(userId);
+  if (!workspace) return NextResponse.json({ error: "No workspace" }, { status: 403 });
 
   const { id } = await params;
 
@@ -42,6 +43,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = currentUser.id;
   const { workspace } = await getCurrentWorkspace(userId);
+  if (!workspace) return NextResponse.json({ error: "No workspace" }, { status: 403 });
 
   const { id } = await params;
   const body = await request.json() as {
@@ -77,7 +79,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   async function resolveAssignment(id: string | null | undefined): Promise<string | null> {
     if (id === null) return null;
     if (!id) return undefined as unknown as null; // not provided — skip field
-    const member = await prisma.workspaceMember.findFirst({ where: { workspaceId: workspace.id, userId: id } });
+    const member = await prisma.workspaceMember.findFirst({ where: { workspaceId: workspace!.id, userId: id } });
     return member ? id : null;
   }
 
@@ -167,6 +169,7 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = currentUser.id;
   const { workspace } = await getCurrentWorkspace(userId);
+  if (!workspace) return NextResponse.json({ error: "No workspace" }, { status: 403 });
 
   const { id } = await params;
 

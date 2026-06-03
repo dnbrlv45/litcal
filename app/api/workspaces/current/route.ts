@@ -9,6 +9,7 @@ export async function GET() {
   const userId = currentUser.id;
 
   const { workspace, membership } = await getCurrentWorkspace(userId);
+  if (!workspace || !membership) return NextResponse.json({ error: "No workspace" }, { status: 403 });
   const members = await prisma.workspaceMember.findMany({
     where: { workspaceId: workspace.id },
     include: {
@@ -37,6 +38,7 @@ export async function DELETE() {
   const userId = currentUser.id;
 
   const { workspace, membership } = await getCurrentWorkspace(userId);
+  if (!workspace || !membership) return NextResponse.json({ error: "No workspace" }, { status: 403 });
   if (membership.role !== "OWNER") {
     return NextResponse.json({ error: "Only the owner can delete the workspace" }, { status: 403 });
   }
@@ -51,6 +53,7 @@ export async function PATCH(request: NextRequest) {
   const userId = currentUser.id;
 
   const { workspace, membership } = await getCurrentWorkspace(userId);
+  if (!workspace || !membership) return NextResponse.json({ error: "No workspace" }, { status: 403 });
   if (!canManageWorkspace(membership.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

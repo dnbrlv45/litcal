@@ -10,6 +10,7 @@ export default async function TeamPage() {
   const userId = user.id;
 
   const { workspace, membership } = await getCurrentWorkspace(userId);
+  if (!workspace || !membership) redirect("/setup");
   const members = await prisma.workspaceMember.findMany({
     where: { workspaceId: workspace.id },
     include: {

@@ -1,7 +1,9 @@
 import CalendarView from "@/components/calendar/CalendarView";
 import Image from "next/image";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
+import { getCurrentWorkspace } from "@/lib/workspaces";
 
 export default async function HomePage() {
   const user = await getCurrentUser();
@@ -31,6 +33,9 @@ export default async function HomePage() {
       </div>
     );
   }
+
+  const { workspace } = await getCurrentWorkspace(user.id);
+  if (!workspace) redirect("/setup");
 
   return <CalendarView />;
 }

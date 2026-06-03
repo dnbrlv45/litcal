@@ -12,6 +12,7 @@ export async function GET(request: NextRequest) {
   if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = currentUser.id;
   const { workspace } = await getCurrentWorkspace(userId);
+  if (!workspace) return NextResponse.json({ error: "No workspace" }, { status: 403 });
 
   const { searchParams } = new URL(request.url);
   const start = searchParams.get("start");
@@ -71,6 +72,7 @@ export async function POST(request: NextRequest) {
   if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = currentUser.id;
   const { workspace } = await getCurrentWorkspace(userId);
+  if (!workspace) return NextResponse.json({ error: "No workspace" }, { status: 403 });
 
   const body = await request.json();
   const { title, description, start, end, timeZone, eventType, location, caseId, allDay } = body as {

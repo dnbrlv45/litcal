@@ -21,6 +21,7 @@ export async function GET() {
   if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = currentUser.id;
   const { workspace } = await getCurrentWorkspace(userId);
+  if (!workspace) return NextResponse.json({ error: "No workspace" }, { status: 403 });
 
   const cases = await prisma.case.findMany({
     where: {
@@ -48,6 +49,7 @@ export async function POST(request: NextRequest) {
   if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = currentUser.id;
   const { workspace } = await getCurrentWorkspace(userId);
+  if (!workspace) return NextResponse.json({ error: "No workspace" }, { status: 403 });
 
   const body = await request.json() as {
     title: string;

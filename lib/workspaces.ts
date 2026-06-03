@@ -44,26 +44,24 @@ export async function getCurrentWorkspace(userId: string) {
 
   if (membership) return { user, membership, workspace: membership.workspace };
 
-  const displayName = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
+  return { user, membership: null, workspace: null };
+}
+
+export async function createWorkspace(userId: string, name: string) {
+  const user = await ensureUser(userId);
+  const displayName = name.trim() || ([user.firstName, user.lastName].filter(Boolean).join(" ").trim()) || "My Workspace";
   const workspace = await prisma.workspace.create({
     data: {
-      name: displayName ? `${displayName}'s Workspace` : "My Workspace",
+      name: displayName,
       createdBy: userId,
-      members: {
-        create: {
-          userId,
-          role: "OWNER",
-        },
-      },
+      members: { create: { userId, role: "OWNER" } },
     },
   });
-
-  const createdMembership = await prisma.workspaceMember.findUniqueOrThrow({
+  const membership = await prisma.workspaceMember.findUniqueOrThrow({
     where: { workspaceId_userId: { workspaceId: workspace.id, userId } },
     include: { workspace: true },
   });
-
-  return { user, membership: createdMembership, workspace };
+  return { workspace, membership };
 }
 
 export function canManageWorkspace(role: string) {

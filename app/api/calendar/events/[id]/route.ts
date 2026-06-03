@@ -14,6 +14,7 @@ export async function DELETE(
   if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = currentUser.id;
   const { workspace } = await getCurrentWorkspace(userId);
+  if (!workspace) return NextResponse.json({ error: "No workspace" }, { status: 403 });
 
   const { id } = await params;
 
@@ -65,6 +66,7 @@ export async function PATCH(
   if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = currentUser.id;
   const { workspace } = await getCurrentWorkspace(userId);
+  if (!workspace) return NextResponse.json({ error: "No workspace" }, { status: 403 });
 
   const { id } = await params;
 
