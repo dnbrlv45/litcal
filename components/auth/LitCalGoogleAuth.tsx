@@ -11,14 +11,14 @@ interface Props {
 
 export default function LitCalGoogleAuth({ mode }: Props) {
   const isSignIn = mode === "sign-in";
-  const title = isSignIn ? "Sign in to LitCal" : "Create your LitCal account";
+  const title = isSignIn ? "Sign in to LitCal" : "Create a workspace";
   const subtitle = isSignIn
     ? "Use your Google account to access your litigation calendar."
-    : "Sign up with Google to get started.";
+    : "Sign up with Google to create your workspace and get started.";
   const googleHref = isSignIn ? "/api/auth/google/sign-in" : "/api/auth/google/sign-in?mode=signup";
   const alternateHref = isSignIn ? "/sign-up" : "/sign-in";
   const alternateText = isSignIn ? "Need an account?" : "Already have an account?";
-  const alternateAction = isSignIn ? "Create one" : "Sign in";
+  const alternateAction = isSignIn ? "Create a workspace" : "Sign in";
 
   return (
     <main className="flex min-h-screen flex-1 items-center justify-center bg-slate-50 px-6 py-12">
