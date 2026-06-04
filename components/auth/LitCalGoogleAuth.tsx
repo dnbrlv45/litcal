@@ -16,9 +16,6 @@ export default function LitCalGoogleAuth({ mode }: Props) {
     ? "Use your Google account to access your litigation calendar."
     : "Sign up with Google to create your workspace and get started.";
   const googleHref = isSignIn ? "/api/auth/google/sign-in" : "/api/auth/google/sign-in?mode=signup";
-  const alternateHref = isSignIn ? "/sign-up" : "/sign-in";
-  const alternateText = isSignIn ? "Need an account?" : "Already have an account?";
-  const alternateAction = isSignIn ? "Create a workspace" : "Sign in";
 
   return (
     <main className="flex min-h-screen flex-1 items-center justify-center bg-slate-50 px-6 py-12">
@@ -40,10 +37,21 @@ export default function LitCalGoogleAuth({ mode }: Props) {
         </div>
 
         <p className="mt-6 text-center text-sm text-slate-600">
-          {alternateText}{" "}
-          <Link href={alternateHref} className="font-semibold text-teal-800 hover:text-teal-900">
-            {alternateAction}
-          </Link>
+          {isSignIn ? (
+            <>
+              New to LitCal?{" "}
+              <Link href="/sign-up" className="font-semibold text-teal-800 hover:text-teal-900">
+                Create a workspace
+              </Link>
+            </>
+          ) : (
+            <>
+              Already have a workspace?{" "}
+              <Link href="/sign-in" className="font-semibold text-teal-800 hover:text-teal-900">
+                Sign in
+              </Link>
+            </>
+          )}
         </p>
 
         <p className="mt-6 text-center text-xs leading-5 text-slate-500">
