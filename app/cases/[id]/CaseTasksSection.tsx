@@ -1,9 +1,21 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Plus, CheckCircle2, Circle, AlertCircle } from "lucide-react";
+import { Plus, CheckCircle2, Circle, Clock, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import TaskModal, { TaskData, TaskMember, TaskCase } from "@/app/tasks/TaskModal";
+
+const STATUS_CYCLE: Record<string, string> = {
+  TODO: "IN_PROGRESS",
+  IN_PROGRESS: "DONE",
+  DONE: "TODO",
+};
+
+const STATUS_ICON: Record<string, { icon: React.ElementType; color: string; title: string }> = {
+  TODO:        { icon: Circle,       color: "text-slate-400", title: "Move to In Progress" },
+  IN_PROGRESS: { icon: Clock,        color: "text-blue-500",  title: "Mark done" },
+  DONE:        { icon: CheckCircle2, color: "text-green-600", title: "Reopen" },
+};
 
 const PRIORITY_COLORS: Record<string, string> = {
   LOW:    "bg-slate-100 text-slate-600",
@@ -74,8 +86,8 @@ export default function CaseTasksSection({ caseId, caseTitle, caseNumber }: Prop
     setTasks((prev) => prev.filter((t) => t.id !== id));
   }
 
-  async function handleToggleDone(task: TaskData) {
-    const newStatus = task.status === "DONE" ? "TODO" : "DONE";
+  async function handleCycleStatus(task: TaskData) {
+    const newStatus = STATUS_CYCLE[task.status] ?? "TODO";
     const res = await fetch(`/api/tasks/${task.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -110,14 +122,17 @@ export default function CaseTasksSection({ caseId, caseTitle, caseNumber }: Prop
         <div className="space-y-1.5">
           {tasks.map((task) => {
             const overdue = isOverdue(task.dueDate, task.status);
+            const statusMeta = STATUS_ICON[task.status] ?? STATUS_ICON.TODO;
+            const StatusIcon = statusMeta.icon;
             return (
               <div key={task.id}
                 className="flex items-start gap-2.5 p-2.5 rounded-md border border-border bg-card hover:bg-accent/30 transition-colors group text-sm">
                 <button
-                  onClick={() => handleToggleDone(task)}
-                  className={`mt-0.5 shrink-0 ${task.status === "DONE" ? "text-green-600" : "text-slate-300 hover:text-teal-600"} transition-colors`}
+                  onClick={() => handleCycleStatus(task)}
+                  className={`mt-0.5 shrink-0 ${statusMeta.color} hover:opacity-70 transition-opacity`}
+                  title={statusMeta.title}
                 >
-                  {task.status === "DONE" ? <CheckCircle2 className="w-4 h-4" /> : <Circle className="w-4 h-4" />}
+                  <StatusIcon className="w-4 h-4" />
                 </button>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">

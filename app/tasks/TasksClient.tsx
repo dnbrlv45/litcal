@@ -5,10 +5,16 @@ import { Plus, CheckCircle2, Circle, Clock, AlertCircle, ChevronDown } from "luc
 import { Button } from "@/components/ui/button";
 import TaskModal, { TaskData, TaskMember, TaskCase } from "./TaskModal";
 
+const STATUS_CYCLE: Record<string, string> = {
+  TODO: "IN_PROGRESS",
+  IN_PROGRESS: "DONE",
+  DONE: "TODO",
+};
+
 const STATUS_META = {
-  TODO:        { label: "To Do",       icon: Circle,       color: "text-slate-500" },
-  IN_PROGRESS: { label: "In Progress", icon: Clock,        color: "text-blue-500"  },
-  DONE:        { label: "Done",        icon: CheckCircle2, color: "text-green-600" },
+  TODO:        { label: "To Do",       icon: Circle,       color: "text-slate-400", title: "Move to In Progress" },
+  IN_PROGRESS: { label: "In Progress", icon: Clock,        color: "text-blue-500",  title: "Mark done" },
+  DONE:        { label: "Done",        icon: CheckCircle2, color: "text-green-600", title: "Reopen" },
 } as const;
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -40,22 +46,22 @@ interface TaskCardProps {
   task: TaskData;
   onEdit: (t: TaskData) => void;
   onDelete: (id: string) => void;
-  onToggleDone: (t: TaskData) => void;
+  onCycleStatus: (t: TaskData) => void;
 }
 
-function TaskCard({ task, onEdit, onDelete, onToggleDone }: TaskCardProps) {
+function TaskCard({ task, onEdit, onDelete, onCycleStatus }: TaskCardProps) {
   const overdue = isOverdue(task.dueDate, task.status);
-  const Meta = STATUS_META[task.status as keyof typeof STATUS_META];
-  const Icon = Meta?.icon ?? Circle;
+  const Meta = STATUS_META[task.status as keyof typeof STATUS_META] ?? STATUS_META.TODO;
+  const Icon = Meta.icon;
 
   return (
     <div className="flex items-start gap-3 p-3 rounded-lg border border-border bg-card hover:bg-accent/30 transition-colors group">
       <button
-        onClick={() => onToggleDone(task)}
-        className={`mt-0.5 shrink-0 ${task.status === "DONE" ? "text-green-600" : "text-slate-300 hover:text-teal-600"} transition-colors`}
-        title={task.status === "DONE" ? "Mark incomplete" : "Mark done"}
+        onClick={() => onCycleStatus(task)}
+        className={`mt-0.5 shrink-0 ${Meta.color} hover:opacity-70 transition-opacity`}
+        title={Meta.title}
       >
-        {task.status === "DONE" ? <CheckCircle2 className="w-5 h-5" /> : <Circle className="w-5 h-5" />}
+        <Icon className="w-5 h-5" />
       </button>
 
       <div className="flex-1 min-w-0">
@@ -106,10 +112,10 @@ interface GroupProps {
   defaultOpen?: boolean;
   onEdit: (t: TaskData) => void;
   onDelete: (id: string) => void;
-  onToggleDone: (t: TaskData) => void;
+  onCycleStatus: (t: TaskData) => void;
 }
 
-function TaskGroup({ title, tasks, defaultOpen = true, onEdit, onDelete, onToggleDone }: GroupProps) {
+function TaskGroup({ title, tasks, defaultOpen = true, onEdit, onDelete, onCycleStatus }: GroupProps) {
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="mb-6">
@@ -126,7 +132,7 @@ function TaskGroup({ title, tasks, defaultOpen = true, onEdit, onDelete, onToggl
           {tasks.length === 0 ? (
             <p className="text-xs text-muted-foreground py-2 pl-1">No tasks</p>
           ) : tasks.map((t) => (
-            <TaskCard key={t.id} task={t} onEdit={onEdit} onDelete={onDelete} onToggleDone={onToggleDone} />
+            <TaskCard key={t.id} task={t} onEdit={onEdit} onDelete={onDelete} onCycleStatus={onCycleStatus} />
           ))}
         </div>
       )}
@@ -187,8 +193,8 @@ export default function TasksClient() {
     setTasks((prev) => prev.filter((t) => t.id !== id));
   }
 
-  async function handleToggleDone(task: TaskData) {
-    const newStatus = task.status === "DONE" ? "TODO" : "DONE";
+  async function handleCycleStatus(task: TaskData) {
+    const newStatus = STATUS_CYCLE[task.status] ?? "TODO";
     const res = await fetch(`/api/tasks/${task.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -270,9 +276,9 @@ export default function TasksClient() {
           </div>
         ) : (
           <>
-            <TaskGroup title="To Do" tasks={todo} onEdit={openEdit} onDelete={handleDelete} onToggleDone={handleToggleDone} />
-            <TaskGroup title="In Progress" tasks={inProgress} onEdit={openEdit} onDelete={handleDelete} onToggleDone={handleToggleDone} />
-            <TaskGroup title="Done" tasks={done} defaultOpen={false} onEdit={openEdit} onDelete={handleDelete} onToggleDone={handleToggleDone} />
+            <TaskGroup title="To Do" tasks={todo} onEdit={openEdit} onDelete={handleDelete} onCycleStatus={handleCycleStatus} />
+            <TaskGroup title="In Progress" tasks={inProgress} onEdit={openEdit} onDelete={handleDelete} onCycleStatus={handleCycleStatus} />
+            <TaskGroup title="Done" tasks={done} defaultOpen={false} onEdit={openEdit} onDelete={handleDelete} onCycleStatus={handleCycleStatus} />
           </>
         )}
       </div>
