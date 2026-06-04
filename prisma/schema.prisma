@@ -60,6 +60,7 @@ model Workspace {
   invitations WorkspaceInvitation[]
   cases     Case[]
   events    Event[]
+  tasks     Task[]
 
   @@index([createdBy])
 }
@@ -75,6 +76,7 @@ model WorkspaceMember {
 
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks       Task[]
 
   @@unique([workspaceId, userId])
   @@index([userId])
@@ -173,6 +175,7 @@ model Event {
   caseRef          Case?               @relation(fields: [caseId], references: [id], onDelete: SetNull)
   assignedAttorney User?               @relation("EventAttorney", fields: [assignedAttorneyId], references: [id], onDelete: SetNull)
   googleSync       GoogleCalendarSync?
+  tasks            Task[]
 
   @@index([userId, startTime])
   @@index([userId, startTime, endTime])
@@ -293,6 +296,7 @@ model Case {
   assignedAssistant User?      @relation("CaseAssistant", fields: [assignedAssistantId], references: [id], onDelete: SetNull)
   parties      CaseParty[]
   events       Event[]
+  tasks        Task[]
 
   @@index([orgId])
   @@index([workspaceId])
@@ -345,6 +349,50 @@ model CaseParty {
   caseRef Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
 
   @@index([caseId])
+}
+
+// ─── TASKS ───────────────────────────────────────────────────────────────────
+
+model Task {
+  id           String       @id @default(cuid())
+  workspaceId  String
+  caseId       String?
+  eventId      String?
+  assignedToId String?
+
+  title        String
+  description  String?
+  status       TaskStatus   @default(TODO)
+  priority     TaskPriority @default(MEDIUM)
+  dueDate      DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  workspace    Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  caseRef      Case?            @relation(fields: [caseId],       references: [id], onDelete: SetNull)
+  eventRef     Event?           @relation(fields: [eventId],      references: [id], onDelete: SetNull)
+  assignedTo   WorkspaceMember? @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([caseId])
+  @@index([eventId])
+  @@index([assignedToId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
 }
 
 // ─── FUTURE ───────────────────────────────────────────────────────────────────

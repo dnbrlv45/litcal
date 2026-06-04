@@ -1,8 +1,9 @@
-export default function TasksPage() {
-  return (
-    <div className="p-8">
-      <h1 className="text-xl font-semibold">Tasks</h1>
-      <p className="text-sm text-muted-foreground mt-1">Task management — coming soon.</p>
-    </div>
-  );
+import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/auth";
+import TasksClient from "./TasksClient";
+
+export default async function TasksPage() {
+  const user = await getCurrentUser();
+  if (!user) redirect("/sign-in");
+  return <TasksClient />;
 }

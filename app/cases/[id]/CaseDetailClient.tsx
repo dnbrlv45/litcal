@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { EVENT_TYPE_COLORS } from "@/lib/google-calendar";
 import type { EventType } from "@/lib/google-calendar";
 import { COUNTIES_AND_COURTS } from "@/lib/counties-courts";
+import CaseTasksSection from "./CaseTasksSection";
 
 const STATUS_OPTIONS = ["ACTIVE", "PENDING", "CLOSED", "ARCHIVED"] as const;
 const STATUS_COLORS = {
@@ -410,10 +411,15 @@ export default function CaseDetailClient({ id }: { id: string }) {
           {error && <p className="text-xs text-destructive">{error}</p>}
         </div>
 
-        {/* Right: events */}
+        {/* Right: events + tasks */}
         <div className="col-span-2 flex flex-col gap-5">
           <EventGroup label="Upcoming" events={upcomingEvents} />
           <EventGroup label="Past" events={pastEvents} muted />
+          <CaseTasksSection
+            caseId={caseData.id}
+            caseTitle={caseData.title}
+            caseNumber={caseData.caseNumber}
+          />
         </div>
       </div>
     </div>
