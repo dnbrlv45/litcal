@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Plus, CheckCircle2, Circle, Clock, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import TaskModal, { TaskData, TaskMember, TaskCase } from "@/app/tasks/TaskModal";
