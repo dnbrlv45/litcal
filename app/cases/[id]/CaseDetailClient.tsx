@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Calendar, MapPin, Pencil, Trash2, Check, X } from "lucide-react";
@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { EVENT_TYPE_COLORS } from "@/lib/google-calendar";
 import type { EventType } from "@/lib/google-calendar";
+import { COUNTIES_AND_COURTS } from "@/lib/counties-courts";
 
 const STATUS_OPTIONS = ["ACTIVE", "PENDING", "CLOSED", "ARCHIVED"] as const;
 const STATUS_COLORS = {
@@ -43,6 +44,9 @@ interface CaseData {
   id: string; title: string; caseNumber: string | null;
   status: keyof typeof STATUS_COLORS; caseType: string;
   court: string | null; county: string | null; judge: string | null;
+  countyId: string | null; courtId: string | null;
+  countyRef: { id: string; name: string } | null;
+  courtRef: { id: string; name: string } | null;
   description: string | null; filingDate: string | null;
   defendant: string | null; defenseFirm: string | null; defenseAttorney: string | null;
   assignedAttorney:  AssignedUser | null;
@@ -78,8 +82,8 @@ export default function CaseDetailClient({ id }: { id: string }) {
   const [editTitle, setEditTitle] = useState("");
   const [editCaseNumber, setEditCaseNumber] = useState("");
   const [editStatus, setEditStatus] = useState<string>("ACTIVE");
-  const [editCourt, setEditCourt] = useState("");
-  const [editCounty, setEditCounty] = useState("");
+  const [editCountyName, setEditCountyName] = useState("");
+  const [editCourtName, setEditCourtName] = useState("");
   const [editJudge, setEditJudge] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editDefendant, setEditDefendant] = useState("");
@@ -142,8 +146,8 @@ export default function CaseDetailClient({ id }: { id: string }) {
     setEditTitle(caseData.title);
     setEditCaseNumber(caseData.caseNumber ?? "");
     setEditStatus(caseData.status);
-    setEditCourt(caseData.court ?? "");
-    setEditCounty(caseData.county ?? "");
+    setEditCountyName(caseData.countyRef?.name ?? caseData.county ?? "");
+    setEditCourtName(caseData.courtRef?.name ?? caseData.court ?? "");
     setEditJudge(caseData.judge ?? "");
     setEditDescription(caseData.description ?? "");
     setEditDefendant(caseData.defendant ?? "");
@@ -162,7 +166,7 @@ export default function CaseDetailClient({ id }: { id: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: editTitle, caseNumber: editCaseNumber, status: editStatus,
-          court: editCourt, county: editCounty, judge: editJudge,
+          countyName: editCountyName || null, courtName: editCourtName || null, judge: editJudge,
           description: editDescription,
           defendant: editDefendant, defenseFirm: editDefenseFirm, defenseAttorney: editDefenseAttorney,
         }),
@@ -197,6 +201,12 @@ export default function CaseDetailClient({ id }: { id: string }) {
   const paralegals = members.filter((m) => m.jobTitle === "PARALEGAL");
   const assistants = members.filter((m) => m.jobTitle === "ASSISTANT");
   const select = "flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed";
+
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const editCourts = useMemo(
+    () => COUNTIES_AND_COURTS.find((c) => c.name === editCountyName)?.courts ?? [],
+    [editCountyName],
+  );
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -318,12 +328,35 @@ export default function CaseDetailClient({ id }: { id: string }) {
           <div className="rounded-xl border border-border p-4 flex flex-col gap-3">
             <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Case Info</h2>
             <Field label="County" editing={editing}
-              display={caseData.county}
-              input={<Input value={editCounty} onChange={(e) => setEditCounty(e.target.value)} placeholder="e.g. Los Angeles" />}
+              display={caseData.countyRef?.name ?? caseData.county}
+              input={
+                <select
+                  value={editCountyName}
+                  onChange={(e) => { setEditCountyName(e.target.value); setEditCourtName(""); }}
+                  className={select}
+                >
+                  <option value="">— Select county —</option>
+                  {COUNTIES_AND_COURTS.map(({ name }) => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+              }
             />
             <Field label="Court" editing={editing}
-              display={caseData.court}
-              input={<Input value={editCourt} onChange={(e) => setEditCourt(e.target.value)} placeholder="e.g. Superior Court" />}
+              display={caseData.courtRef?.name ?? caseData.court}
+              input={
+                <select
+                  value={editCourtName}
+                  onChange={(e) => setEditCourtName(e.target.value)}
+                  disabled={!editCountyName}
+                  className={select}
+                >
+                  <option value="">{editCountyName ? "— Select court —" : "— Select county first —"}</option>
+                  {editCourts.map(({ name }) => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+              }
             />
             <Field label="Judge" editing={editing}
               display={caseData.judge}

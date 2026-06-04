@@ -30,6 +30,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
       assignedAttorney:  { select: { id: true, firstName: true, lastName: true, email: true } },
       assignedParalegal: { select: { id: true, firstName: true, lastName: true, email: true } },
       assignedAssistant: { select: { id: true, firstName: true, lastName: true, email: true } },
+      countyRef: { select: { id: true, name: true } },
+      courtRef:  { select: { id: true, name: true } },
     },
   });
 
@@ -51,8 +53,8 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     caseNumber?: string;
     caseType?: string;
     status?: string;
-    court?: string;
-    county?: string;
+    countyName?: string | null;
+    courtName?: string | null;
     judge?: string;
     description?: string;
     filingDate?: string | null;
@@ -83,6 +85,23 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     return member ? id : null;
   }
 
+  async function resolveCountyCourt(countyName?: string | null, courtName?: string | null) {
+    if (countyName === undefined) return null; // not provided, skip
+    if (!countyName) return { countyId: null, courtId: null, county: null as string | null, court: null as string | null };
+    const county = await prisma.county.findFirst({ where: { name: { equals: countyName, mode: "insensitive" } } });
+    if (!county) return { countyId: null, courtId: null, county: countyName, court: courtName ?? null };
+    let courtId: string | null = null;
+    let court: string | null = courtName ?? null;
+    if (courtName) {
+      const courtRow = await prisma.court.findFirst({
+        where: { countyId: county.id, name: { equals: courtName, mode: "insensitive" } },
+      });
+      courtId = courtRow?.id ?? null;
+      court = courtRow?.name ?? courtName;
+    }
+    return { countyId: county.id, courtId, county: county.name, court };
+  }
+
   const validTypes = ["AUTO_ACCIDENT","SLIP_AND_FALL","GOVERNMENT_CLAIM","DOG_BITE","PREMISES_LIABILITY","MEDICAL_MALPRACTICE","WRONGFUL_DEATH","PRODUCT_LIABILITY","OTHER"];
   const validStatuses = ["ACTIVE","CLOSED","ARCHIVED","PENDING"];
   const closingStatuses = ["CLOSED", "ARCHIVED"];
@@ -90,13 +109,15 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   const newStatus = body.status && validStatuses.includes(body.status) ? body.status : null;
   const isClosing = newStatus && closingStatuses.includes(newStatus) && !closingStatuses.includes(existing.status);
 
-  const [attorneyId, paralegalId, assistantId] = await Promise.all([
+  const [attorneyId, paralegalId, assistantId, countyCourt] = await Promise.all([
     body.assignedAttorneyId  !== undefined ? resolveAssignment(body.assignedAttorneyId)  : Promise.resolve(undefined),
     body.assignedParalegalId !== undefined ? resolveAssignment(body.assignedParalegalId) : Promise.resolve(undefined),
     body.assignedAssistantId !== undefined ? resolveAssignment(body.assignedAssistantId) : Promise.resolve(undefined),
+    resolveCountyCourt(body.countyName, body.courtName),
   ]);
 
   const ASSIGNMENT_INCLUDE = { select: { id: true, firstName: true, lastName: true, email: true } } as const;
+  const LOCATION_INCLUDE = { select: { id: true, name: true } } as const;
 
   const updated = await prisma.case.update({
     where: { id },
@@ -105,8 +126,12 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       ...(body.caseNumber !== undefined && { caseNumber: body.caseNumber?.trim() || null }),
       ...(body.caseType && validTypes.includes(body.caseType) && { caseType: body.caseType as never }),
       ...(newStatus && { status: newStatus as never }),
-      ...(body.court !== undefined && { court: body.court?.trim() || null }),
-      ...(body.county !== undefined && { county: body.county?.trim() || null }),
+      ...(countyCourt && {
+        county: countyCourt.county,
+        court: countyCourt.court,
+        countyId: countyCourt.countyId,
+        courtId: countyCourt.courtId,
+      }),
       ...(body.judge !== undefined && { judge: body.judge?.trim() || null }),
       ...(body.description !== undefined && { description: body.description?.trim() || null }),
       ...(body.filingDate !== undefined && { filingDate: body.filingDate ? new Date(body.filingDate) : null }),
@@ -124,6 +149,8 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       assignedAttorney:  ASSIGNMENT_INCLUDE,
       assignedParalegal: ASSIGNMENT_INCLUDE,
       assignedAssistant: ASSIGNMENT_INCLUDE,
+      countyRef: LOCATION_INCLUDE,
+      courtRef:  LOCATION_INCLUDE,
     },
   });
 

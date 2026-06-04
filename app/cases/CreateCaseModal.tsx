@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { COUNTIES_AND_COURTS } from "@/lib/counties-courts";
 
 const CASE_TYPES = [
   { value: "AUTO_ACCIDENT",       label: "Auto Accident" },
@@ -26,7 +27,7 @@ interface Props {
 
 const EMPTY = {
   title: "", caseNumber: "", caseType: "AUTO_ACCIDENT",
-  county: "", court: "",
+  countyName: "", courtName: "",
   defendant: "", defenseFirm: "", defenseAttorney: "",
 };
 
@@ -40,7 +41,16 @@ export default function CreateCaseModal({ open, onClose, onCreated }: Props) {
       setFields((f) => ({ ...f, [key]: e.target.value }));
   }
 
+  function setCounty(e: React.ChangeEvent<HTMLSelectElement>) {
+    setFields((f) => ({ ...f, countyName: e.target.value, courtName: "" }));
+  }
+
   function reset() { setFields(EMPTY); setError(null); }
+
+  const courts = useMemo(
+    () => COUNTIES_AND_COURTS.find((c) => c.name === fields.countyName)?.courts ?? [],
+    [fields.countyName],
+  );
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -50,7 +60,16 @@ export default function CreateCaseModal({ open, onClose, onCreated }: Props) {
       const res = await fetch("/api/cases", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(fields),
+        body: JSON.stringify({
+          title: fields.title,
+          caseNumber: fields.caseNumber,
+          caseType: fields.caseType,
+          countyName: fields.countyName || null,
+          courtName: fields.courtName || null,
+          defendant: fields.defendant,
+          defenseFirm: fields.defenseFirm,
+          defenseAttorney: fields.defenseAttorney,
+        }),
       });
       if (!res.ok) throw new Error();
       onCreated();
@@ -99,11 +118,27 @@ export default function CreateCaseModal({ open, onClose, onCreated }: Props) {
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="case-county">County</Label>
-              <Input id="case-county" placeholder="e.g. Los Angeles" value={fields.county} onChange={set("county")} />
+              <select id="case-county" value={fields.countyName} onChange={setCounty} className={select}>
+                <option value="">— Select county —</option>
+                {COUNTIES_AND_COURTS.map(({ name }) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="case-court">Court</Label>
-              <Input id="case-court" placeholder="e.g. Superior Court" value={fields.court} onChange={set("court")} />
+              <select
+                id="case-court"
+                value={fields.courtName}
+                onChange={set("courtName")}
+                disabled={!fields.countyName}
+                className={select}
+              >
+                <option value="">{fields.countyName ? "— Select court —" : "— Select county first —"}</option>
+                {courts.map(({ name }) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
             </div>
           </div>
 

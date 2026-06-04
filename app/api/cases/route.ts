@@ -5,6 +5,22 @@ import { getCurrentWorkspace } from "@/lib/workspaces";
 
 const CASE_TYPE_VALUES = ["AUTO_ACCIDENT","SLIP_AND_FALL","GOVERNMENT_CLAIM","DOG_BITE","PREMISES_LIABILITY","MEDICAL_MALPRACTICE","WRONGFUL_DEATH","PRODUCT_LIABILITY","OTHER"];
 
+async function resolveCountyCourt(countyName?: string | null, courtName?: string | null) {
+  if (!countyName) return { countyId: null, courtId: null, county: null, court: null };
+  const county = await prisma.county.findFirst({ where: { name: { equals: countyName, mode: "insensitive" } } });
+  if (!county) return { countyId: null, courtId: null, county: countyName, court: courtName ?? null };
+  let courtId: string | null = null;
+  let court: string | null = courtName ?? null;
+  if (courtName) {
+    const courtRow = await prisma.court.findFirst({
+      where: { countyId: county.id, name: { equals: courtName, mode: "insensitive" } },
+    });
+    courtId = courtRow?.id ?? null;
+    court = courtRow?.name ?? courtName;
+  }
+  return { countyId: county.id, courtId, county: county.name, court };
+}
+
 async function resolveAssignment(id: string | undefined | null, workspaceId: string): Promise<string | null> {
   if (!id) return null;
   const member = await prisma.workspaceMember.findFirst({ where: { workspaceId, userId: id } });
@@ -36,6 +52,8 @@ export async function GET() {
       assignedAttorney:  ASSIGNMENT_INCLUDE,
       assignedParalegal: ASSIGNMENT_INCLUDE,
       assignedAssistant: ASSIGNMENT_INCLUDE,
+      countyRef: { select: { id: true, name: true } },
+      courtRef:  { select: { id: true, name: true } },
     },
     orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
   });
@@ -55,8 +73,8 @@ export async function POST(request: NextRequest) {
     title: string;
     caseNumber?: string;
     caseType?: string;
-    court?: string;
-    county?: string;
+    countyName?: string | null;
+    courtName?: string | null;
     judge?: string;
     description?: string;
     filingDate?: string;
@@ -73,10 +91,11 @@ export async function POST(request: NextRequest) {
 
   const caseType = CASE_TYPE_VALUES.includes(body.caseType ?? "") ? body.caseType as never : "AUTO_ACCIDENT";
 
-  const [attorneyId, paralegalId, assistantId] = await Promise.all([
+  const [attorneyId, paralegalId, assistantId, courtyCourt] = await Promise.all([
     resolveAssignment(body.assignedAttorneyId, workspace.id),
     resolveAssignment(body.assignedParalegalId, workspace.id),
     resolveAssignment(body.assignedAssistantId, workspace.id),
+    resolveCountyCourt(body.countyName, body.courtName),
   ]);
 
   const newCase = await prisma.case.create({
@@ -87,8 +106,10 @@ export async function POST(request: NextRequest) {
       title: body.title.trim(),
       caseNumber: body.caseNumber?.trim() || null,
       caseType,
-      court: body.court?.trim() || null,
-      county: body.county?.trim() || null,
+      county: courtyCourt.county,
+      court: courtyCourt.court,
+      countyId: courtyCourt.countyId,
+      courtId: courtyCourt.courtId,
       judge: body.judge?.trim() || null,
       description: body.description?.trim() || null,
       filingDate: body.filingDate ? new Date(body.filingDate) : null,
@@ -105,6 +126,8 @@ export async function POST(request: NextRequest) {
       assignedAttorney:  ASSIGNMENT_INCLUDE,
       assignedParalegal: ASSIGNMENT_INCLUDE,
       assignedAssistant: ASSIGNMENT_INCLUDE,
+      countyRef: { select: { id: true, name: true } },
+      courtRef:  { select: { id: true, name: true } },
     },
   });
 

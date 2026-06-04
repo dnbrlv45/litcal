@@ -230,6 +230,26 @@ enum SyncStatus {
   DELETED
 }
 
+// ─── COUNTIES & COURTS ───────────────────────────────────────────────────────
+
+model County {
+  id     String  @id @default(cuid())
+  name   String  @unique
+  courts Court[]
+  cases  Case[]
+}
+
+model Court {
+  id       String  @id @default(cuid())
+  name     String
+  countyId String
+  county   County  @relation(fields: [countyId], references: [id], onDelete: Cascade)
+  cases    Case[]
+
+  @@unique([countyId, name])
+  @@index([countyId])
+}
+
 // ─── CASES ────────────────────────────────────────────────────────────────────
 
 model Case {
@@ -247,6 +267,8 @@ model Case {
   court        String?
   judge        String?
   county       String?
+  countyId     String?
+  courtId      String?
 
   defendant       String?
   defenseFirm     String?
@@ -264,6 +286,8 @@ model Case {
 
   user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   workspace         Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  countyRef         County?    @relation(fields: [countyId], references: [id], onDelete: SetNull)
+  courtRef          Court?     @relation(fields: [courtId], references: [id], onDelete: SetNull)
   assignedAttorney  User?      @relation("CaseAttorney",  fields: [assignedAttorneyId],  references: [id], onDelete: SetNull)
   assignedParalegal User?      @relation("CaseParalegal", fields: [assignedParalegalId], references: [id], onDelete: SetNull)
   assignedAssistant User?      @relation("CaseAssistant", fields: [assignedAssistantId], references: [id], onDelete: SetNull)
@@ -274,6 +298,8 @@ model Case {
   @@index([workspaceId])
   @@index([userId])
   @@index([status])
+  @@index([countyId])
+  @@index([courtId])
   @@index([assignedAttorneyId])
   @@index([assignedParalegalId])
   @@index([assignedAssistantId])
