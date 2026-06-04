@@ -1,7 +1,10 @@
-import { PrismaClient } from "@prisma/client";
-import { COUNTIES_AND_COURTS } from "../lib/counties-courts";
+import * as dotenv from "dotenv";
+import * as path from "path";
+dotenv.config({ path: path.resolve(__dirname, "../.env") });
+dotenv.config({ path: path.resolve(__dirname, "../.env.local"), override: true });
 
-const prisma = new PrismaClient();
+import { COUNTIES_AND_COURTS } from "../lib/counties-courts";
+import { prisma } from "../lib/prisma";
 
 async function main() {
   console.log("Seeding counties and courts…");
@@ -60,4 +63,4 @@ async function main() {
 
 main()
   .catch((e) => { console.error(e); process.exit(1); })
-  .finally(() => prisma.$disconnect());
+  .finally(() => prisma.$disconnect().catch(() => {}));
