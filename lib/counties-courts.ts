@@ -5,7 +5,7 @@ export const COUNTIES_AND_COURTS: CountyEntry[] = [
   { name: "Alameda", courts: [
     { name: "Rene C. Davidson Courthouse" }, { name: "Wiley W. Manuel Courthouse" },
     { name: "Administration Building" }, { name: "Hayward Hall of Justice" },
-    { name: "East County Hall of Justice" }, { name: "Freemont Hall of Justice" },
+    { name: "East County Hall of Justice" }, { name: "Fremont Hall of Justice" },
     { name: "George E. McDonald Hall of Justice" }, { name: "Berkeley Courthouse" },
     { name: "Juvenile Justice Center" }, { name: "John George Psychiatric Pavilion" },
   ]},
