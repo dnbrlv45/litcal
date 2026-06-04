@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Plus, CheckCircle2, Circle, Clock, AlertCircle, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import TaskModal, { TaskData, TaskMember, TaskCase } from "./TaskModal";
+import TaskModal, { TaskData, TaskMember, TaskCase } from "@/components/tasks/TaskModal";
 
 const STATUS_CYCLE: Record<string, string> = {
   TODO: "IN_PROGRESS",

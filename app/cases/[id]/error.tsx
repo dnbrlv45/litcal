@@ -6,10 +6,10 @@ import { Button } from "@/components/ui/button";
 
 export default function CaseDetailError({
   error,
-  reset,
+  unstable_retry,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
+  unstable_retry: () => void;
 }) {
   useEffect(() => {
     console.error("Case detail error:", error);
@@ -23,7 +23,7 @@ export default function CaseDetailError({
         {error.digest ? `\n\nDigest: ${error.digest}` : ""}
       </pre>
       <div className="flex gap-2">
-        <Button variant="outline" size="sm" onClick={reset}>Try again</Button>
+        <Button variant="outline" size="sm" onClick={unstable_retry}>Try again</Button>
         <Link href="/cases"><Button variant="ghost" size="sm">Back to Cases</Button></Link>
       </div>
     </div>
