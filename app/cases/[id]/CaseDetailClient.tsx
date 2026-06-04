@@ -182,6 +182,11 @@ export default function CaseDetailClient({ id }: { id: string }) {
     }
   }
 
+  const editCourts = useMemo(
+    () => COUNTIES_AND_COURTS.find((c) => c.name === editCountyName)?.courts ?? [],
+    [editCountyName],
+  );
+
   if (loading) {
     return <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">Loading…</div>;
   }
@@ -202,12 +207,6 @@ export default function CaseDetailClient({ id }: { id: string }) {
   const paralegals = members.filter((m) => m.jobTitle === "PARALEGAL");
   const assistants = members.filter((m) => m.jobTitle === "ASSISTANT");
   const select = "flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed";
-
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const editCourts = useMemo(
-    () => COUNTIES_AND_COURTS.find((c) => c.name === editCountyName)?.courts ?? [],
-    [editCountyName],
-  );
 
   return (
     <div className="flex-1 overflow-y-auto">
