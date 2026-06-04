@@ -141,18 +141,40 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  // Auto-create CMS task for Case Management Conferences
+  // Auto-create CMS deadline event + linked task for Case Management Conferences
   if ((safeEventType as string) === "CASE_MANAGEMENT_CONFERENCE" && caseId) {
     const rawDue = new Date(startDate.getTime() - 15 * 24 * 60 * 60 * 1000);
-    const dueDate = adjustToBusinessDay(rawDue);
+    const cmsDate = adjustToBusinessDay(rawDue);
+
+    // All-day deadline event on the CMS due date
+    const cmsStart = new Date(cmsDate); cmsStart.setHours(0, 0, 0, 0);
+    const cmsEnd   = new Date(cmsDate); cmsEnd.setHours(23, 59, 59, 999);
+
+    const cmsEvent = await prisma.event.create({
+      data: {
+        userId,
+        workspaceId: workspace.id,
+        title: "File Case Management Statement (CMS)",
+        description: `CMS due before Case Management Conference on ${startDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}.`,
+        startTime: cmsStart,
+        endTime: cmsEnd,
+        timeZone: timeZone ?? "UTC",
+        allDay: true,
+        eventType: "DEADLINE",
+        caseId,
+        assignedAttorneyId: inheritedAttorneyId,
+      },
+    });
+
+    // Task linked to both the CMC event and the CMS deadline event
     await prisma.task.create({
       data: {
         workspaceId: workspace.id,
         caseId,
-        eventId: event.id,
+        eventId: cmsEvent.id,
         title: "File Case Management Statement (CMS)",
         priority: "HIGH",
-        dueDate,
+        dueDate: cmsDate,
       },
     });
   }
@@ -192,7 +214,7 @@ export async function POST(request: NextRequest) {
         litCalId
       );
 
-      // Store sync record
+      // Store sync record for the CMC event
       await prisma.googleCalendarSync.create({
         data: {
           eventId: event.id,
@@ -201,6 +223,41 @@ export async function POST(request: NextRequest) {
           syncStatus: "SYNCED",
         },
       });
+
+      // Also push the CMS deadline event to Google Calendar if it was created
+      if ((safeEventType as string) === "CASE_MANAGEMENT_CONFERENCE" && caseId) {
+        try {
+          const cmsEventRow = await prisma.event.findFirst({
+            where: { caseId, eventType: "DEADLINE", title: "File Case Management Statement (CMS)", userId },
+            orderBy: { createdAt: "desc" },
+          });
+          if (cmsEventRow) {
+            const cmsDayStr = cmsEventRow.startTime.toISOString().slice(0, 10);
+            const cmsGEvent: GoogleCalEvent = await createGoogleEvent(
+              accessToken,
+              {
+                summary: cmsEventRow.title,
+                description: cmsEventRow.description ?? undefined,
+                start: cmsDayStr,
+                end: cmsDayStr,
+                timeZone: timeZone ?? "UTC",
+                reminderOverrides: [{ method: "popup", minutes: 1440 }],
+              },
+              litCalId
+            );
+            await prisma.googleCalendarSync.create({
+              data: {
+                eventId: cmsEventRow.id,
+                googleEventId: cmsGEvent.id,
+                googleCalendarId: litCalId,
+                syncStatus: "SYNCED",
+              },
+            });
+          }
+        } catch (err) {
+          console.error("CMS Google Calendar push failed:", err);
+        }
+      }
 
       googlePush = { ok: true };
     } catch (err) {
