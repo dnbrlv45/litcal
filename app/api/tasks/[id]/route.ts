@@ -2,18 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCurrentWorkspace } from "@/lib/workspaces";
-
-const TASK_INCLUDE = {
-  assignedTo: {
-    select: {
-      id: true,
-      jobTitle: true,
-      user: { select: { id: true, firstName: true, lastName: true, email: true } },
-    },
-  },
-  caseRef: { select: { id: true, title: true, caseNumber: true } },
-  eventRef: { select: { id: true, title: true, startTime: true } },
-} as const;
+import { TASK_INCLUDE } from "../route";
 
 async function getTaskForWorkspace(id: string, workspaceId: string) {
   return prisma.task.findFirst({ where: { id, workspaceId }, include: TASK_INCLUDE });
@@ -38,35 +27,96 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     dueDate?: string | null;
     caseId?: string | null;
     eventId?: string | null;
-    assignedToId?: string | null;
-    completedAt?: string | null;
+    assigneeIds?: string[];
   };
 
-  const STATUSES = ["TODO", "IN_PROGRESS", "DONE"];
+  const STATUSES   = ["TODO", "IN_PROGRESS", "DONE"];
   const PRIORITIES = ["LOW", "MEDIUM", "HIGH", "URGENT"];
 
   const completedAt =
-    body.status === "DONE" && existing.status !== "DONE"
-      ? new Date()
-      : body.status !== "DONE" && existing.status === "DONE"
-      ? null
-      : existing.completedAt;
+    body.status === "DONE" && existing.status !== "DONE"   ? new Date()
+    : body.status !== "DONE" && existing.status === "DONE" ? null
+    : existing.completedAt;
+
+  // Handle assignee diff if provided
+  let newlyAddedMemberIds: string[] = [];
+  if (body.assigneeIds !== undefined) {
+    const incomingIds = body.assigneeIds.filter(Boolean);
+
+    // Validate they belong to the workspace
+    if (incomingIds.length > 0) {
+      const valid = await prisma.workspaceMember.findMany({
+        where: { workspaceId: workspace.id, id: { in: incomingIds } },
+        select: { id: true },
+      });
+      const validSet = new Set(valid.map((m) => m.id));
+      const invalid = incomingIds.filter((mid) => !validSet.has(mid));
+      if (invalid.length > 0)
+        return NextResponse.json({ error: "Invalid assignee IDs" }, { status: 400 });
+    }
+
+    const currentIds = existing.assignees.map((a) => a.member.id);
+    const toAdd    = incomingIds.filter((mid) => !currentIds.includes(mid));
+    const toRemove = currentIds.filter((mid) => !incomingIds.includes(mid));
+
+    if (toRemove.length > 0) {
+      await prisma.taskAssignee.deleteMany({
+        where: { taskId: id, memberId: { in: toRemove } },
+      });
+    }
+    if (toAdd.length > 0) {
+      await prisma.taskAssignee.createMany({
+        data: toAdd.map((memberId) => ({ taskId: id, memberId })),
+        skipDuplicates: true,
+      });
+    }
+    newlyAddedMemberIds = toAdd;
+  }
 
   const task = await prisma.task.update({
     where: { id },
     data: {
-      ...(body.title !== undefined ? { title: body.title.trim() } : {}),
-      ...(body.description !== undefined ? { description: body.description?.trim() || null } : {}),
-      ...(body.status !== undefined && STATUSES.includes(body.status) ? { status: body.status as never } : {}),
-      ...(body.priority !== undefined && PRIORITIES.includes(body.priority) ? { priority: body.priority as never } : {}),
-      ...(body.dueDate !== undefined ? { dueDate: body.dueDate ? new Date(body.dueDate) : null } : {}),
-      ...(body.caseId !== undefined ? { caseId: body.caseId || null } : {}),
-      ...(body.eventId !== undefined ? { eventId: body.eventId || null } : {}),
-      ...(body.assignedToId !== undefined ? { assignedToId: body.assignedToId || null } : {}),
+      ...(body.title       !== undefined ? { title:       body.title.trim() }                                     : {}),
+      ...(body.description !== undefined ? { description: body.description?.trim() || null }                      : {}),
+      ...(body.status      !== undefined && STATUSES.includes(body.status)   ? { status:   body.status   as never } : {}),
+      ...(body.priority    !== undefined && PRIORITIES.includes(body.priority) ? { priority: body.priority as never } : {}),
+      ...(body.dueDate     !== undefined ? { dueDate:  body.dueDate  ? new Date(body.dueDate) : null }            : {}),
+      ...(body.caseId      !== undefined ? { caseId:   body.caseId  || null }                                     : {}),
+      ...(body.eventId     !== undefined ? { eventId:  body.eventId || null }                                     : {}),
       completedAt,
     },
     include: TASK_INCLUDE,
   });
+
+  // Notify newly added assignees
+  if (newlyAddedMemberIds.length > 0) {
+    const assigner = currentUser;
+    const assignerName = [assigner.firstName, assigner.lastName].filter(Boolean).join(" ") || assigner.email;
+
+    const members = await prisma.workspaceMember.findMany({
+      where: { id: { in: newlyAddedMemberIds } },
+      select: { id: true, userId: true },
+    });
+
+    const caseTitle = task.caseRef?.title ?? null;
+    const notifBody = [
+      caseTitle ? `Case: ${caseTitle}` : null,
+      `Assigned by: ${assignerName}`,
+    ].filter(Boolean).join("\n");
+
+    await prisma.notification.createMany({
+      data: members.map((m) => ({
+        userId:      m.userId,
+        workspaceId: workspace.id,
+        type:        "TASK_ASSIGNED" as never,
+        title:       `Task Assigned: ${task.title}`,
+        body:        notifBody || null,
+        taskId:      task.id,
+        caseId:      task.caseId ?? null,
+      })),
+      skipDuplicates: true,
+    });
+  }
 
   return NextResponse.json({ task });
 }

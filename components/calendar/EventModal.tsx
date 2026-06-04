@@ -15,15 +15,17 @@ import { Textarea } from "@/components/ui/textarea";
 import type { EventType, ConflictDetail } from "@/lib/google-calendar";
 
 const EVENT_TYPES: { value: EventType; label: string }[] = [
-  { value: "HEARING",    label: "Hearing" },
-  { value: "DEPOSITION", label: "Deposition" },
-  { value: "TRIAL",      label: "Trial" },
-  { value: "CONFERENCE", label: "Conference" },
-  { value: "MEDIATION",  label: "Mediation" },
-  { value: "MEETING",    label: "Meeting" },
-  { value: "DEADLINE",   label: "Deadline" },
-  { value: "REMINDER",   label: "Reminder" },
-  { value: "OTHER",      label: "Other" },
+  { value: "HEARING",                    label: "Hearing" },
+  { value: "DEPOSITION",                 label: "Deposition" },
+  { value: "TRIAL",                      label: "Trial" },
+  { value: "DEADLINE",                   label: "Deadline" },
+  { value: "COURT_CALL",                 label: "Court Call" },
+  { value: "CONFERENCE",                 label: "Conference" },
+  { value: "MEDIATION",                  label: "Mediation" },
+  { value: "CASE_MANAGEMENT_CONFERENCE", label: "Case Management Conference" },
+  { value: "MEETING",                    label: "Meeting" },
+  { value: "REMINDER",                   label: "Reminder" },
+  { value: "OTHER",                      label: "Other" },
 ];
 
 interface Props {

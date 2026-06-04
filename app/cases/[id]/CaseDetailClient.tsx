@@ -30,6 +30,8 @@ const TYPE_LABELS: Record<string, string> = {
 const EVENT_TYPE_LABELS: Record<string, string> = {
   HEARING: "Hearing", DEPOSITION: "Deposition", TRIAL: "Trial",
   CONFERENCE: "Conference", MEETING: "Meeting", DEADLINE: "Deadline",
+  MEDIATION: "Mediation", COURT_CALL: "Court Call",
+  CASE_MANAGEMENT_CONFERENCE: "Case Management Conference",
   REMINDER: "Reminder", OTHER: "Other",
 };
 

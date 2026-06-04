@@ -30,15 +30,17 @@ const MONTH_NAMES = [
 const DAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 
 const EVENT_TYPE_LABELS: Record<EventType, string> = {
-  HEARING:    "Hearing",
-  DEPOSITION: "Deposition",
-  TRIAL:      "Trial",
-  DEADLINE:   "Deadline",
-  CONFERENCE: "Conference",
-  MEDIATION:  "Mediation",
-  MEETING:    "Meeting",
-  REMINDER:   "Reminder",
-  OTHER:      "Other",
+  HEARING:                    "Hearing",
+  DEPOSITION:                 "Deposition",
+  TRIAL:                      "Trial",
+  DEADLINE:                   "Deadline",
+  CONFERENCE:                 "Conference",
+  MEDIATION:                  "Mediation",
+  COURT_CALL:                 "Court Call",
+  CASE_MANAGEMENT_CONFERENCE: "Case Management Conference",
+  MEETING:                    "Meeting",
+  REMINDER:                   "Reminder",
+  OTHER:                      "Other",
 };
 
 interface WorkspaceMember {

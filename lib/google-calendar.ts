@@ -14,6 +14,8 @@ export type EventType =
   | "CONFERENCE"
   | "MEETING"
   | "MEDIATION"
+  | "COURT_CALL"
+  | "CASE_MANAGEMENT_CONFERENCE"
   | "REMINDER"
   | "OTHER";
 
@@ -44,15 +46,17 @@ export interface CalEvent {
 }
 
 export const EVENT_TYPE_COLORS: Record<EventType, { bg: string; text: string; dot: string; border: string; ring: string }> = {
-  HEARING:    { bg: "bg-orange-50",  text: "text-orange-800",  dot: "bg-orange-500",  border: "border-orange-300",  ring: "ring-orange-100" },
-  DEPOSITION: { bg: "bg-cyan-50",    text: "text-cyan-800",    dot: "bg-cyan-500",    border: "border-cyan-300",    ring: "ring-cyan-100" },
-  TRIAL:      { bg: "bg-emerald-50", text: "text-emerald-800", dot: "bg-emerald-500", border: "border-emerald-300", ring: "ring-emerald-100" },
-  CONFERENCE: { bg: "bg-blue-50",    text: "text-blue-800",    dot: "bg-blue-500",    border: "border-blue-300",    ring: "ring-blue-100" },
-  MEETING:    { bg: "bg-cyan-50",    text: "text-cyan-800",    dot: "bg-cyan-500",    border: "border-cyan-300",    ring: "ring-cyan-100" },
-  MEDIATION:  { bg: "bg-violet-50",  text: "text-violet-800",  dot: "bg-violet-500",  border: "border-violet-300",  ring: "ring-violet-100" },
-  DEADLINE:   { bg: "bg-rose-50",    text: "text-rose-800",    dot: "bg-rose-500",    border: "border-rose-300",    ring: "ring-rose-100" },
-  REMINDER:   { bg: "bg-amber-50",   text: "text-amber-800",   dot: "bg-amber-500",   border: "border-amber-300",   ring: "ring-amber-100" },
-  OTHER:      { bg: "bg-slate-50",   text: "text-slate-700",   dot: "bg-slate-400",   border: "border-slate-300",   ring: "ring-slate-100" },
+  HEARING:                    { bg: "bg-orange-50",  text: "text-orange-800",  dot: "bg-orange-500",  border: "border-orange-300",  ring: "ring-orange-100" },
+  DEPOSITION:                 { bg: "bg-cyan-50",    text: "text-cyan-800",    dot: "bg-cyan-500",    border: "border-cyan-300",    ring: "ring-cyan-100" },
+  TRIAL:                      { bg: "bg-emerald-50", text: "text-emerald-800", dot: "bg-emerald-500", border: "border-emerald-300", ring: "ring-emerald-100" },
+  CONFERENCE:                 { bg: "bg-blue-50",    text: "text-blue-800",    dot: "bg-blue-500",    border: "border-blue-300",    ring: "ring-blue-100" },
+  MEETING:                    { bg: "bg-cyan-50",    text: "text-cyan-800",    dot: "bg-cyan-500",    border: "border-cyan-300",    ring: "ring-cyan-100" },
+  MEDIATION:                  { bg: "bg-violet-50",  text: "text-violet-800",  dot: "bg-violet-500",  border: "border-violet-300",  ring: "ring-violet-100" },
+  COURT_CALL:                 { bg: "bg-sky-50",     text: "text-sky-800",     dot: "bg-sky-500",     border: "border-sky-300",     ring: "ring-sky-100" },
+  CASE_MANAGEMENT_CONFERENCE: { bg: "bg-indigo-50",  text: "text-indigo-800",  dot: "bg-indigo-500",  border: "border-indigo-300",  ring: "ring-indigo-100" },
+  DEADLINE:                   { bg: "bg-rose-50",    text: "text-rose-800",    dot: "bg-rose-500",    border: "border-rose-300",    ring: "ring-rose-100" },
+  REMINDER:                   { bg: "bg-amber-50",   text: "text-amber-800",   dot: "bg-amber-500",   border: "border-amber-300",   ring: "ring-amber-100" },
+  OTHER:                      { bg: "bg-slate-50",   text: "text-slate-700",   dot: "bg-slate-400",   border: "border-slate-300",   ring: "ring-slate-100" },
 };
 
 export function mapGoogleEvent(e: GoogleCalEvent): CalEvent {
@@ -116,9 +120,15 @@ export async function createGoogleEvent(
     start: string;
     end: string;
     timeZone: string;
+    reminderOverrides?: Array<{ method: "popup"; minutes: number }>;
   },
   calendarId = "primary"
 ): Promise<GoogleCalEvent> {
+  const reminders =
+    event.reminderOverrides && event.reminderOverrides.length > 0
+      ? { useDefault: false, overrides: event.reminderOverrides }
+      : { useDefault: true };
+
   const res = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
     {
@@ -132,6 +142,7 @@ export async function createGoogleEvent(
         description: event.description,
         start: { dateTime: event.start, timeZone: event.timeZone },
         end: { dateTime: event.end, timeZone: event.timeZone },
+        reminders,
       }),
     }
   );

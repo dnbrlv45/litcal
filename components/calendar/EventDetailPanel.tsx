@@ -11,18 +11,20 @@ import type { CalEvent, EventType, ConflictDetail } from "@/lib/google-calendar"
 import { EVENT_TYPE_COLORS } from "@/lib/google-calendar";
 
 const EVENT_TYPE_LABELS: Record<EventType, string> = {
-  HEARING: "Hearing",
-  DEPOSITION: "Deposition",
-  TRIAL: "Trial",
-  CONFERENCE: "Conference",
-  MEDIATION: "Mediation",
-  MEETING: "Meeting",
-  DEADLINE: "Deadline",
-  REMINDER: "Reminder",
-  OTHER: "Other",
+  HEARING:                    "Hearing",
+  DEPOSITION:                 "Deposition",
+  TRIAL:                      "Trial",
+  CONFERENCE:                 "Conference",
+  MEDIATION:                  "Mediation",
+  MEETING:                    "Meeting",
+  DEADLINE:                   "Deadline",
+  COURT_CALL:                 "Court Call",
+  CASE_MANAGEMENT_CONFERENCE: "Case Management Conference",
+  REMINDER:                   "Reminder",
+  OTHER:                      "Other",
 };
 
-const EVENT_TYPES: EventType[] = ["HEARING","DEPOSITION","TRIAL","CONFERENCE","MEDIATION","MEETING","DEADLINE","REMINDER","OTHER"];
+const EVENT_TYPES: EventType[] = ["HEARING","DEPOSITION","TRIAL","DEADLINE","COURT_CALL","CONFERENCE","MEDIATION","CASE_MANAGEMENT_CONFERENCE","MEETING","REMINDER","OTHER"];
 
 interface Props {
   event: CalEvent | null;

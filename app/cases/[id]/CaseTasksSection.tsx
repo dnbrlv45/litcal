@@ -43,6 +43,11 @@ function memberName(m: TaskMember) {
   return [m.user.firstName, m.user.lastName].filter(Boolean).join(" ") || m.user.email;
 }
 
+function assigneeNames(task: TaskData): string {
+  if (!task.assignees.length) return "";
+  return task.assignees.map((a) => memberName(a.member)).join(", ");
+}
+
 interface Props {
   caseId: string;
   caseTitle: string;
@@ -155,8 +160,8 @@ export default function CaseTasksSection({ caseId, caseTitle, caseNumber }: Prop
                         {formatDate(task.dueDate)}
                       </span>
                     )}
-                    {task.assignedTo && (
-                      <span className="text-xs text-muted-foreground">{memberName(task.assignedTo)}</span>
+                    {task.assignees.length > 0 && (
+                      <span className="text-xs text-muted-foreground">{assigneeNames(task)}</span>
                     )}
                   </div>
                 </div>

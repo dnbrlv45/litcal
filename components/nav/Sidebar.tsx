@@ -16,6 +16,7 @@ import {
   Plus,
   LogOut,
 } from "lucide-react";
+import NotificationBell from "./NotificationBell";
 import { EVENT_TYPE_COLORS, EventType } from "@/lib/google-calendar";
 
 const NAV_ITEMS = [
@@ -83,6 +84,7 @@ export default function Sidebar() {
             </Link>
           );
         })}
+        <NotificationBell />
 
         {/* MY CALENDARS */}
         <div className="mt-6 mb-1 px-3">

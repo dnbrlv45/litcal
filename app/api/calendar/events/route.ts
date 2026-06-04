@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getAccessToken, createGoogleEvent, createLitCalCalendar } from "@/lib/google-calendar";
 import type { GoogleCalEvent } from "@/lib/google-calendar";
+import { computeReminders, googleReminderOverrides, adjustToBusinessDay } from "@/lib/reminders";
 import { getCurrentWorkspace } from "@/lib/workspaces";
 import { detectConflicts, getConflictedEventIds } from "@/lib/conflicts";
 
@@ -99,7 +100,7 @@ export async function POST(request: NextRequest) {
     inheritedAttorneyId = linkedCase.assignedAttorneyId;
   }
 
-  const validTypes = ["DEADLINE","HEARING","DEPOSITION","TRIAL","CONFERENCE","MEETING","MEDIATION","REMINDER","OTHER"];
+  const validTypes = ["DEADLINE","HEARING","DEPOSITION","TRIAL","CONFERENCE","MEETING","MEDIATION","COURT_CALL","CASE_MANAGEMENT_CONFERENCE","REMINDER","OTHER"];
   const safeEventType = validTypes.includes(eventType ?? "") ? eventType as never : "OTHER";
 
   // Check conflicts before creating (non-blocking)
@@ -128,6 +129,34 @@ export async function POST(request: NextRequest) {
     },
   });
 
+  // Store reminder schedule
+  const reminderRows = computeReminders(startDate, safeEventType as string);
+  if (reminderRows.length > 0) {
+    await prisma.eventReminder.createMany({
+      data: reminderRows.map((r) => ({
+        eventId: event.id,
+        minutesBefore: r.minutesBefore,
+        sendAt: r.sendAt,
+      })),
+    });
+  }
+
+  // Auto-create CMS task for Case Management Conferences
+  if ((safeEventType as string) === "CASE_MANAGEMENT_CONFERENCE" && caseId) {
+    const rawDue = new Date(startDate.getTime() - 15 * 24 * 60 * 60 * 1000);
+    const dueDate = adjustToBusinessDay(rawDue);
+    await prisma.task.create({
+      data: {
+        workspaceId: workspace.id,
+        caseId,
+        eventId: event.id,
+        title: "File Case Management Statement (CMS)",
+        priority: "HIGH",
+        dueDate,
+      },
+    });
+  }
+
   // Push to Google Calendar if connected
   let googlePush: { ok: boolean; error?: string | null } = { ok: false, error: "Google not connected" };
 
@@ -149,9 +178,17 @@ export async function POST(request: NextRequest) {
         });
       }
 
+      const reminderOverrides = googleReminderOverrides(safeEventType as string);
       const gEvent: GoogleCalEvent = await createGoogleEvent(
         accessToken,
-        { summary: event.title, description: event.description ?? undefined, start, end, timeZone: timeZone ?? "UTC" },
+        {
+          summary: event.title,
+          description: event.description ?? undefined,
+          start,
+          end,
+          timeZone: timeZone ?? "UTC",
+          reminderOverrides,
+        },
         litCalId
       );
 
