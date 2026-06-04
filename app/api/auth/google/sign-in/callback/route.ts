@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { attachSession, upsertGoogleUser, type GoogleIdentity } from "@/lib/auth";
+import { createWorkspace, getCurrentWorkspace } from "@/lib/workspaces";
 
 function callbackUrl(request: NextRequest) {
   return process.env.GOOGLE_AUTH_REDIRECT_URI ?? new URL("/api/auth/google/sign-in/callback", request.url).toString();
@@ -66,6 +67,10 @@ export async function GET(request: NextRequest) {
   let user;
   if (authMode === "sign-up") {
     user = await upsertGoogleUser(identity);
+    const { workspace } = await getCurrentWorkspace(user.id);
+    if (!workspace) {
+      await createWorkspace(user.id, "");
+    }
   } else {
     const { prisma } = await import("@/lib/prisma");
     const email = identity.email.trim().toLowerCase();
