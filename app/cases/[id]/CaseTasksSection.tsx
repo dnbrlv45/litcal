@@ -8,13 +8,12 @@ import TaskModal, { TaskData, TaskMember, TaskCase } from "@/app/tasks/TaskModal
 const STATUS_CYCLE: Record<string, string> = {
   TODO: "IN_PROGRESS",
   IN_PROGRESS: "DONE",
-  DONE: "TODO",
 };
 
-const STATUS_ICON: Record<string, { icon: React.ElementType; color: string; title: string }> = {
-  TODO:        { icon: Circle,       color: "text-slate-400", title: "Move to In Progress" },
-  IN_PROGRESS: { icon: Clock,        color: "text-blue-500",  title: "Mark done" },
-  DONE:        { icon: CheckCircle2, color: "text-green-600", title: "Reopen" },
+const STATUS_ICON: Record<string, { icon: React.ElementType; color: string; title: string; clickable: boolean }> = {
+  TODO:        { icon: Circle,       color: "text-slate-400", title: "Move to In Progress", clickable: true },
+  IN_PROGRESS: { icon: Clock,        color: "text-blue-500",  title: "Mark done",           clickable: true },
+  DONE:        { icon: CheckCircle2, color: "text-green-600", title: "Edit to reopen",      clickable: false },
 };
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -128,8 +127,9 @@ export default function CaseTasksSection({ caseId, caseTitle, caseNumber }: Prop
               <div key={task.id}
                 className="flex items-start gap-2.5 p-2.5 rounded-md border border-border bg-card hover:bg-accent/30 transition-colors group text-sm">
                 <button
-                  onClick={() => handleCycleStatus(task)}
-                  className={`mt-0.5 shrink-0 ${statusMeta.color} hover:opacity-70 transition-opacity`}
+                  onClick={() => statusMeta.clickable && handleCycleStatus(task)}
+                  disabled={!statusMeta.clickable}
+                  className={`mt-0.5 shrink-0 ${statusMeta.color} ${statusMeta.clickable ? "hover:opacity-70 cursor-pointer" : "cursor-default"} transition-opacity`}
                   title={statusMeta.title}
                 >
                   <StatusIcon className="w-4 h-4" />

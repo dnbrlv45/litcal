@@ -8,13 +8,12 @@ import TaskModal, { TaskData, TaskMember, TaskCase } from "./TaskModal";
 const STATUS_CYCLE: Record<string, string> = {
   TODO: "IN_PROGRESS",
   IN_PROGRESS: "DONE",
-  DONE: "TODO",
 };
 
 const STATUS_META = {
-  TODO:        { label: "To Do",       icon: Circle,       color: "text-slate-400", title: "Move to In Progress" },
-  IN_PROGRESS: { label: "In Progress", icon: Clock,        color: "text-blue-500",  title: "Mark done" },
-  DONE:        { label: "Done",        icon: CheckCircle2, color: "text-green-600", title: "Reopen" },
+  TODO:        { label: "To Do",       icon: Circle,       color: "text-slate-400", title: "Move to In Progress", clickable: true },
+  IN_PROGRESS: { label: "In Progress", icon: Clock,        color: "text-blue-500",  title: "Mark done",           clickable: true },
+  DONE:        { label: "Done",        icon: CheckCircle2, color: "text-green-600", title: "Edit to reopen",      clickable: false },
 } as const;
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -57,8 +56,9 @@ function TaskCard({ task, onEdit, onDelete, onCycleStatus }: TaskCardProps) {
   return (
     <div className="flex items-start gap-3 p-3 rounded-lg border border-border bg-card hover:bg-accent/30 transition-colors group">
       <button
-        onClick={() => onCycleStatus(task)}
-        className={`mt-0.5 shrink-0 ${Meta.color} hover:opacity-70 transition-opacity`}
+        onClick={() => Meta.clickable && onCycleStatus(task)}
+        disabled={!Meta.clickable}
+        className={`mt-0.5 shrink-0 ${Meta.color} ${Meta.clickable ? "hover:opacity-70 cursor-pointer" : "cursor-default"} transition-opacity`}
         title={Meta.title}
       >
         <Icon className="w-5 h-5" />
