@@ -15,7 +15,7 @@ export default function LitCalGoogleAuth({ mode }: Props) {
   const subtitle = isSignIn
     ? "Use your Google account to access your litigation calendar."
     : "Sign up with Google to get started.";
-  const googleHref = isSignIn ? "/api/auth/google/sign-in" : "/api/auth/google/sign-up";
+  const googleHref = isSignIn ? "/api/auth/google/sign-in" : "/api/auth/google/sign-in?mode=signup";
   const alternateHref = isSignIn ? "/sign-up" : "/sign-in";
   const alternateText = isSignIn ? "Need an account?" : "Already have an account?";
   const alternateAction = isSignIn ? "Create one" : "Sign in";

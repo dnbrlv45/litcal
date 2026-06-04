@@ -13,6 +13,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Google OAuth not configured" }, { status: 500 });
   }
 
+  const mode = new URL(request.url).searchParams.get("mode");
+
   const state = crypto.randomUUID();
   const params = new URLSearchParams({
     client_id: clientId,
@@ -30,6 +32,15 @@ export async function GET(request: NextRequest) {
     maxAge: 600,
     path: "/",
   });
+  if (mode === "signup") {
+    response.cookies.set("litcal_google_auth_mode", "sign-up", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 600,
+      path: "/",
+    });
+  }
 
   return response;
 }
