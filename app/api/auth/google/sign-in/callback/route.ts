@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { attachSession, type GoogleIdentity } from "@/lib/auth";
+import { attachSession, upsertGoogleUser, type GoogleIdentity } from "@/lib/auth";
 
 function callbackUrl(request: NextRequest) {
   return process.env.GOOGLE_AUTH_REDIRECT_URI ?? new URL("/api/auth/google/sign-in/callback", request.url).toString();
@@ -61,25 +61,33 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL("/sign-in?error=userinfo", baseUrl));
   }
 
-  const { prisma } = await import("@/lib/prisma");
-  const email = identity.email.trim().toLowerCase();
-  const user = await prisma.user.findFirst({
-    where: { OR: [{ googleSub: identity.sub }, { email }] },
-  });
+  const authMode = request.cookies.get("litcal_google_auth_mode")?.value;
 
-  if (!user) {
-    return NextResponse.redirect(new URL("/sign-up?error=no_account", baseUrl));
-  }
-
-  if (user.googleSub !== identity.sub) {
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { googleSub: identity.sub },
+  let user;
+  if (authMode === "sign-up") {
+    user = await upsertGoogleUser(identity);
+  } else {
+    const { prisma } = await import("@/lib/prisma");
+    const email = identity.email.trim().toLowerCase();
+    user = await prisma.user.findFirst({
+      where: { OR: [{ googleSub: identity.sub }, { email }] },
     });
+
+    if (!user) {
+      return NextResponse.redirect(new URL("/sign-up?error=no_account", baseUrl));
+    }
+
+    if (user.googleSub !== identity.sub) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { googleSub: identity.sub },
+      });
+    }
   }
 
   const response = NextResponse.redirect(new URL("/", baseUrl));
   response.cookies.delete("litcal_google_auth_state");
+  response.cookies.delete("litcal_google_auth_mode");
   await attachSession(response, user.id);
   return response;
 }
