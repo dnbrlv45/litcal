@@ -18,7 +18,14 @@ export async function GET(_request: NextRequest) {
           caseId: true,
           userId: true,
           workspaceId: true,
-          caseRef: { select: { id: true, title: true, caseNumber: true } },
+          caseRef: {
+            select: {
+              id: true, title: true, caseNumber: true,
+              assignedAttorneyId: true,
+              assignedParalegalId: true,
+              assignedAssistantId: true,
+            },
+          },
           assignedAttorney: { select: { id: true } },
         },
       },
@@ -63,21 +70,16 @@ export async function GET(_request: NextRequest) {
       ev.caseRef ? `Case: ${ev.caseRef.caseNumber ? `#${ev.caseRef.caseNumber} · ` : ""}${ev.caseRef.title}` : null,
     ].filter(Boolean).join("\n");
 
-    // Notify the event owner
-    rows.push({
-      userId:      ev.userId,
-      workspaceId: ev.workspaceId,
-      type:        "EVENT_REMINDER",
-      title,
-      body,
-      eventId: ev.id,
-      caseId:  ev.caseId ?? null,
-    });
+    // Collect all unique recipients: event owner, event attorney, case staff
+    const recipientIds = new Set<string>([ev.userId]);
+    if (ev.assignedAttorney) recipientIds.add(ev.assignedAttorney.id);
+    if (ev.caseRef?.assignedAttorneyId)  recipientIds.add(ev.caseRef.assignedAttorneyId);
+    if (ev.caseRef?.assignedParalegalId) recipientIds.add(ev.caseRef.assignedParalegalId);
+    if (ev.caseRef?.assignedAssistantId) recipientIds.add(ev.caseRef.assignedAssistantId);
 
-    // Also notify the assigned attorney if different from owner
-    if (ev.assignedAttorney && ev.assignedAttorney.id !== ev.userId) {
+    for (const userId of recipientIds) {
       rows.push({
-        userId:      ev.assignedAttorney.id,
+        userId,
         workspaceId: ev.workspaceId,
         type:        "EVENT_REMINDER",
         title,
