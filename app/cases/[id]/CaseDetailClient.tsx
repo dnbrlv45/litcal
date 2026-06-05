@@ -52,7 +52,7 @@ interface CaseData {
   court: string | null; county: string | null; judge: string | null;
   countyId: string | null; courtId: string | null;
   countyRef: { id: string; name: string } | null;
-  courtRef: { id: string; name: true } | null;
+  courtRef: { id: string; name: string } | null;
   description: string | null; filingDate: string | null;
   defendant: string | null; defenseFirm: string | null; defenseAttorney: string | null;
   staff: CaseStaffRow[];
