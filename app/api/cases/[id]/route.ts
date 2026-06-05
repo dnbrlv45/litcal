@@ -154,6 +154,37 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     },
   });
 
+  // Send CASE_ASSIGNED notifications for newly assigned staff
+  {
+    const assignerName = [currentUser.firstName, currentUser.lastName].filter(Boolean).join(" ") || currentUser.email;
+    const caseLabel = updated.caseNumber ? `#${updated.caseNumber} · ${updated.title}` : updated.title;
+
+    const newAssignments: { userId: string; role: string }[] = [];
+    if (attorneyId && attorneyId !== existing.assignedAttorneyId) {
+      newAssignments.push({ userId: attorneyId, role: "Attorney" });
+    }
+    if (paralegalId && paralegalId !== existing.assignedParalegalId) {
+      newAssignments.push({ userId: paralegalId, role: "Paralegal" });
+    }
+    if (assistantId && assistantId !== existing.assignedAssistantId) {
+      newAssignments.push({ userId: assistantId, role: "Assistant" });
+    }
+
+    if (newAssignments.length > 0) {
+      await prisma.notification.createMany({
+        data: newAssignments.map(({ userId: assigneeId, role }) => ({
+          userId:      assigneeId,
+          workspaceId: workspace.id,
+          type:        "CASE_ASSIGNED" as never,
+          title:       `Case Assigned: ${updated.title}`,
+          body:        `Role: ${role}\nAssigned by: ${assignerName}\nCase: ${caseLabel}`,
+          caseId:      updated.id,
+        })),
+        skipDuplicates: true,
+      });
+    }
+  }
+
   // Propagate attorney change to all existing events on this case
   if (attorneyId !== undefined && attorneyId !== existing.assignedAttorneyId) {
     await prisma.event.updateMany({

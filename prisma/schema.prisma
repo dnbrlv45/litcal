@@ -456,6 +456,7 @@ model Notification {
 
 enum NotificationType {
   TASK_ASSIGNED
+  CASE_ASSIGNED
   EVENT_REMINDER
 }
 

@@ -87,10 +87,10 @@ export default function NotificationBell() {
         )}
       </div>
 
-      <div className="max-h-96 overflow-y-auto divide-y divide-slate-100">
+      <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
         {notifications.length === 0 ? (
           <p className="text-xs text-slate-500 text-center py-6">No notifications.</p>
-        ) : notifications.map((n) => (
+        ) : notifications.slice(0, 10).map((n) => (
           <div
             key={n.id}
             onClick={() => !n.read && markRead(n.id)}
@@ -117,6 +117,15 @@ export default function NotificationBell() {
             </div>
           </div>
         ))}
+      </div>
+      <div className="border-t border-slate-100 px-4 py-2.5">
+        <Link
+          href="/notifications"
+          onClick={() => setOpen(false)}
+          className="text-xs text-teal-700 hover:underline font-medium"
+        >
+          View all notifications →
+        </Link>
       </div>
     </div>
   ) : null;
