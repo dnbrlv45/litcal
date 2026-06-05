@@ -6,6 +6,12 @@ import { getCurrentWorkspace } from "@/lib/workspaces";
 
 type Params = { params: Promise<{ id: string }> };
 
+const STAFF_INCLUDE = {
+  include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
+} as const;
+
+const LOCATION_INCLUDE = { select: { id: true, name: true } } as const;
+
 // GET /api/cases/[id]
 export async function GET(_req: NextRequest, { params }: Params) {
   const currentUser = await requireUser();
@@ -27,11 +33,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
     include: {
       parties: true,
       events: { orderBy: { startTime: "asc" } },
-      assignedAttorney:  { select: { id: true, firstName: true, lastName: true, email: true } },
-      assignedParalegal: { select: { id: true, firstName: true, lastName: true, email: true } },
-      assignedAssistant: { select: { id: true, firstName: true, lastName: true, email: true } },
-      countyRef: { select: { id: true, name: true } },
-      courtRef:  { select: { id: true, name: true } },
+      staff: STAFF_INCLUDE,
+      countyRef: LOCATION_INCLUDE,
+      courtRef:  LOCATION_INCLUDE,
     },
   });
 
@@ -62,9 +66,9 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     defendant?: string;
     defenseFirm?: string;
     defenseAttorney?: string;
-    assignedAttorneyId?: string | null;
-    assignedParalegalId?: string | null;
-    assignedAssistantId?: string | null;
+    // Staff changes: add/remove rows by userId + role
+    staffAdd?:    { userId: string; role: "ATTORNEY" | "PARALEGAL" | "ASSISTANT" }[];
+    staffRemove?: { userId: string; role: "ATTORNEY" | "PARALEGAL" | "ASSISTANT" }[];
   };
 
   const existing = await prisma.case.findFirst({
@@ -75,18 +79,12 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         { userId, workspaceId: null },
       ],
     },
+    include: { staff: { select: { userId: true, role: true } } },
   });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  async function resolveAssignment(id: string | null | undefined): Promise<string | null> {
-    if (id === null) return null;
-    if (!id) return undefined as unknown as null; // not provided — skip field
-    const member = await prisma.workspaceMember.findFirst({ where: { workspaceId: workspace!.id, userId: id } });
-    return member ? id : null;
-  }
-
   async function resolveCountyCourt(countyName?: string | null, courtName?: string | null) {
-    if (countyName === undefined) return null; // not provided, skip
+    if (countyName === undefined) return null;
     if (!countyName) return { countyId: null, courtId: null, county: null as string | null, court: null as string | null };
     const county = await prisma.county.findFirst({ where: { name: { equals: countyName, mode: "insensitive" } } });
     if (!county) return { countyId: null, courtId: null, county: countyName, court: courtName ?? null };
@@ -109,15 +107,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   const newStatus = body.status && validStatuses.includes(body.status) ? body.status : null;
   const isClosing = newStatus && closingStatuses.includes(newStatus) && !closingStatuses.includes(existing.status);
 
-  const [attorneyId, paralegalId, assistantId, countyCourt] = await Promise.all([
-    body.assignedAttorneyId  !== undefined ? resolveAssignment(body.assignedAttorneyId)  : Promise.resolve(undefined),
-    body.assignedParalegalId !== undefined ? resolveAssignment(body.assignedParalegalId) : Promise.resolve(undefined),
-    body.assignedAssistantId !== undefined ? resolveAssignment(body.assignedAssistantId) : Promise.resolve(undefined),
-    resolveCountyCourt(body.countyName, body.courtName),
-  ]);
-
-  const ASSIGNMENT_INCLUDE = { select: { id: true, firstName: true, lastName: true, email: true } } as const;
-  const LOCATION_INCLUDE = { select: { id: true, name: true } } as const;
+  const countyCourt = await resolveCountyCourt(body.countyName, body.courtName);
 
   const updated = await prisma.case.update({
     where: { id },
@@ -139,37 +129,49 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       ...(body.defendant !== undefined && { defendant: body.defendant?.trim() || null }),
       ...(body.defenseFirm !== undefined && { defenseFirm: body.defenseFirm?.trim() || null }),
       ...(body.defenseAttorney !== undefined && { defenseAttorney: body.defenseAttorney?.trim() || null }),
-      ...(attorneyId  !== undefined && { assignedAttorneyId:  attorneyId }),
-      ...(paralegalId !== undefined && { assignedParalegalId: paralegalId }),
-      ...(assistantId !== undefined && { assignedAssistantId: assistantId }),
     },
     include: {
       parties: true,
       _count: { select: { events: true } },
-      assignedAttorney:  ASSIGNMENT_INCLUDE,
-      assignedParalegal: ASSIGNMENT_INCLUDE,
-      assignedAssistant: ASSIGNMENT_INCLUDE,
+      staff: STAFF_INCLUDE,
       countyRef: LOCATION_INCLUDE,
       courtRef:  LOCATION_INCLUDE,
     },
   });
 
-  // Send CASE_ASSIGNED notifications for newly assigned staff
-  {
+  // Apply staff changes
+  const toAdd    = body.staffAdd    ?? [];
+  const toRemove = body.staffRemove ?? [];
+
+  if (toRemove.length > 0) {
+    for (const { userId: uid, role } of toRemove) {
+      await prisma.caseStaff.deleteMany({ where: { caseId: id, userId: uid, role: role as never } });
+    }
+  }
+
+  if (toAdd.length > 0) {
+    // Validate each userId is a workspace member
+    const memberIds = (await prisma.workspaceMember.findMany({
+      where: { workspaceId: workspace.id, userId: { in: toAdd.map((a) => a.userId) } },
+      select: { userId: true },
+    })).map((m) => m.userId);
+
+    const validAdd = toAdd.filter((a) => memberIds.includes(a.userId));
+    if (validAdd.length > 0) {
+      await prisma.caseStaff.createMany({
+        data: validAdd.map((a) => ({ caseId: id, userId: a.userId, role: a.role as never })),
+        skipDuplicates: true,
+      });
+    }
+  }
+
+  // Send CASE_ASSIGNED notifications for newly added staff
+  if (toAdd.length > 0) {
     const assignerName = [currentUser.firstName, currentUser.lastName].filter(Boolean).join(" ") || currentUser.email;
     const caseLabel = updated.caseNumber ? `#${updated.caseNumber} · ${updated.title}` : updated.title;
+    const existingIds = new Set(existing.staff.map((s) => `${s.userId}:${s.role}`));
 
-    const newAssignments: { userId: string; role: string }[] = [];
-    if (attorneyId && attorneyId !== existing.assignedAttorneyId) {
-      newAssignments.push({ userId: attorneyId, role: "Attorney" });
-    }
-    if (paralegalId && paralegalId !== existing.assignedParalegalId) {
-      newAssignments.push({ userId: paralegalId, role: "Paralegal" });
-    }
-    if (assistantId && assistantId !== existing.assignedAssistantId) {
-      newAssignments.push({ userId: assistantId, role: "Assistant" });
-    }
-
+    const newAssignments = toAdd.filter((a) => !existingIds.has(`${a.userId}:${a.role}`));
     if (newAssignments.length > 0) {
       await prisma.notification.createMany({
         data: newAssignments.map(({ userId: assigneeId, role }) => ({
@@ -177,7 +179,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
           workspaceId: workspace.id,
           type:        "CASE_ASSIGNED" as never,
           title:       `Case Assigned: ${updated.title}`,
-          body:        `Role: ${role}\nAssigned by: ${assignerName}\nCase: ${caseLabel}`,
+          body:        `Role: ${role.charAt(0) + role.slice(1).toLowerCase()}\nAssigned by: ${assignerName}\nCase: ${caseLabel}`,
           caseId:      updated.id,
         })),
         skipDuplicates: true,
@@ -185,13 +187,23 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     }
   }
 
-  // Propagate attorney change to all existing events on this case
-  if (attorneyId !== undefined && attorneyId !== existing.assignedAttorneyId) {
-    await prisma.event.updateMany({
-      where: { caseId: id },
-      data: { assignedAttorneyId: attorneyId },
-    });
+  // Propagate first attorney to events if no attorney was previously assigned
+  if (toAdd.length > 0) {
+    const addedAttorneys = toAdd.filter((a) => a.role === "ATTORNEY");
+    const hadAttorney = existing.staff.some((s) => s.role === "ATTORNEY");
+    if (addedAttorneys.length > 0 && !hadAttorney) {
+      await prisma.event.updateMany({
+        where: { caseId: id },
+        data: { assignedAttorneyId: addedAttorneys[0].userId },
+      });
+    }
   }
+
+  // Re-fetch updated staff after mutations
+  const finalStaff = await prisma.caseStaff.findMany({
+    where: { caseId: id },
+    include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
+  });
 
   // When closing/archiving, delete all associated events from DB and Google Calendar
   if (isClosing) {
@@ -218,7 +230,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     }
   }
 
-  return NextResponse.json({ case: updated });
+  return NextResponse.json({ case: { ...updated, staff: finalStaff } });
 }
 
 // DELETE /api/cases/[id]
@@ -242,7 +254,6 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Delete events from Google Calendar before deleting the case
   const events = await prisma.event.findMany({
     where: { caseId: id },
     include: { googleSync: true },
@@ -262,6 +273,6 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
     }
   }
 
-  await prisma.case.delete({ where: { id } }); // cascades to events + parties
+  await prisma.case.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }

@@ -21,14 +21,17 @@ async function resolveCountyCourt(countyName?: string | null, courtName?: string
   return { countyId: county.id, courtId, county: county.name, court };
 }
 
-async function resolveAssignment(id: string | undefined | null, workspaceId: string): Promise<string | null> {
-  if (!id) return null;
-  const member = await prisma.workspaceMember.findFirst({ where: { workspaceId, userId: id } });
-  return member ? id : null;
+async function resolveStaffIds(ids: string[], workspaceId: string): Promise<string[]> {
+  if (!ids.length) return [];
+  const members = await prisma.workspaceMember.findMany({
+    where: { workspaceId, userId: { in: ids } },
+    select: { userId: true },
+  });
+  return members.map((m) => m.userId);
 }
 
-const ASSIGNMENT_INCLUDE = {
-  select: { id: true, firstName: true, lastName: true, email: true },
+const STAFF_INCLUDE = {
+  include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
 } as const;
 
 // GET /api/cases
@@ -49,9 +52,7 @@ export async function GET() {
     include: {
       parties: true,
       _count: { select: { events: true } },
-      assignedAttorney:  ASSIGNMENT_INCLUDE,
-      assignedParalegal: ASSIGNMENT_INCLUDE,
-      assignedAssistant: ASSIGNMENT_INCLUDE,
+      staff: STAFF_INCLUDE,
       countyRef: { select: { id: true, name: true } },
       courtRef:  { select: { id: true, name: true } },
     },
@@ -81,9 +82,9 @@ export async function POST(request: NextRequest) {
     defendant?: string;
     defenseFirm?: string;
     defenseAttorney?: string;
-    assignedAttorneyId?: string;
-    assignedParalegalId?: string;
-    assignedAssistantId?: string;
+    attorneys?: string[];
+    paralegals?: string[];
+    assistants?: string[];
   };
 
   if (!body.title?.trim())
@@ -91,12 +92,18 @@ export async function POST(request: NextRequest) {
 
   const caseType = CASE_TYPE_VALUES.includes(body.caseType ?? "") ? body.caseType as never : "AUTO_ACCIDENT";
 
-  const [attorneyId, paralegalId, assistantId, courtyCourt] = await Promise.all([
-    resolveAssignment(body.assignedAttorneyId, workspace.id),
-    resolveAssignment(body.assignedParalegalId, workspace.id),
-    resolveAssignment(body.assignedAssistantId, workspace.id),
+  const [attorneyIds, paralegalIds, assistantIds, countyCourt] = await Promise.all([
+    resolveStaffIds(body.attorneys ?? [], workspace.id),
+    resolveStaffIds(body.paralegals ?? [], workspace.id),
+    resolveStaffIds(body.assistants ?? [], workspace.id),
     resolveCountyCourt(body.countyName, body.courtName),
   ]);
+
+  const staffRows = [
+    ...attorneyIds.map((uid) => ({ id: `cs_${uid}_atty`, userId: uid, role: "ATTORNEY" as const })),
+    ...paralegalIds.map((uid) => ({ id: `cs_${uid}_para`, userId: uid, role: "PARALEGAL" as const })),
+    ...assistantIds.map((uid) => ({ id: `cs_${uid}_asst`, userId: uid, role: "ASSISTANT" as const })),
+  ];
 
   const newCase = await prisma.case.create({
     data: {
@@ -106,26 +113,22 @@ export async function POST(request: NextRequest) {
       title: body.title.trim(),
       caseNumber: body.caseNumber?.trim() || null,
       caseType,
-      county: courtyCourt.county,
-      court: courtyCourt.court,
-      countyId: courtyCourt.countyId,
-      courtId: courtyCourt.courtId,
+      county: countyCourt.county,
+      court: countyCourt.court,
+      countyId: countyCourt.countyId,
+      courtId: countyCourt.courtId,
       judge: body.judge?.trim() || null,
       description: body.description?.trim() || null,
       filingDate: body.filingDate ? new Date(body.filingDate) : null,
       defendant: body.defendant?.trim() || null,
       defenseFirm: body.defenseFirm?.trim() || null,
       defenseAttorney: body.defenseAttorney?.trim() || null,
-      assignedAttorneyId: attorneyId,
-      assignedParalegalId: paralegalId,
-      assignedAssistantId: assistantId,
+      staff: staffRows.length > 0 ? { create: staffRows.map(({ id: _id, ...r }) => r) } : undefined,
     },
     include: {
       parties: true,
       _count: { select: { events: true } },
-      assignedAttorney:  ASSIGNMENT_INCLUDE,
-      assignedParalegal: ASSIGNMENT_INCLUDE,
-      assignedAssistant: ASSIGNMENT_INCLUDE,
+      staff: STAFF_INCLUDE,
       countyRef: { select: { id: true, name: true } },
       courtRef:  { select: { id: true, name: true } },
     },

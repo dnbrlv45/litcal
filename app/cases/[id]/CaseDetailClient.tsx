@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Calendar, MapPin, Pencil, Trash2, Check, X } from "lucide-react";
+import { ArrowLeft, Calendar, MapPin, Pencil, Trash2, Check, X, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,8 +35,11 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
   REMINDER: "Reminder", OTHER: "Other",
 };
 
+type StaffRole = "ATTORNEY" | "PARALEGAL" | "ASSISTANT";
+
 interface AssignedUser { id: string; firstName: string | null; lastName: string | null; email: string; }
 interface WorkspaceMember { id: string; jobTitle: string | null; user: AssignedUser; }
+interface CaseStaffRow { role: StaffRole; user: AssignedUser; }
 
 interface CaseEvent {
   id: string; title: string; startTime: string; endTime: string;
@@ -49,12 +52,10 @@ interface CaseData {
   court: string | null; county: string | null; judge: string | null;
   countyId: string | null; courtId: string | null;
   countyRef: { id: string; name: string } | null;
-  courtRef: { id: string; name: string } | null;
+  courtRef: { id: string; name: true } | null;
   description: string | null; filingDate: string | null;
   defendant: string | null; defenseFirm: string | null; defenseAttorney: string | null;
-  assignedAttorney:  AssignedUser | null;
-  assignedParalegal: AssignedUser | null;
-  assignedAssistant: AssignedUser | null;
+  staff: CaseStaffRow[];
   events: CaseEvent[];
 }
 
@@ -114,18 +115,35 @@ export default function CaseDetailClient({ id }: { id: string }) {
     }
   }, []);
 
-  async function updateAssignment(field: "assignedAttorneyId" | "assignedParalegalId" | "assignedAssistantId", value: string) {
+  async function addStaff(userId: string, role: StaffRole) {
     setSavingAssignment(true);
     try {
       const res = await fetch(`/api/cases/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ [field]: value || null }),
+        body: JSON.stringify({ staffAdd: [{ userId, role }] }),
       });
       if (!res.ok) throw new Error();
       await fetchCase();
     } catch {
       setError("Failed to update assignment.");
+    } finally {
+      setSavingAssignment(false);
+    }
+  }
+
+  async function removeStaff(userId: string, role: StaffRole) {
+    setSavingAssignment(true);
+    try {
+      const res = await fetch(`/api/cases/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ staffRemove: [{ userId, role }] }),
+      });
+      if (!res.ok) throw new Error();
+      await fetchCase();
+    } catch {
+      setError("Failed to remove assignment.");
     } finally {
       setSavingAssignment(false);
     }
@@ -205,9 +223,13 @@ export default function CaseDetailClient({ id }: { id: string }) {
   const pastEvents = caseData.events.filter((e) => new Date(e.startTime) < new Date());
 
   const canAssign = caseData.status === "ACTIVE";
+  const staffByRole = (role: StaffRole) => caseData.staff.filter((s) => s.role === role);
+  const assignedIds = new Set(caseData.staff.map((s) => `${s.user.id}:${s.role}`));
+
   const attorneys  = members.filter((m) => m.jobTitle === "ATTORNEY");
   const paralegals = members.filter((m) => m.jobTitle === "PARALEGAL");
   const assistants = members.filter((m) => m.jobTitle === "ASSISTANT");
+
   const select = "flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed";
 
   return (
@@ -281,49 +303,64 @@ export default function CaseDetailClient({ id }: { id: string }) {
         {/* Left: case info */}
         <div className="col-span-1 flex flex-col gap-5">
 
-          {/* Assignments — always visible, inline save, active-only */}
+          {/* Assignments */}
           <div className="rounded-xl border border-border p-4 flex flex-col gap-3">
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Assignments</h2>
               {savingAssignment && <span className="text-xs text-muted-foreground">Saving…</span>}
               {!canAssign && <span className="text-xs text-muted-foreground italic">Case must be active to assign</span>}
             </div>
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs text-muted-foreground">Attorney</Label>
-              <select
-                value={caseData.assignedAttorney?.id ?? ""}
-                onChange={(e) => updateAssignment("assignedAttorneyId", e.target.value)}
-                disabled={!canAssign || savingAssignment}
-                className={select}
-              >
-                <option value="">— Unassigned —</option>
-                {attorneys.map((m) => <option key={m.user.id} value={m.user.id}>{memberLabel(m)}</option>)}
-              </select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs text-muted-foreground">Paralegal</Label>
-              <select
-                value={caseData.assignedParalegal?.id ?? ""}
-                onChange={(e) => updateAssignment("assignedParalegalId", e.target.value)}
-                disabled={!canAssign || savingAssignment}
-                className={select}
-              >
-                <option value="">— Unassigned —</option>
-                {paralegals.map((m) => <option key={m.user.id} value={m.user.id}>{memberLabel(m)}</option>)}
-              </select>
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs text-muted-foreground">Assistant</Label>
-              <select
-                value={caseData.assignedAssistant?.id ?? ""}
-                onChange={(e) => updateAssignment("assignedAssistantId", e.target.value)}
-                disabled={!canAssign || savingAssignment}
-                className={select}
-              >
-                <option value="">— Unassigned —</option>
-                {assistants.map((m) => <option key={m.user.id} value={m.user.id}>{memberLabel(m)}</option>)}
-              </select>
-            </div>
+
+            {(["ATTORNEY", "PARALEGAL", "ASSISTANT"] as StaffRole[]).map((role) => {
+              const roleLabel = role.charAt(0) + role.slice(1).toLowerCase();
+              const pool = role === "ATTORNEY" ? attorneys : role === "PARALEGAL" ? paralegals : assistants;
+              const assigned = staffByRole(role);
+              const unassigned = pool.filter((m) => !assignedIds.has(`${m.user.id}:${role}`));
+
+              return (
+                <div key={role} className="flex flex-col gap-1.5">
+                  <Label className="text-xs text-muted-foreground">{roleLabel}</Label>
+
+                  {/* Assigned chips */}
+                  {assigned.map((s) => (
+                    <div key={s.user.id} className="flex items-center justify-between bg-slate-50 rounded-lg px-2.5 py-1.5 text-sm">
+                      <span>{userName(s.user)}</span>
+                      {canAssign && (
+                        <button
+                          onClick={() => removeStaff(s.user.id, role)}
+                          disabled={savingAssignment}
+                          className="ml-2 text-slate-400 hover:text-rose-500 transition-colors"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+
+                  {/* Add dropdown */}
+                  {canAssign && unassigned.length > 0 && (
+                    <select
+                      value=""
+                      onChange={(e) => { if (e.target.value) addStaff(e.target.value, role); }}
+                      disabled={savingAssignment}
+                      className={select}
+                    >
+                      <option value="">
+                        <Plus className="w-3 h-3" />
+                        {assigned.length > 0 ? `+ Add another ${roleLabel.toLowerCase()}` : `+ Assign ${roleLabel.toLowerCase()}`}
+                      </option>
+                      {unassigned.map((m) => (
+                        <option key={m.user.id} value={m.user.id}>{memberLabel(m)}</option>
+                      ))}
+                    </select>
+                  )}
+
+                  {canAssign && unassigned.length === 0 && assigned.length === 0 && (
+                    <p className="text-xs text-muted-foreground italic">No {roleLabel.toLowerCase()}s in workspace</p>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           {/* Case Info */}

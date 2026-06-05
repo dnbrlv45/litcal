@@ -21,9 +21,7 @@ export async function GET(_request: NextRequest) {
           caseRef: {
             select: {
               id: true, title: true, caseNumber: true,
-              assignedAttorneyId: true,
-              assignedParalegalId: true,
-              assignedAssistantId: true,
+              staff: { select: { userId: true } },
             },
           },
           assignedAttorney: { select: { id: true } },
@@ -73,9 +71,7 @@ export async function GET(_request: NextRequest) {
     // Collect all unique recipients: event owner, event attorney, case staff
     const recipientIds = new Set<string>([ev.userId]);
     if (ev.assignedAttorney) recipientIds.add(ev.assignedAttorney.id);
-    if (ev.caseRef?.assignedAttorneyId)  recipientIds.add(ev.caseRef.assignedAttorneyId);
-    if (ev.caseRef?.assignedParalegalId) recipientIds.add(ev.caseRef.assignedParalegalId);
-    if (ev.caseRef?.assignedAssistantId) recipientIds.add(ev.caseRef.assignedAssistantId);
+    for (const s of ev.caseRef?.staff ?? []) recipientIds.add(s.userId);
 
     for (const userId of recipientIds) {
       rows.push({
