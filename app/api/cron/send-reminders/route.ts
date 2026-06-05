@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(_request: NextRequest) {
+  // BUILD_CHECK_v2
   const now = new Date();
 
   // Find all unsent reminders whose sendAt has passed
