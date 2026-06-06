@@ -1,6 +1,5 @@
 import crypto from "crypto";
 import { getAccessToken } from "@/lib/google-calendar";
-import { prisma } from "@/lib/prisma";
 
 interface InviteEmailOptions {
   inviterName: string;
@@ -108,7 +107,7 @@ function buildInviteEmail({
 
   return [
     `To: ${headerRecipientEmail}`,
-    `From: ${headerInviterName} <${headerInviterEmail}>`,
+    `From: LitCal <litcalai@gmail.com>`,
     `Subject: ${subject}`,
     "MIME-Version: 1.0",
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
@@ -127,16 +126,13 @@ function buildInviteEmail({
   ].join("\r\n");
 }
 
-export async function sendWorkspaceInviteEmail(userId: string, options: InviteEmailOptions) {
-  const connection = await prisma.userCalendarConnection.findFirst({
-    where: { userId, provider: "GOOGLE", gmailRefreshToken: { not: null } },
-  });
-
-  if (!connection?.gmailRefreshToken) {
+export async function sendWorkspaceInviteEmail(_userId: string, options: InviteEmailOptions) {
+  const refreshToken = process.env.GMAIL_REFRESH_TOKEN;
+  if (!refreshToken) {
     return { ok: false, reason: "gmail_not_connected" as const };
   }
 
-  const accessToken = await getAccessToken(connection.gmailRefreshToken);
+  const accessToken = await getAccessToken(refreshToken);
   const raw = base64Url(buildInviteEmail(options));
   const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
     method: "POST",

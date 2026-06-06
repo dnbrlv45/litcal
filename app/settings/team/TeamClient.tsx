@@ -114,14 +114,14 @@ export default function TeamClient({ initialWorkspace, initialMembers, initialIn
           const without = current.filter((m) => m.id !== data.member.id);
           return [...without, data.member];
         });
-        flash(data.emailDelivery?.ok ? "Member added and invite email sent." : "Member added. Connect Google again in Calendar settings to send invite emails from Gmail.");
+        flash(data.emailDelivery?.ok ? "Member added and invite email sent." : "Member added but invite email failed to send.");
       }
       if (data.invitation) {
         setInvitations((current) => {
           const without = current.filter((i) => i.id !== data.invitation.id);
           return [data.invitation, ...without];
         });
-        flash(data.emailDelivery?.ok ? "Invitation created and email sent." : "Invitation created. Connect Google again in Calendar settings to send invite emails from Gmail.");
+        flash(data.emailDelivery?.ok ? "Invitation created and email sent." : "Invitation created but invite email failed to send.");
       }
       setEmail("");
       setRole("MEMBER");
