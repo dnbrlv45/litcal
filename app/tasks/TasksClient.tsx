@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Plus, CheckCircle2, Circle, Clock, AlertCircle, ChevronDown } from "lucide-react";
+import { Plus, CheckCircle2, Circle, Clock, AlertCircle, ChevronDown, ListTodo } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import TaskModal, { TaskData, TaskMember, TaskCase } from "@/components/tasks/TaskModal";
 
@@ -59,7 +59,7 @@ function TaskCard({ task, onEdit, onDelete, onCycleStatus }: TaskCardProps) {
   const Icon = Meta.icon;
 
   return (
-    <div className="flex items-start gap-3 p-3 rounded-lg border border-border bg-card hover:bg-accent/30 transition-colors group">
+    <div className="flex items-start gap-3 p-3 rounded-lg border border-slate-200 bg-white shadow-sm hover:border-teal-200 hover:bg-teal-50/20 transition-colors group">
       <button
         onClick={() => Meta.clickable && onCycleStatus(task)}
         disabled={!Meta.clickable}
@@ -71,12 +71,12 @@ function TaskCard({ task, onEdit, onDelete, onCycleStatus }: TaskCardProps) {
 
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
-          <p className={`text-sm font-medium leading-snug ${task.status === "DONE" ? "line-through text-muted-foreground" : ""}`}>
+          <p className={`text-sm font-semibold leading-snug ${task.status === "DONE" ? "line-through text-muted-foreground" : "text-slate-950"}`}>
             {task.title}
           </p>
           <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button onClick={() => onEdit(task)} className="text-xs text-muted-foreground hover:text-foreground px-1">Edit</button>
-            <button onClick={() => onDelete(task.id)} className="text-xs text-muted-foreground hover:text-red-600 px-1">Delete</button>
+            <button onClick={() => onEdit(task)} className="rounded px-1.5 py-0.5 text-xs font-medium text-muted-foreground hover:bg-slate-100 hover:text-foreground">Edit</button>
+            <button onClick={() => onDelete(task.id)} className="rounded px-1.5 py-0.5 text-xs font-medium text-muted-foreground hover:bg-red-50 hover:text-red-600">Delete</button>
           </div>
         </div>
 
@@ -85,7 +85,7 @@ function TaskCard({ task, onEdit, onDelete, onCycleStatus }: TaskCardProps) {
         )}
 
         <div className="flex flex-wrap items-center gap-2 mt-1.5">
-          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${PRIORITY_COLORS[task.priority] ?? ""}`}>
+          <span className={`text-xs px-1.5 py-0.5 rounded font-semibold ${PRIORITY_COLORS[task.priority] ?? ""}`}>
             {PRIORITY_LABELS[task.priority]}
           </span>
 
@@ -126,14 +126,14 @@ function TaskGroup({ title, tasks, defaultOpen = true, onEdit, onDelete, onCycle
     <div className="mb-6">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 mb-2 text-sm font-semibold text-foreground hover:text-teal-700 transition-colors"
+        className="flex items-center gap-2 mb-2 text-sm font-bold text-slate-900 hover:text-teal-700 transition-colors"
       >
         <ChevronDown className={`w-4 h-4 transition-transform ${open ? "" : "-rotate-90"}`} />
         {title}
         <span className="text-xs font-normal text-muted-foreground">({tasks.length})</span>
       </button>
       {open && (
-        <div className="space-y-1.5 pl-2">
+        <div className="space-y-2 pl-2">
           {tasks.length === 0 ? (
             <p className="text-xs text-muted-foreground py-2 pl-1">No tasks</p>
           ) : tasks.map((t) => (
@@ -175,7 +175,9 @@ export default function TasksClient() {
     }
   }, [filterStatus, filterPriority, filterCase, filterAssignee]);
 
-  useEffect(() => { fetchTasks(); }, [fetchTasks]);
+  useEffect(() => {
+    void Promise.resolve().then(fetchTasks);
+  }, [fetchTasks]);
 
   useEffect(() => {
     fetch("/api/workspaces/members").then((r) => r.json()).then((d) => setMembers(d.members ?? []));
@@ -213,15 +215,17 @@ export default function TasksClient() {
   const inProgress = tasks.filter((t) => t.status === "IN_PROGRESS");
   const done = tasks.filter((t) => t.status === "DONE");
 
-  const selectClass = "rounded-md border border-input bg-background px-3 py-1.5 text-sm";
+  const selectClass = "h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-400";
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 surface-grid">
       {/* Header */}
-      <div className="flex items-center justify-between px-8 py-5 border-b border-border shrink-0">
+      <div className="flex items-center justify-between gap-6 px-8 py-5 border-b border-slate-200/80 bg-white/90 backdrop-blur shrink-0">
         <div>
-          <h1 className="text-xl font-semibold">Tasks</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{tasks.length} total</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-950">Tasks</h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            {todo.length} to do · {inProgress.length} in progress · {done.length} done
+          </p>
         </div>
         <Button onClick={openCreate} className="gap-2 bg-teal-700 hover:bg-teal-800 text-white border-0">
           <Plus className="w-4 h-4" />
@@ -230,7 +234,7 @@ export default function TasksClient() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3 px-8 py-4 border-b border-border shrink-0">
+      <div className="flex flex-wrap items-center gap-3 px-8 py-4 border-b border-slate-200/80 bg-white/70 shrink-0">
         <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className={selectClass}>
           <option value="">All statuses</option>
           <option value="TODO">To Do</option>
@@ -271,11 +275,17 @@ export default function TasksClient() {
       {/* Task list */}
       <div className="flex-1 overflow-y-auto px-8 py-6">
         {loading ? (
-          <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">Loading…</div>
+          <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">Loading tasks…</div>
         ) : tasks.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-40 gap-2">
-            <p className="text-sm text-muted-foreground">No tasks yet.</p>
-            <Button variant="ghost" size="sm" onClick={openCreate} className="gap-1 text-teal-700">
+          <div className="flex flex-col items-center justify-center h-72 gap-3 rounded-lg border border-dashed border-slate-300 bg-white/70 text-center">
+            <div className="grid size-12 place-items-center rounded-lg bg-teal-50 text-teal-700">
+              <ListTodo className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-950">No tasks yet</p>
+              <p className="mt-1 text-xs text-muted-foreground">Create tasks for deadlines, follow-ups, and case work.</p>
+            </div>
+            <Button variant="ghost" size="sm" onClick={openCreate} className="gap-1 text-teal-700 hover:bg-teal-50">
               <Plus className="w-4 h-4" /> Create your first task
             </Button>
           </div>

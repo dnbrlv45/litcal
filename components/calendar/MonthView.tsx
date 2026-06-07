@@ -53,10 +53,10 @@ export default function MonthView({ date, today, events, onCellClick, onSelectDa
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className="grid grid-cols-7 border-b border-slate-200 bg-white shrink-0">
+    <div className="flex flex-col h-full overflow-hidden rounded-lg border border-slate-200 bg-white panel-shadow">
+      <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50/80 shrink-0">
         {DAYS_OF_WEEK.map((d) => (
-          <div key={d} className="py-3 text-center text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+          <div key={d} className="py-3 text-center text-[11px] font-bold text-slate-500 uppercase tracking-wide">
             {d}
           </div>
         ))}
@@ -71,8 +71,8 @@ export default function MonthView({ date, today, events, onCellClick, onSelectDa
                 <div
                   key={di}
                   onClick={() => day && onCellClick(new Date(year, month, day))}
-                  className={`border-b border-r border-slate-100 p-2 last:border-r-0 flex flex-col gap-1 ${
-                    day === null ? "bg-slate-50/60" : "hover:bg-slate-50 cursor-pointer"
+                  className={`border-b border-r border-slate-100 p-2 last:border-r-0 flex flex-col gap-1 transition-colors ${
+                    day === null ? "bg-slate-50/70" : "hover:bg-teal-50/30 cursor-pointer"
                   }`}
                 >
                   {day !== null && (
@@ -81,7 +81,7 @@ export default function MonthView({ date, today, events, onCellClick, onSelectDa
                       className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm self-start transition-colors ${
                         isToday(day)
                           ? "bg-teal-700 text-white font-semibold shadow-sm"
-                          : "text-slate-700 hover:bg-slate-100"
+                          : "text-slate-700 hover:bg-white hover:shadow-sm"
                       }`}
                     >
                       {day}
@@ -106,7 +106,7 @@ export default function MonthView({ date, today, events, onCellClick, onSelectDa
                     );
                   })}
                   {dayEvents.length > 3 && (
-                    <div className="text-xs text-muted-foreground px-1">+{dayEvents.length - 3} more</div>
+                    <div className="px-1 text-xs font-medium text-slate-500">+{dayEvents.length - 3} more</div>
                   )}
                 </div>
               );

@@ -45,12 +45,13 @@ export default function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-[248px] shrink-0 flex flex-col bg-white text-slate-950 h-full border-r border-slate-200/80">
+    <aside className="w-[256px] shrink-0 flex flex-col bg-sidebar text-sidebar-foreground h-full border-r border-sidebar-border">
       {/* Logo */}
       <div className="flex items-center gap-3 px-5 py-5 shrink-0">
-        <Image src="/litcal-logo.svg" alt="LitCal" width={36} height={36} className="size-9 shrink-0 rounded-lg shadow-sm" priority />
+        <Image src="/litcal-logo.svg" alt="LitCal" width={36} height={36} className="size-9 shrink-0 rounded-lg shadow-sm ring-1 ring-black/5" priority />
         <div className="leading-tight">
-          <div className="text-[15px] font-extrabold tracking-[0.12em] text-slate-950 uppercase">LitCal</div>
+          <div className="text-[15px] font-extrabold tracking-[0.1em] text-slate-950 uppercase">LitCal</div>
+          <div className="text-[11px] font-medium text-slate-500">Litigation calendar</div>
         </div>
       </div>
 
@@ -58,7 +59,7 @@ export default function Sidebar() {
       <div className="px-4 pb-4 shrink-0">
         <Link
           href="/settings/team"
-          className="flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-100"
+          className="flex w-full items-center gap-2 rounded-lg border border-sidebar-border bg-white/70 px-3 py-2.5 text-sm text-slate-700 shadow-sm transition-colors hover:bg-white"
         >
           <Building2 className="size-4 text-slate-500" />
           <span className="truncate">LitCal Team</span>
@@ -73,14 +74,18 @@ export default function Sidebar() {
             <Link
               key={href}
               href={href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+              className={`group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
                 isActive
-                  ? "bg-teal-50 text-teal-800 shadow-[inset_0_0_0_1px_rgba(15,118,110,0.10)]"
-                  : "text-slate-700 hover:text-slate-950 hover:bg-slate-100"
+                  ? "bg-white text-slate-950 shadow-sm ring-1 ring-sidebar-border"
+                  : "text-slate-600 hover:text-slate-950 hover:bg-white/65"
               }`}
             >
-              <Icon className="w-4 h-4 shrink-0" />
-              <span className="flex-1">{label}</span>
+              <span className={`grid size-7 place-items-center rounded-md transition-colors ${
+                isActive ? "bg-teal-50 text-teal-700" : "text-slate-500 group-hover:bg-slate-100 group-hover:text-slate-800"
+              }`}>
+                <Icon className="w-4 h-4 shrink-0" />
+              </span>
+              <span className="flex-1 font-medium">{label}</span>
             </Link>
           );
         })}
@@ -93,21 +98,21 @@ export default function Sidebar() {
           </span>
         </div>
         {MY_CALENDARS.map(({ label, type }) => (
-          <div key={label} className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-slate-700 hover:text-slate-950 hover:bg-slate-100 cursor-pointer transition-colors">
+          <div key={label} className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-600 hover:text-slate-950 hover:bg-white/65 cursor-pointer transition-colors">
             <span className={`w-4 h-4 rounded-[5px] shrink-0 ${EVENT_TYPE_COLORS[type].dot} shadow-sm`} />
             {label}
           </div>
         ))}
-        <div className="flex items-center gap-3 px-3 py-2 text-sm text-slate-500 hover:text-slate-800 cursor-pointer transition-colors">
+        <div className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-800 cursor-pointer transition-colors">
           <Plus className="w-4 h-4 shrink-0" />
           Add Calendar
         </div>
       </nav>
 
       {/* Bottom */}
-      <div className="px-4 py-4 border-t border-slate-200/80 flex items-center gap-2">
+      <div className="px-4 py-4 border-t border-sidebar-border flex items-center gap-2">
         <form action="/api/auth/sign-out" method="post" className="w-full">
-          <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-950">
+          <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-white/70 hover:text-slate-950">
             <LogOut className="size-4" />
             Sign Out
           </button>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Plus, Briefcase, Search, ChevronRight } from "lucide-react";
+import { Plus, Briefcase, Search, ChevronRight, Archive, CheckCircle2, Clock3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import CreateCaseModal from "./CreateCaseModal";
@@ -51,7 +51,9 @@ export default function CasesClient() {
     }
   }
 
-  useEffect(() => { fetchCases(); }, []);
+  useEffect(() => {
+    void Promise.resolve().then(fetchCases);
+  }, []);
 
   const filtered = cases.filter((c) =>
     c.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -66,13 +68,30 @@ export default function CasesClient() {
     ARCHIVED: filtered.filter((c) => c.status === "ARCHIVED"),
   };
 
+  const stats = [
+    { label: "Active", value: grouped.ACTIVE.length, icon: CheckCircle2 },
+    { label: "Pending", value: grouped.PENDING.length, icon: Clock3 },
+    { label: "Archived", value: grouped.ARCHIVED.length + grouped.CLOSED.length, icon: Archive },
+  ];
+
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 surface-grid">
       {/* Header */}
-      <div className="flex items-center justify-between px-8 py-5 border-b border-border shrink-0">
-        <div>
-          <h1 className="text-xl font-semibold">Cases</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{cases.length} total</p>
+      <div className="flex items-center justify-between gap-6 px-8 py-5 border-b border-slate-200/80 bg-white/90 backdrop-blur shrink-0">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-950">Cases</h1>
+          <p className="text-sm text-slate-500 mt-0.5">{cases.length} total matters</p>
+        </div>
+        <div className="hidden flex-1 items-center justify-end gap-3 md:flex">
+          {stats.map(({ label, value, icon: Icon }) => (
+            <div key={label} className="flex min-w-28 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+              <Icon className="size-4 text-slate-500" />
+              <div>
+                <div className="text-sm font-bold leading-none text-slate-950">{value}</div>
+                <div className="mt-0.5 text-[11px] font-medium text-slate-500">{label}</div>
+              </div>
+            </div>
+          ))}
         </div>
         <Button onClick={() => setModalOpen(true)} className="gap-2 bg-teal-700 hover:bg-teal-800 text-white border-0">
           <Plus className="w-4 h-4" />
@@ -81,14 +100,14 @@ export default function CasesClient() {
       </div>
 
       {/* Search */}
-      <div className="px-8 py-4 shrink-0 border-b border-border">
-        <div className="relative max-w-sm">
+      <div className="px-8 py-4 shrink-0 border-b border-slate-200/80 bg-white/70">
+        <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder="Search cases, numbers, courts…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
+            className="h-10 rounded-lg border-slate-200 bg-white pl-9 shadow-sm"
           />
         </div>
       </div>
@@ -96,13 +115,15 @@ export default function CasesClient() {
       {/* List */}
       <div className="flex-1 overflow-y-auto px-8 py-6">
         {loading ? (
-          <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">Loading…</div>
+          <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">Loading cases…</div>
         ) : cases.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-60 gap-3 text-center">
-            <Briefcase className="w-10 h-10 text-muted-foreground/40" />
+          <div className="flex flex-col items-center justify-center h-72 gap-3 rounded-lg border border-dashed border-slate-300 bg-white/70 text-center">
+            <div className="grid size-12 place-items-center rounded-lg bg-teal-50 text-teal-700">
+              <Briefcase className="w-6 h-6" />
+            </div>
             <div>
-              <p className="font-medium text-sm">No cases yet</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Create your first case to start tracking events and deadlines.</p>
+              <p className="font-semibold text-sm text-slate-950">No cases yet</p>
+              <p className="text-xs text-muted-foreground mt-1">Create your first case to start tracking events and deadlines.</p>
             </div>
             <Button size="sm" onClick={() => setModalOpen(true)} className="mt-1 bg-teal-700 hover:bg-teal-800 text-white border-0">
               New Case
@@ -123,11 +144,11 @@ export default function CasesClient() {
                       <Link
                         key={c.id}
                         href={`/cases/${c.id}`}
-                        className="flex items-center gap-4 px-4 py-3.5 rounded-xl border border-border bg-card hover:bg-accent/30 transition-colors group"
+                        className="flex items-center gap-4 px-4 py-3.5 rounded-lg border border-slate-200 bg-white shadow-sm hover:border-teal-200 hover:bg-teal-50/20 transition-colors group"
                       >
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2.5 flex-wrap">
-                            <span className="font-semibold text-sm truncate">{c.title}</span>
+                            <span className="font-semibold text-sm truncate text-slate-950">{c.title}</span>
                             {c.caseNumber && (
                               <span className="text-xs text-muted-foreground font-mono shrink-0">#{c.caseNumber}</span>
                             )}
@@ -135,7 +156,7 @@ export default function CasesClient() {
                               {c.status.charAt(0) + c.status.slice(1).toLowerCase()}
                             </span>
                           </div>
-                          <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
+                          <div className="flex items-center gap-3 mt-1 text-xs font-medium text-slate-500 flex-wrap">
                             <span>{TYPE_LABELS[c.caseType]}</span>
                             {c.court && <span>· {c.court}</span>}
                             {c.judge && <span>· {c.judge}</span>}

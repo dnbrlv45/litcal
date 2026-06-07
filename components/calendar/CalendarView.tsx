@@ -171,7 +171,9 @@ export default function CalendarView() {
     } catch { /* silently fail */ }
   }, [view, date]);
 
-  useEffect(() => { fetchEvents(); }, [fetchEvents]);
+  useEffect(() => {
+    void Promise.resolve().then(fetchEvents);
+  }, [fetchEvents]);
 
   // Apply all filters
   const filteredEvents = events.filter((e) => {
@@ -235,28 +237,28 @@ export default function CalendarView() {
     );
   });
 
-  const selectClass = "h-8 rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-700 shadow-sm focus:outline-none focus:ring-1 focus:ring-teal-300 focus:border-teal-300 transition-colors";
+  const selectClass = "h-8 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-400 transition-colors";
   const activeSelectClass = "border-teal-400 bg-teal-50 text-teal-800 ring-1 ring-teal-200";
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 overflow-hidden bg-slate-50/70">
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden bg-slate-50 surface-grid">
       {/* Top nav */}
-      <div className="h-[72px] shrink-0 border-b border-slate-200/80 bg-white/95 px-7 flex items-center justify-between gap-5">
+      <div className="h-[72px] shrink-0 border-b border-slate-200/80 bg-white/90 backdrop-blur px-7 flex items-center justify-between gap-5">
         <div className="relative w-full max-w-[680px]">
           <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
           <input
-            className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-14 text-sm text-slate-700 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
-            placeholder="Search cases, events, deadlines... or ask AI"
+            className="h-11 w-full rounded-lg border border-slate-200 bg-white pl-10 pr-14 text-sm text-slate-700 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+            placeholder="Search cases, events, deadlines..."
           />
           <span className="absolute right-3 top-1/2 inline-flex -translate-y-1/2 items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-1 text-[11px] font-medium text-slate-400">
             <Command className="size-3" />K
           </span>
         </div>
         <div className="flex items-center gap-3 text-slate-700">
-          <button className="relative grid size-9 place-items-center rounded-lg hover:bg-slate-100">
+          <button className="relative grid size-9 place-items-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-950">
             <Bell className="size-4" />
           </button>
-          <button className="grid size-9 place-items-center rounded-lg hover:bg-slate-100">
+          <button className="grid size-9 place-items-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-950">
             <CalendarDays className="size-4" />
           </button>
           <form action="/api/auth/sign-out" method="post">
@@ -268,17 +270,25 @@ export default function CalendarView() {
       </div>
 
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-8 pt-5 pb-3 shrink-0">
-        <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-bold tracking-tight text-slate-950">{periodLabel}</h1>
-          <ChevronDown className="size-4 text-slate-500" />
-          <div className="ml-4 flex rounded-lg border border-slate-200 bg-white p-0.5 shadow-sm">
+      <div className="flex items-center justify-between px-8 pt-5 pb-3 shrink-0 gap-4">
+        <div className="flex min-w-0 items-center gap-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h1 className="truncate text-2xl font-bold tracking-tight text-slate-950">{periodLabel}</h1>
+              <ChevronDown className="size-4 shrink-0 text-slate-500" />
+            </div>
+            <p className="mt-0.5 text-xs font-medium text-slate-500">
+              {filteredEvents.length} event{filteredEvents.length !== 1 ? "s" : ""} visible
+              {activeFilterCount > 0 ? ` after ${activeFilterCount} filter${activeFilterCount !== 1 ? "s" : ""}` : ""}
+            </p>
+          </div>
+          <div className="ml-2 flex rounded-lg border border-slate-200 bg-white p-0.5 shadow-sm">
             {(["day", "week", "month", "team"] as CalView[]).map((v) => (
               <button
                 key={v}
                 onClick={() => setView(v)}
                 className={`h-8 min-w-[68px] rounded-md px-4 text-sm capitalize transition-colors ${
-                  view === v ? "bg-slate-950 text-white shadow-sm" : "text-slate-600 hover:text-slate-950"
+                  view === v ? "bg-slate-950 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
                 }`}
               >
                 {v}
@@ -359,7 +369,7 @@ export default function CalendarView() {
           </button>
 
           {caseDropdownOpen && (
-            <div className="absolute left-0 top-full mt-1 z-50 w-72 rounded-lg border border-slate-200 bg-white shadow-lg overflow-hidden">
+            <div className="absolute left-0 top-full mt-1 z-50 w-72 rounded-lg border border-slate-200 bg-white panel-shadow overflow-hidden">
               <div className="p-2 border-b border-slate-100">
                 <input
                   autoFocus

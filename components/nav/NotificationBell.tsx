@@ -35,8 +35,10 @@ export default function NotificationBell() {
   }
 
   useEffect(() => {
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000);
+    void Promise.resolve().then(fetchNotifications);
+    const interval = setInterval(() => {
+      void fetchNotifications();
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -76,12 +78,12 @@ export default function NotificationBell() {
     <div
       id="notif-dropdown"
       style={{ position: "fixed", top: dropdownPos.top, left: dropdownPos.left, zIndex: 9999 }}
-      className="w-80 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden"
+      className="w-[328px] bg-white border border-slate-200 rounded-lg panel-shadow overflow-hidden"
     >
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-        <span className="text-sm font-semibold">Notifications</span>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50/80">
+        <span className="text-sm font-semibold text-slate-950">Notifications</span>
         {unread > 0 && (
-          <button onClick={markAllRead} className="text-xs text-teal-700 hover:underline">
+          <button onClick={markAllRead} className="rounded-md px-2 py-1 text-xs font-medium text-teal-700 hover:bg-teal-50">
             Mark all read
           </button>
         )}
@@ -99,7 +101,7 @@ export default function NotificationBell() {
             <div className="flex items-start gap-2">
               {!n.read && <span className="mt-1.5 w-2 h-2 rounded-full bg-teal-500 shrink-0" />}
               <div className={!n.read ? "" : "pl-4"}>
-                <p className="text-sm font-medium leading-snug">{n.title}</p>
+                <p className="text-sm font-semibold leading-snug text-slate-900">{n.title}</p>
                 {n.body && <p className="text-xs text-slate-500 mt-0.5 whitespace-pre-line">{n.body}</p>}
                 {n.caseRef && (
                   <Link
@@ -122,7 +124,7 @@ export default function NotificationBell() {
         <Link
           href="/notifications"
           onClick={() => setOpen(false)}
-          className="text-xs text-teal-700 hover:underline font-medium"
+          className="text-xs text-teal-700 hover:text-teal-800 font-semibold"
         >
           View all notifications →
         </Link>
@@ -135,9 +137,9 @@ export default function NotificationBell() {
       <button
         ref={buttonRef}
         onClick={handleToggle}
-        className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors text-slate-700 hover:text-slate-950 hover:bg-slate-100 w-full"
+        className="group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all text-slate-600 hover:text-slate-950 hover:bg-white/65 w-full"
       >
-        <span className="relative">
+        <span className="relative grid size-7 place-items-center rounded-md text-slate-500 transition-colors group-hover:bg-slate-100 group-hover:text-slate-800">
           <Bell className="w-4 h-4 shrink-0" />
           {unread > 0 && (
             <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center px-0.5">
@@ -145,7 +147,7 @@ export default function NotificationBell() {
             </span>
           )}
         </span>
-        <span className="flex-1">Notifications</span>
+        <span className="flex-1 font-medium">Notifications</span>
       </button>
 
       {typeof document !== "undefined" && dropdown && createPortal(dropdown, document.body)}
