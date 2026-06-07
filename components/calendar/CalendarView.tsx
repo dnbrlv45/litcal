@@ -243,8 +243,8 @@ export default function CalendarView() {
 
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden bg-slate-50">
-      {/* Top nav */}
-      <div className="h-[72px] shrink-0 border-b border-slate-200/80 bg-white/90 backdrop-blur px-7 flex items-center justify-between gap-5">
+      {/* Top nav — hidden on mobile */}
+      <div className="hidden md:flex h-[72px] shrink-0 border-b border-slate-200/80 bg-white/90 backdrop-blur px-7 items-center justify-between gap-5">
         <div className="relative w-full max-w-[680px]">
           <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
           <input
@@ -271,8 +271,52 @@ export default function CalendarView() {
       </div>
 
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-8 pt-5 pb-3 shrink-0 gap-4">
-        <div className="flex min-w-0 items-center gap-4">
+      <div className="flex flex-col gap-3 px-4 pt-4 pb-2 shrink-0 md:flex-row md:items-center md:justify-between md:px-8 md:pt-5 md:pb-3 md:gap-4">
+        {/* Top row: title + new event button */}
+        <div className="flex items-center justify-between gap-2 md:hidden">
+          <div className="min-w-0">
+            <h1 className="truncate text-lg font-bold tracking-tight text-slate-950">{periodLabel}</h1>
+            <p className="mt-0.5 text-xs font-medium text-slate-500">
+              {filteredEvents.length} event{filteredEvents.length !== 1 ? "s" : ""}
+              {activeFilterCount > 0 ? ` · ${activeFilterCount} filter${activeFilterCount !== 1 ? "s" : ""}` : ""}
+            </p>
+          </div>
+          <Button size="sm" onClick={() => openModal()} className="gap-1.5 bg-slate-950 px-3 text-white hover:bg-slate-800 shrink-0">
+            <Plus className="w-4 h-4" />
+            New
+          </Button>
+        </div>
+
+        {/* Navigation row: prev/next + today + view switcher */}
+        <div className="flex items-center gap-2 md:hidden">
+          <div className="flex overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+            <button onClick={prev} className="grid size-9 place-items-center border-r border-slate-200 text-slate-600 active:bg-slate-100">
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button onClick={goToToday} className="px-3 text-xs font-medium text-slate-600 border-r border-slate-200 active:bg-slate-100">
+              Today
+            </button>
+            <button onClick={next} className="grid size-9 place-items-center text-slate-600 active:bg-slate-100">
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex rounded-lg border border-slate-200 bg-white p-0.5 shadow-sm">
+            {(["day", "week", "month"] as CalView[]).map((v) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={`h-7 min-w-[52px] rounded-md px-2 text-xs capitalize transition-colors ${
+                  view === v ? "bg-slate-950 text-white shadow-sm" : "text-slate-600"
+                }`}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Desktop layout (unchanged) */}
+        <div className="hidden md:flex min-w-0 items-center gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h1 className="truncate text-2xl font-bold tracking-tight text-slate-950">{periodLabel}</h1>
@@ -297,8 +341,7 @@ export default function CalendarView() {
             ))}
           </div>
         </div>
-
-        <div className="flex items-center gap-2">
+        <div className="hidden md:flex items-center gap-2">
           <Button variant="outline" size="lg" onClick={goToToday} className="h-10 border-slate-200 bg-white px-4 text-sm shadow-sm">
             Today
           </Button>
@@ -317,8 +360,8 @@ export default function CalendarView() {
         </div>
       </div>
 
-      {/* Filter bar */}
-      <div className="flex items-center gap-2 px-8 pb-4 shrink-0 flex-wrap">
+      {/* Filter bar — hidden on mobile to save space */}
+      <div className="hidden md:flex items-center gap-2 px-8 pb-4 shrink-0 flex-wrap">
         {/* Attorney */}
         {attorneys.length > 0 && (
           <select
@@ -417,7 +460,7 @@ export default function CalendarView() {
       </div>
 
       {/* Main content row */}
-      <div className="flex flex-1 min-h-0 overflow-hidden px-5 pb-5">
+      <div className="flex flex-1 min-h-0 overflow-hidden px-2 pb-2 md:px-5 md:pb-5">
         {/* Calendar */}
         <div className="flex-1 min-w-0 overflow-hidden flex flex-col gap-5">
           {view === "month" && (

@@ -258,7 +258,7 @@ export default function TasksClient() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-slate-50">
       {/* Header */}
-      <div className="flex items-center justify-between gap-6 px-8 py-5 border-b border-slate-200/80 bg-white/90 backdrop-blur shrink-0">
+      <div className="flex items-center justify-between gap-4 px-4 py-4 md:px-8 md:py-5 border-b border-slate-200/80 bg-white/90 backdrop-blur shrink-0">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-950">Tasks</h1>
           <p className="text-sm text-slate-500 mt-0.5">
@@ -272,7 +272,7 @@ export default function TasksClient() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3 px-8 py-4 border-b border-slate-200/80 bg-white/70 shrink-0">
+      <div className="flex flex-wrap items-center gap-3 px-4 py-3 md:px-8 md:py-4 border-b border-slate-200/80 bg-white/70 shrink-0">
         <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className={selectClass}>
           <option value="">All statuses</option>
           <option value="TODO">To Do</option>
@@ -311,7 +311,7 @@ export default function TasksClient() {
       </div>
 
       {/* Task list */}
-      <div className="flex-1 overflow-y-auto px-8 py-6">
+      <div className="flex-1 overflow-y-auto px-4 py-4 md:px-8 md:py-6">
         {loading ? (
           <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">Loading tasks…</div>
         ) : tasks.length === 0 ? (

@@ -69,7 +69,7 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className={`shrink-0 flex flex-col bg-sidebar text-sidebar-foreground h-full border-r border-sidebar-border transition-[width] duration-200 ${
+    <aside className={`hidden md:flex shrink-0 flex-col bg-sidebar text-sidebar-foreground h-full border-r border-sidebar-border transition-[width] duration-200 ${
       collapsed ? "w-[76px]" : "w-[256px]"
     }`}>
       {/* Logo */}

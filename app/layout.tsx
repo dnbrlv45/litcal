@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import Sidebar from "@/components/nav/Sidebar";
+import MobileNav from "@/components/nav/MobileNav";
 import "./globals.css";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -26,7 +27,8 @@ export default function RootLayout({
     >
       <body className="h-full flex bg-background text-foreground overflow-hidden">
         <Sidebar />
-        <main className="flex-1 flex flex-col min-w-0 overflow-hidden">{children}</main>
+        <main className="flex-1 flex flex-col min-w-0 overflow-hidden pb-16 md:pb-0">{children}</main>
+        <MobileNav />
       </body>
     </html>
   );
