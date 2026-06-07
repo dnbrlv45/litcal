@@ -22,7 +22,7 @@ import DayView from "./DayView";
 import TeamView from "./TeamView";
 import EventModal from "./EventModal";
 import EventDetailPanel from "./EventDetailPanel";
-import type { CalEvent, EventType } from "@/lib/google-calendar";
+import { EVENT_TYPE_COLORS, type CalEvent, type EventType } from "@/lib/google-calendar";
 
 type CalView = "month" | "week" | "day" | "team";
 
