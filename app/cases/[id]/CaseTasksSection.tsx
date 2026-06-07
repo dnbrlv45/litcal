@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Plus, CheckCircle2, Circle, Clock, AlertCircle } from "lucide-react";
+import { Plus, CheckCircle2, Circle, Clock, AlertCircle, ListTodo } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import TaskModal, { TaskData, TaskMember, TaskCase } from "@/components/tasks/TaskModal";
 
@@ -72,7 +72,9 @@ export default function CaseTasksSection({ caseId, caseTitle, caseNumber }: Prop
     }
   }, [caseId]);
 
-  useEffect(() => { fetchTasks(); }, [fetchTasks]);
+  useEffect(() => {
+    void Promise.resolve().then(fetchTasks);
+  }, [fetchTasks]);
   useEffect(() => {
     fetch("/api/workspaces/members").then((r) => r.json()).then((d) => setMembers(d.members ?? []));
   }, []);
@@ -104,13 +106,21 @@ export default function CaseTasksSection({ caseId, caseTitle, caseNumber }: Prop
   const thisCase: TaskCase = { id: caseId, title: caseTitle, caseNumber };
 
   return (
-    <div className="mt-8">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold">Tasks</h3>
+    <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="grid size-7 place-items-center rounded-lg bg-slate-100 text-slate-600">
+            <ListTodo className="size-3.5" />
+          </span>
+          <div>
+            <h3 className="text-sm font-bold text-slate-950">Tasks</h3>
+            <p className="mt-0.5 text-xs text-slate-500">{tasks.length} task{tasks.length !== 1 ? "s" : ""} linked to this case</p>
+          </div>
+        </div>
         <Button
           size="sm"
           variant="ghost"
-          className="gap-1 text-teal-700 hover:text-teal-800 h-7 px-2"
+          className="gap-1 text-teal-700 hover:bg-teal-50 hover:text-teal-800 h-8 px-2"
           onClick={() => { setEditingTask(null); setModalOpen(true); }}
         >
           <Plus className="w-3.5 h-3.5" />
@@ -119,18 +129,21 @@ export default function CaseTasksSection({ caseId, caseTitle, caseNumber }: Prop
       </div>
 
       {loading ? (
-        <p className="text-xs text-muted-foreground py-2">Loading…</p>
+        <p className="text-xs text-muted-foreground py-2">Loading tasks…</p>
       ) : tasks.length === 0 ? (
-        <p className="text-xs text-muted-foreground py-2">No tasks for this case.</p>
+        <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center">
+          <p className="text-sm font-semibold text-slate-700">No tasks for this case</p>
+          <p className="mt-1 text-xs text-slate-500">Add follow-ups, deadlines, or case work here.</p>
+        </div>
       ) : (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           {tasks.map((task) => {
             const overdue = isOverdue(task.dueDate, task.status);
             const statusMeta = STATUS_ICON[task.status] ?? STATUS_ICON.TODO;
             const StatusIcon = statusMeta.icon;
             return (
               <div key={task.id}
-                className="flex items-start gap-2.5 p-2.5 rounded-md border border-border bg-card hover:bg-accent/30 transition-colors group text-sm">
+                className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3.5 text-sm shadow-sm transition-colors hover:border-teal-200 hover:bg-teal-50/20 group">
                 <button
                   onClick={() => statusMeta.clickable && handleCycleStatus(task)}
                   disabled={!statusMeta.clickable}
@@ -141,16 +154,16 @@ export default function CaseTasksSection({ caseId, caseTitle, caseNumber }: Prop
                 </button>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
-                    <span className={`font-medium leading-snug ${task.status === "DONE" ? "line-through text-muted-foreground" : ""}`}>
+                    <span className={`font-semibold leading-snug ${task.status === "DONE" ? "line-through text-muted-foreground" : "text-slate-950"}`}>
                       {task.title}
                     </span>
                     <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => { setEditingTask(task); setModalOpen(true); }} className="text-xs text-muted-foreground hover:text-foreground px-1">Edit</button>
-                      <button onClick={() => handleDelete(task.id)} className="text-xs text-muted-foreground hover:text-red-600 px-1">Delete</button>
+                      <button onClick={() => { setEditingTask(task); setModalOpen(true); }} className="rounded px-1.5 py-0.5 text-xs font-medium text-muted-foreground hover:bg-slate-100 hover:text-foreground">Edit</button>
+                      <button onClick={() => handleDelete(task.id)} className="rounded px-1.5 py-0.5 text-xs font-medium text-muted-foreground hover:bg-red-50 hover:text-red-600">Delete</button>
                     </div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 mt-1">
-                    <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${PRIORITY_COLORS[task.priority] ?? ""}`}>
+                  <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                    <span className={`text-xs px-1.5 py-0.5 rounded font-semibold ${PRIORITY_COLORS[task.priority] ?? ""}`}>
                       {PRIORITY_LABELS[task.priority]}
                     </span>
                     <span className="text-xs text-muted-foreground">{STATUS_LABELS[task.status] ?? task.status}</span>
