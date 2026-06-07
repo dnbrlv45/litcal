@@ -69,6 +69,8 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
   const [caseId, setCaseId] = useState("");
   const [cases, setCases] = useState<CaseOption[]>([]);
   const [allDay, setAllDay] = useState(false);
+  const [endDate, setEndDate] = useState(toDateInputValue(defaultStart ?? new Date()));
+  const [autoTrialEnd, setAutoTrialEnd] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conflicts, setConflicts] = useState<ConflictDetail[]>([]);
@@ -84,9 +86,12 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
   useEffect(() => {
     if (open) {
       void Promise.resolve().then(() => {
+        const d = toDateInputValue(defaultStart ?? new Date());
         setTitle("");
         setEventType("HEARING");
-        setDate(toDateInputValue(defaultStart ?? new Date()));
+        setDate(d);
+        setEndDate(d);
+        setAutoTrialEnd(false);
         setStartTime(DEFAULT_START);
         setEndTime(DEFAULT_END);
         setAllDay(false);
@@ -99,6 +104,35 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
       });
     }
   }, [open, defaultStart]);
+
+  function addDays(dateStr: string, days: number): string {
+    const d = new Date(`${dateStr}T12:00:00`);
+    d.setDate(d.getDate() + days);
+    return toDateInputValue(d);
+  }
+
+  function handleEventTypeChange(newType: EventType) {
+    setEventType(newType);
+    if (newType === "TRIAL") {
+      setAllDay(true);
+      setEndDate(addDays(date, 7));
+      setAutoTrialEnd(true);
+    } else if (eventType === "TRIAL") {
+      // Switching away from Trial — restore to timed, single-day
+      setAllDay(false);
+      setEndDate(date);
+      setAutoTrialEnd(false);
+    }
+  }
+
+  function handleDateChange(newDate: string) {
+    setDate(newDate);
+    if (autoTrialEnd) {
+      setEndDate(addDays(newDate, 7));
+    } else if (!allDay) {
+      setEndDate(newDate);
+    }
+  }
 
   function handleStartChange(newStart: string) {
     const oldStartMins = timeToMinutes(startTime);
@@ -121,8 +155,8 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
     if (!title.trim()) { setError("Title is required."); return; }
 
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const startISO = allDay ? new Date(`${date}T00:00:00`).toISOString() : new Date(`${date}T${startTime}`).toISOString();
-    const endISO   = allDay ? new Date(`${date}T23:59:59`).toISOString() : new Date(`${date}T${endTime}`).toISOString();
+    const startISO = allDay ? new Date(`${date}T00:00:00`).toISOString()    : new Date(`${date}T${startTime}`).toISOString();
+    const endISO   = allDay ? new Date(`${endDate}T23:59:59`).toISOString() : new Date(`${date}T${endTime}`).toISOString();
 
     setSaving(true);
     setError(null);
@@ -192,7 +226,7 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
             <select
               id="event-type"
               value={eventType}
-              onChange={(e) => setEventType(e.target.value as EventType)}
+              onChange={(e) => handleEventTypeChange(e.target.value as EventType)}
               className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
               {EVENT_TYPES.map(({ value, label }) => (
@@ -220,16 +254,33 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
             </div>
           )}
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="event-date">Date</Label>
-            <Input id="event-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <div className={`grid gap-3 ${allDay ? "grid-cols-2" : "grid-cols-1"}`}>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="event-date">{allDay ? "Start date" : "Date"}</Label>
+              <Input id="event-date" type="date" value={date} onChange={(e) => handleDateChange(e.target.value)} />
+            </div>
+            {allDay && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="event-end-date">End date</Label>
+                <Input
+                  id="event-end-date"
+                  type="date"
+                  value={endDate}
+                  min={date}
+                  onChange={(e) => { setEndDate(e.target.value); setAutoTrialEnd(false); }}
+                />
+              </div>
+            )}
           </div>
 
           <label className="flex items-center gap-2.5 cursor-pointer select-none">
             <input
               type="checkbox"
               checked={allDay}
-              onChange={(e) => setAllDay(e.target.checked)}
+              onChange={(e) => {
+                setAllDay(e.target.checked);
+                if (!e.target.checked) { setEndDate(date); setAutoTrialEnd(false); }
+              }}
               className="h-4 w-4 rounded border-slate-300 accent-slate-900"
             />
             <span className="text-sm text-slate-700">All day</span>
