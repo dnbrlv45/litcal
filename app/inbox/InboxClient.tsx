@@ -44,14 +44,20 @@ export default function InboxClient() {
     void Promise.resolve().then(fetchNotifications);
   }, [fetchNotifications]);
 
+  function broadcastUpdate() {
+    window.dispatchEvent(new Event("notifications-updated"));
+  }
+
   async function markAllRead() {
     await fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ all: true }) });
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    broadcastUpdate();
   }
 
   async function markRead(id: string) {
     await fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: [id] }) });
     setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
+    broadcastUpdate();
   }
 
   async function openNotification(notification: Notification) {
@@ -140,7 +146,7 @@ export default function InboxClient() {
                 const unreadSelected = Array.from(selected).filter((id) => !notifications.find((n) => n.id === id)?.read);
                 if (unreadSelected.length > 0) {
                   fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: unreadSelected }) })
-                    .then(() => setNotifications((prev) => prev.map((n) => selected.has(n.id) ? { ...n, read: true } : n)));
+                    .then(() => { setNotifications((prev) => prev.map((n) => selected.has(n.id) ? { ...n, read: true } : n)); broadcastUpdate(); });
                 }
               }}
               className="text-sm text-teal-700 hover:underline"
