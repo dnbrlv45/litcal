@@ -82,13 +82,13 @@ export default function Sidebar() {
           type="button"
           onClick={toggleCollapsed}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          className={`flex h-9 w-full items-center rounded-lg border border-sidebar-border bg-white/70 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-white hover:text-slate-950 ${
+          className={`group relative flex h-9 w-full items-center rounded-lg border border-sidebar-border bg-white/70 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-white hover:text-slate-950 ${
             collapsed ? "justify-center px-2" : "justify-between px-3"
           }`}
         >
           {!collapsed && <span>Collapse</span>}
           {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+          {collapsed && <CollapsedTooltip label="Expand sidebar" />}
         </button>
       </div>
 
@@ -112,8 +112,8 @@ export default function Sidebar() {
             <Link
               key={href}
               href={href}
-              title={collapsed ? label : undefined}
-              className={`group flex items-center rounded-lg text-sm transition-all ${
+              aria-label={label}
+              className={`group relative flex items-center rounded-lg text-sm transition-all ${
                 collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5"
               } ${
                 isActive
@@ -127,6 +127,7 @@ export default function Sidebar() {
                 <Icon className="w-4 h-4 shrink-0" />
               </span>
               {!collapsed && <span className="flex-1 font-medium">{label}</span>}
+              {collapsed && <CollapsedTooltip label={label} />}
             </Link>
           );
         })}
@@ -158,17 +159,26 @@ export default function Sidebar() {
       <div className={`py-4 border-t border-sidebar-border flex items-center gap-2 ${collapsed ? "px-3" : "px-4"}`}>
         <form action="/api/auth/sign-out" method="post" className="w-full">
           <button
-            title={collapsed ? "Sign Out" : undefined}
             aria-label="Sign Out"
-            className={`flex w-full items-center rounded-lg py-2 text-sm font-medium text-slate-600 hover:bg-white/70 hover:text-slate-950 ${
+            className={`group relative flex w-full items-center rounded-lg py-2 text-sm font-medium text-slate-600 hover:bg-white/70 hover:text-slate-950 ${
               collapsed ? "justify-center px-2" : "gap-2 px-3"
             }`}
           >
             <LogOut className="size-4" />
             {!collapsed && "Sign Out"}
+            {collapsed && <CollapsedTooltip label="Sign Out" />}
           </button>
         </form>
       </div>
     </aside>
+  );
+}
+
+function CollapsedTooltip({ label }: { label: string }) {
+  return (
+    <span className="pointer-events-none absolute left-[calc(100%+10px)] top-1/2 z-50 flex -translate-y-1/2 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100">
+      <span className="size-1.5 rounded-full bg-teal-500" />
+      {label}
+    </span>
   );
 }
