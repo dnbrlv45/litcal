@@ -8,6 +8,7 @@ const publicRoutes = [
   /^\/sign-up(?:\/.*)?$/,
   /^\/api\/auth\/google\/sign-in(?:\/.*)?$/,
   /^\/api\/auth\/sign-out$/,
+  /^\/api\/cron\//, // cron-job.org has no session cookie
 ];
 
 function isPublicRoute(pathname: string) {
