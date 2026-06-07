@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+// Force dynamic so Next.js never statically optimizes this route —
+// process.env.CRON_SECRET must be read at runtime, not build time.
+export const dynamic = "force-dynamic";
+
 export async function GET(request: NextRequest) {
   // Verify CRON_SECRET so only cron-job.org (with the secret in the URL) can trigger this
   const secret = request.nextUrl.searchParams.get("secret");
