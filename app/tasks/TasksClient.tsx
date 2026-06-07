@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import { Plus, CheckCircle2, Circle, Clock, AlertCircle, ChevronDown, ListTodo } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import TaskModal, { TaskData, TaskMember, TaskCase } from "@/components/tasks/TaskModal";
@@ -146,6 +147,7 @@ function TaskGroup({ title, tasks, defaultOpen = true, onEdit, onDelete, onCycle
 }
 
 export default function TasksClient() {
+  const searchParams = useSearchParams();
   const [tasks, setTasks] = useState<TaskData[]>([]);
   const [members, setMembers] = useState<TaskMember[]>([]);
   const [cases, setCases] = useState<TaskCase[]>([]);
@@ -158,6 +160,7 @@ export default function TasksClient() {
   const [filterPriority, setFilterPriority] = useState("");
   const [filterCase, setFilterCase] = useState("");
   const [filterAssignee, setFilterAssignee] = useState("");
+  const openedTaskId = useRef<string | null>(null);
 
   const fetchTasks = useCallback(async () => {
     setLoading(true);
@@ -183,6 +186,18 @@ export default function TasksClient() {
     fetch("/api/workspaces/members").then((r) => r.json()).then((d) => setMembers(d.members ?? []));
     fetch("/api/cases").then((r) => r.json()).then((d) => setCases(d.cases ?? []));
   }, []);
+
+  useEffect(() => {
+    const taskId = searchParams.get("taskId");
+    if (!taskId || loading || openedTaskId.current === taskId) return;
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
+    openedTaskId.current = taskId;
+    void Promise.resolve().then(() => {
+      setEditingTask(task);
+      setModalOpen(true);
+    });
+  }, [loading, searchParams, tasks]);
 
   function openCreate() { setEditingTask(null); setModalOpen(true); }
   function openEdit(t: TaskData) { setEditingTask(t); setModalOpen(true); }

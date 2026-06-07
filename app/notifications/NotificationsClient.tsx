@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Bell, Trash2, CheckCheck, X } from "lucide-react";
+import { notificationHref, notificationTargetLabel } from "@/lib/notification-routing";
 
 interface Notification {
   id: string;
@@ -23,6 +24,7 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 export default function NotificationsClient() {
+  const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -38,7 +40,9 @@ export default function NotificationsClient() {
     }
   }, []);
 
-  useEffect(() => { fetchNotifications(); }, [fetchNotifications]);
+  useEffect(() => {
+    void Promise.resolve().then(fetchNotifications);
+  }, [fetchNotifications]);
 
   async function markAllRead() {
     await fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ all: true }) });
@@ -48,6 +52,11 @@ export default function NotificationsClient() {
   async function markRead(id: string) {
     await fetch("/api/notifications", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: [id] }) });
     setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, read: true } : n));
+  }
+
+  async function openNotification(notification: Notification) {
+    if (!notification.read) await markRead(notification.id);
+    router.push(notificationHref(notification));
   }
 
   async function deleteSelected() {
@@ -72,7 +81,8 @@ export default function NotificationsClient() {
   function toggleSelect(id: string) {
     setSelected((prev) => {
       const s = new Set(prev);
-      s.has(id) ? s.delete(id) : s.add(id);
+      if (s.has(id)) s.delete(id);
+      else s.add(id);
       return s;
     });
   }
@@ -175,10 +185,11 @@ export default function NotificationsClient() {
                 type="checkbox"
                 checked={selected.has(n.id)}
                 onChange={() => toggleSelect(n.id)}
+                onClick={(e) => e.stopPropagation()}
                 className="mt-1 rounded border-slate-300 text-teal-600 focus:ring-teal-500 shrink-0"
               />
               {!n.read && <span className="mt-2 w-2 h-2 rounded-full bg-teal-500 shrink-0" />}
-              <div className={`flex-1 min-w-0 ${n.read ? "" : ""}`} onClick={() => !n.read && markRead(n.id)}>
+              <button className="flex-1 min-w-0 text-left" onClick={() => void openNotification(n)}>
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <span className="inline-block text-[10px] font-semibold uppercase tracking-wide text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded mr-2">
@@ -193,25 +204,10 @@ export default function NotificationsClient() {
                 {n.body && (
                   <p className="text-xs text-slate-500 mt-1 whitespace-pre-line">{n.body}</p>
                 )}
-                {n.caseRef && (
-                  <Link
-                    href={`/cases/${n.caseRef.id}`}
-                    className="text-xs text-teal-700 hover:underline mt-1 inline-block"
-                  >
-                    {n.caseRef.caseNumber ? `#${n.caseRef.caseNumber} · ` : ""}{n.caseRef.title}
-                  </Link>
-                )}
-                {n.taskRef && (
-                  <Link
-                    href={`/tasks`}
-                    className="text-xs text-teal-700 hover:underline mt-1 inline-block"
-                  >
-                    View task: {n.taskRef.title}
-                  </Link>
-                )}
-              </div>
+                <p className="mt-1 inline-block text-xs font-semibold text-teal-700">{notificationTargetLabel(n)}</p>
+              </button>
               <button
-                onClick={() => deleteOne(n.id)}
+                onClick={(e) => { e.stopPropagation(); void deleteOne(n.id); }}
                 className="shrink-0 p-1 rounded text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-colors mt-0.5"
               >
                 <Trash2 className="w-3.5 h-3.5" />

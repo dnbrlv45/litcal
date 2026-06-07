@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { Bell } from "lucide-react";
+import { Bell, X } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { notificationHref, notificationTargetLabel } from "@/lib/notification-routing";
 
 interface Notification {
   id: string;
@@ -22,18 +24,32 @@ interface NotificationBellProps {
 }
 
 export default function NotificationBell({ collapsed = false }: NotificationBellProps) {
+  const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unread, setUnread]               = useState(0);
   const [open, setOpen]                   = useState(false);
+  const [toasts, setToasts]               = useState<Notification[]>([]);
   const [dropdownPos, setDropdownPos]     = useState({ top: 0, left: 0 });
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const knownIdsRef = useRef<Set<string> | null>(null);
 
   async function fetchNotifications() {
     try {
       const res = await fetch("/api/notifications");
       if (!res.ok) return;
       const data = await res.json();
-      setNotifications(data.notifications ?? []);
+      const nextNotifications = (data.notifications ?? []) as Notification[];
+      const knownIds = knownIdsRef.current;
+      if (knownIds && typeof document !== "undefined" && document.visibilityState === "visible") {
+        const freshUnread = nextNotifications
+          .filter((n) => !n.read && !knownIds.has(n.id))
+          .slice(0, 3);
+        if (freshUnread.length > 0) {
+          setToasts((current) => [...freshUnread, ...current].slice(0, 3));
+        }
+      }
+      knownIdsRef.current = new Set(nextNotifications.map((n) => n.id));
+      setNotifications(nextNotifications);
       setUnread(data.unreadCount ?? 0);
     } catch { /* silent */ }
   }
@@ -78,6 +94,17 @@ export default function NotificationBell({ collapsed = false }: NotificationBell
     setUnread((prev) => Math.max(0, prev - 1));
   }
 
+  async function openNotification(notification: Notification) {
+    if (!notification.read) await markRead(notification.id);
+    setOpen(false);
+    setToasts((current) => current.filter((n) => n.id !== notification.id));
+    router.push(notificationHref(notification));
+  }
+
+  function dismissToast(id: string) {
+    setToasts((current) => current.filter((n) => n.id !== id));
+  }
+
   const dropdown = open ? (
     <div
       id="notif-dropdown"
@@ -97,31 +124,23 @@ export default function NotificationBell({ collapsed = false }: NotificationBell
         {notifications.length === 0 ? (
           <p className="text-xs text-slate-500 text-center py-6">No notifications.</p>
         ) : notifications.slice(0, 10).map((n) => (
-          <div
+          <button
             key={n.id}
-            onClick={() => !n.read && markRead(n.id)}
-            className={`px-4 py-3 cursor-pointer transition-colors hover:bg-slate-50 ${!n.read ? "bg-teal-50/60" : ""}`}
+            onClick={() => void openNotification(n)}
+            className={`w-full px-4 py-3 text-left transition-colors hover:bg-slate-50 ${!n.read ? "bg-teal-50/60" : ""}`}
           >
             <div className="flex items-start gap-2">
               {!n.read && <span className="mt-1.5 w-2 h-2 rounded-full bg-teal-500 shrink-0" />}
               <div className={!n.read ? "" : "pl-4"}>
                 <p className="text-sm font-semibold leading-snug text-slate-900">{n.title}</p>
                 {n.body && <p className="text-xs text-slate-500 mt-0.5 whitespace-pre-line">{n.body}</p>}
-                {n.caseRef && (
-                  <Link
-                    href={`/cases/${n.caseRef.id}`}
-                    onClick={(e) => e.stopPropagation()}
-                    className="text-xs text-teal-700 hover:underline mt-0.5 block"
-                  >
-                    {n.caseRef.caseNumber ? `#${n.caseRef.caseNumber} · ` : ""}{n.caseRef.title}
-                  </Link>
-                )}
+                <p className="text-xs text-teal-700 mt-1 font-semibold">{notificationTargetLabel(n)}</p>
                 <p className="text-xs text-slate-400 mt-1">
                   {new Date(n.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
                 </p>
               </div>
             </div>
-          </div>
+          </button>
         ))}
       </div>
       <div className="border-t border-slate-100 px-4 py-2.5">
@@ -162,6 +181,34 @@ export default function NotificationBell({ collapsed = false }: NotificationBell
           </span>
         )}
       </button>
+
+      {typeof document !== "undefined" && toasts.length > 0 && createPortal(
+        <div className="fixed right-5 top-5 z-[10000] flex w-[360px] max-w-[calc(100vw-2rem)] flex-col gap-2">
+          {toasts.map((toast) => (
+            <div key={toast.id} className="rounded-lg border border-slate-200 bg-white shadow-xl">
+              <div className="flex items-start gap-3 p-4">
+                <span className="mt-1 size-2 rounded-full bg-teal-500" />
+                <button
+                  onClick={() => void openNotification(toast)}
+                  className="min-w-0 flex-1 text-left"
+                >
+                  <p className="text-sm font-semibold leading-snug text-slate-950">{toast.title}</p>
+                  {toast.body && <p className="mt-1 line-clamp-2 text-xs text-slate-500 whitespace-pre-line">{toast.body}</p>}
+                  <p className="mt-1 text-xs font-semibold text-teal-700">{notificationTargetLabel(toast)}</p>
+                </button>
+                <button
+                  onClick={() => dismissToast(toast.id)}
+                  className="grid size-7 shrink-0 place-items-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                  aria-label="Dismiss notification"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>,
+        document.body,
+      )}
 
       {typeof document !== "undefined" && dropdown && createPortal(dropdown, document.body)}
     </>
