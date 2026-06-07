@@ -155,7 +155,13 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
     if (!title.trim()) { setError("Title is required."); return; }
 
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const startISO = allDay ? new Date(`${date}T00:00:00`).toISOString()    : new Date(`${date}T${startTime}`).toISOString();
+    // All-day events: store at noon UTC so they render on the correct date
+    // in every timezone (midnight UTC appears as the previous day in UTC-X zones)
+    const toNoonUTC = (dateStr: string) => {
+      const d = new Date(`${dateStr}T00:00:00`);
+      return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0, 0)).toISOString();
+    };
+    const startISO = allDay ? toNoonUTC(date) : new Date(`${date}T${startTime}`).toISOString();
     const endISO   = allDay ? new Date(`${endDate}T23:59:59`).toISOString() : new Date(`${date}T${endTime}`).toISOString();
 
     setSaving(true);

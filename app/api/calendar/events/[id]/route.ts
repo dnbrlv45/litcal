@@ -33,7 +33,25 @@ export async function DELETE(
 
   if (!event) return NextResponse.json({ error: "Event not found" }, { status: 404 });
 
-  // Delete from Supabase — cascades to GoogleCalendarSync automatically
+  // If this is a trigger event (Trial/CMC), delete all generated deadlines it spawned
+  const generatedDeadlines = await prisma.generatedDeadline.findMany({
+    where: { triggerEventId: id },
+    select: { generatedEventId: true, generatedTaskId: true },
+  });
+  const generatedEventIds = generatedDeadlines
+    .map((d) => d.generatedEventId)
+    .filter(Boolean) as string[];
+  const generatedTaskIds = generatedDeadlines
+    .map((d) => d.generatedTaskId)
+    .filter(Boolean) as string[];
+  if (generatedEventIds.length > 0) {
+    await prisma.event.deleteMany({ where: { id: { in: generatedEventIds } } });
+  }
+  if (generatedTaskIds.length > 0) {
+    await prisma.task.deleteMany({ where: { id: { in: generatedTaskIds } } });
+  }
+
+  // Delete from Supabase — cascades to GoogleCalendarSync and GeneratedDeadline rows
   await prisma.event.delete({ where: { id } });
 
   // Mirror deletion to Google Calendar
