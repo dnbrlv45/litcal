@@ -54,6 +54,7 @@ export async function GET(request: NextRequest) {
       allDay: e.allDay,
       eventType: e.eventType,
       location: e.location,
+      department: e.department,
       caseId: e.caseId,
       caseTitle: e.caseRef?.title ?? null,
       caseStatus: e.caseRef?.status ?? null,
@@ -76,7 +77,7 @@ export async function POST(request: NextRequest) {
   if (!workspace) return NextResponse.json({ error: "No workspace" }, { status: 403 });
 
   const body = await request.json();
-  const { title, description, start, end, timeZone, eventType, location, caseId, allDay } = body as {
+  const { title, description, start, end, timeZone, eventType, location, department, caseId, allDay } = body as {
     title: string;
     description?: string;
     start: string;
@@ -84,6 +85,7 @@ export async function POST(request: NextRequest) {
     timeZone: string;
     eventType?: string;
     location?: string;
+    department?: string;
     caseId?: string;
     allDay?: boolean;
   };
@@ -130,6 +132,7 @@ export async function POST(request: NextRequest) {
       allDay: allDay ?? false,
       eventType: safeEventType,
       location: location || null,
+      department: department?.trim() || null,
       caseId: caseId || null,
       assignedAttorneyId: inheritedAttorneyId,
     },
@@ -207,11 +210,15 @@ export async function POST(request: NextRequest) {
       }
 
       const reminderOverrides = googleReminderOverrides(safeEventType as string);
+      const googleDescription = [
+        event.department ? `Department: ${event.department}` : null,
+        event.description,
+      ].filter(Boolean).join("\n\n") || undefined;
       const gEvent: GoogleCalEvent = await createGoogleEvent(
         accessToken,
         {
           summary: event.title,
-          description: event.description ?? undefined,
+          description: googleDescription,
           start,
           end,
           timeZone: timeZone ?? "UTC",
@@ -282,6 +289,7 @@ export async function POST(request: NextRequest) {
       allDay: event.allDay,
       eventType: event.eventType,
       location: event.location,
+      department: event.department,
       caseId: event.caseId,
     },
     googlePush,

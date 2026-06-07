@@ -60,6 +60,7 @@ interface CaseStaffRow { role: StaffRole; user: AssignedUser; }
 interface CaseEvent {
   id: string; title: string; startTime: string; endTime: string;
   allDay: boolean; eventType: EventType; location: string | null;
+  department: string | null;
 }
 
 interface CaseData {
@@ -582,6 +583,12 @@ function EventGroup({ label, events, muted }: { label: string; events: CaseEvent
                       <span className="flex items-center gap-1">
                         <MapPin className="w-3 h-3" />
                         {ev.location}
+                      </span>
+                    )}
+                    {ev.department && (
+                      <span className="flex items-center gap-1">
+                        <Building2 className="w-3 h-3" />
+                        {ev.department}
                       </span>
                     )}
                   </div>

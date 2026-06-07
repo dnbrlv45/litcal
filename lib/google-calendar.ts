@@ -36,6 +36,7 @@ export interface CalEvent {
   allDay: boolean;
   eventType: EventType;
   location?: string;
+  department?: string;
   caseId?: string;
   caseTitle?: string;
   caseStatus?: string;

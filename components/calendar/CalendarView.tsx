@@ -163,6 +163,7 @@ export default function CalendarView() {
           caseId: e.caseId ?? undefined,
           caseTitle: e.caseTitle ?? undefined,
           caseStatus: e.caseStatus ?? undefined,
+          department: e.department ?? undefined,
           assignedAttorneyId: e.assignedAttorneyId ?? undefined,
           assignedAttorneyName: e.assignedAttorneyName ?? undefined,
           hasConflict: e.hasConflict ?? false,

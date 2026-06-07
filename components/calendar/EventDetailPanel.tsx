@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, MapPin, Calendar, Clock, Pencil, Trash2, Check, Briefcase, ChevronRight, FileText, Sparkles, AlertTriangle } from "lucide-react";
+import { X, MapPin, Calendar, Clock, Pencil, Trash2, Check, Briefcase, ChevronRight, FileText, Sparkles, AlertTriangle, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -50,6 +50,7 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [location, setLocation] = useState("");
+  const [department, setDepartment] = useState("");
   const [description, setDescription] = useState("");
   const [caseId, setCaseId] = useState("");
   const [cases, setCases] = useState<CaseOption[]>([]);
@@ -64,10 +65,12 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
   }, []);
 
   useEffect(() => {
-    if (event) {
-      setEditing(false);
-      setError(null);
-      setConflicts([]);
+    if (event?.id) {
+      void Promise.resolve().then(() => {
+        setEditing(false);
+        setError(null);
+        setConflicts([]);
+      });
     }
   }, [event?.id]);
 
@@ -80,6 +83,7 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
     setStartTime(toTimeInputValue(event.start));
     setEndTime(toTimeInputValue(event.end));
     setLocation(event.location ?? "");
+    setDepartment(event.department ?? "");
     setDescription(event.description ?? "");
     setCaseId(event.caseId ?? "");
     setError(null);
@@ -113,7 +117,17 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
       const res = await fetch(`/api/calendar/events/${event.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, description, start: startISO, end: endISO, eventType, location, caseId: caseId || null, allDay }),
+        body: JSON.stringify({
+          title,
+          description,
+          start: startISO,
+          end: endISO,
+          eventType,
+          location,
+          department,
+          caseId: caseId || null,
+          allDay,
+        }),
       });
       if (!res.ok) throw new Error();
       const data = await res.json();
@@ -225,6 +239,17 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
                   >
                     Directions
                   </a>
+                </div>
+              </div>
+            )}
+
+            {/* Department */}
+            {event.department && (
+              <div className="flex items-start gap-3 border-b border-slate-200 pb-5 text-sm">
+                <Building2 className="w-4 h-4 shrink-0 text-slate-500 mt-0.5" />
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Department</span>
+                  <span className="text-slate-800">{event.department}</span>
                 </div>
               </div>
             )}
@@ -348,6 +373,11 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="ep-loc">Location</Label>
               <Input id="ep-loc" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Optional" />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="ep-department">Department</Label>
+              <Input id="ep-department" value={department} onChange={(e) => setDepartment(e.target.value)} placeholder="Optional" />
             </div>
 
             <div className="flex flex-col gap-1.5">

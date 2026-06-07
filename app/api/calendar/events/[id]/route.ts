@@ -77,6 +77,7 @@ export async function PATCH(
     end?: string;
     eventType?: string;
     location?: string;
+    department?: string;
     caseId?: string | null;
     allDay?: boolean;
   };
@@ -92,7 +93,7 @@ export async function PATCH(
   });
   if (!event) return NextResponse.json({ error: "Event not found" }, { status: 404 });
 
-  const validTypes = ["DEADLINE","HEARING","DEPOSITION","TRIAL","CONFERENCE","MEETING","MEDIATION","REMINDER","OTHER"];
+  const validTypes = ["DEADLINE","HEARING","DEPOSITION","TRIAL","CONFERENCE","MEETING","MEDIATION","COURT_CALL","CASE_MANAGEMENT_CONFERENCE","REMINDER","OTHER"];
   const safeEventType = body.eventType && validTypes.includes(body.eventType) ? body.eventType as never : undefined;
 
   const updated = await prisma.event.update({
@@ -104,6 +105,7 @@ export async function PATCH(
       ...(body.end !== undefined && { endTime: new Date(body.end) }),
       ...(safeEventType !== undefined && { eventType: safeEventType }),
       ...(body.location !== undefined && { location: body.location || null }),
+      ...(body.department !== undefined && { department: body.department.trim() || null }),
       ...("caseId" in body && { caseId: body.caseId || null }),
       ...(body.allDay !== undefined && { allDay: body.allDay }),
     },
@@ -127,6 +129,7 @@ export async function PATCH(
       allDay: updated.allDay,
       eventType: updated.eventType,
       location: updated.location,
+      department: updated.department,
     },
     conflicts: conflicts.map((c) => ({
       eventId: c.eventId,

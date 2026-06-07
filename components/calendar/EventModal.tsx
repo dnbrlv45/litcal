@@ -64,6 +64,7 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
   const [startTime, setStartTime] = useState(DEFAULT_START);
   const [endTime, setEndTime] = useState(DEFAULT_END);
   const [location, setLocation] = useState("");
+  const [department, setDepartment] = useState("");
   const [description, setDescription] = useState("");
   const [caseId, setCaseId] = useState("");
   const [cases, setCases] = useState<CaseOption[]>([]);
@@ -82,17 +83,20 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
 
   useEffect(() => {
     if (open) {
-      setTitle("");
-      setEventType("HEARING");
-      setDate(toDateInputValue(defaultStart ?? new Date()));
-      setStartTime(DEFAULT_START);
-      setEndTime(DEFAULT_END);
-      setAllDay(false);
-      setLocation("");
-      setDescription("");
-      setCaseId("");
-      setError(null);
-      setConflicts([]);
+      void Promise.resolve().then(() => {
+        setTitle("");
+        setEventType("HEARING");
+        setDate(toDateInputValue(defaultStart ?? new Date()));
+        setStartTime(DEFAULT_START);
+        setEndTime(DEFAULT_END);
+        setAllDay(false);
+        setLocation("");
+        setDepartment("");
+        setDescription("");
+        setCaseId("");
+        setError(null);
+        setConflicts([]);
+      });
     }
   }, [open, defaultStart]);
 
@@ -127,7 +131,18 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
       const res = await fetch("/api/calendar/events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, description, start: startISO, end: endISO, timeZone, eventType, location, caseId: caseId || undefined, allDay }),
+        body: JSON.stringify({
+          title,
+          description,
+          start: startISO,
+          end: endISO,
+          timeZone,
+          eventType,
+          location,
+          department,
+          caseId: caseId || undefined,
+          allDay,
+        }),
       });
       if (!res.ok) { setError("Failed to create event. Please try again."); return; }
       const data = await res.json();
@@ -237,9 +252,19 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
             <Label htmlFor="event-location">Location <span className="text-muted-foreground font-normal">(optional)</span></Label>
             <Input
               id="event-location"
-              placeholder="e.g. Stanley Mosk Courthouse, Dept. 43"
+              placeholder="e.g. Stanley Mosk Courthouse"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="event-department">Department <span className="text-muted-foreground font-normal">(optional)</span></Label>
+            <Input
+              id="event-department"
+              placeholder="e.g. Dept. 43"
+              value={department}
+              onChange={(e) => setDepartment(e.target.value)}
             />
           </div>
 
