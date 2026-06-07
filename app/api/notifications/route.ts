@@ -10,6 +10,15 @@ export async function GET() {
   const { workspace } = await getCurrentWorkspace(currentUser.id);
   if (!workspace) return NextResponse.json({ error: "No workspace" }, { status: 403 });
 
+  await prisma.notification.deleteMany({
+    where: {
+      userId: currentUser.id,
+      workspaceId: workspace.id,
+      type: "TASK_ASSIGNED",
+      taskId: null,
+    },
+  });
+
   const notifications = await prisma.notification.findMany({
     where: { userId: currentUser.id, workspaceId: workspace.id },
     orderBy: { createdAt: "desc" },

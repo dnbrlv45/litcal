@@ -85,7 +85,9 @@ export default function NotificationBell({ collapsed = false }: NotificationBell
   function handleToggle() {
     if (!open && buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
-      setDropdownPos({ top: rect.top, left: rect.right + 8 });
+      const dropdownHeight = Math.min(520, window.innerHeight - 24);
+      const top = Math.min(Math.max(12, rect.top), Math.max(12, window.innerHeight - dropdownHeight - 12));
+      setDropdownPos({ top, left: rect.right + 8 });
     }
     setOpen((o) => !o);
   }
@@ -117,18 +119,27 @@ export default function NotificationBell({ collapsed = false }: NotificationBell
     <div
       id="notif-dropdown"
       style={{ position: "fixed", top: dropdownPos.top, left: dropdownPos.left, zIndex: 9999 }}
-      className="w-[328px] bg-white border border-slate-200 rounded-lg panel-shadow overflow-hidden"
+      className="w-[328px] max-h-[calc(100vh-24px)] bg-white border border-slate-200 rounded-lg panel-shadow overflow-hidden flex flex-col"
     >
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50/80">
+      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-100 bg-slate-50/80 shrink-0">
         <span className="text-sm font-semibold text-slate-950">Notifications</span>
-        {unread > 0 && (
-          <button onClick={markAllRead} className="rounded-md px-2 py-1 text-xs font-medium text-teal-700 hover:bg-teal-50">
-            Mark all read
-          </button>
-        )}
+        <div className="flex items-center gap-1">
+          <Link
+            href="/notifications"
+            onClick={() => setOpen(false)}
+            className="rounded-md px-2 py-1 text-xs font-semibold text-teal-700 hover:bg-teal-50"
+          >
+            View all
+          </Link>
+          {unread > 0 && (
+            <button onClick={markAllRead} className="rounded-md px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800">
+              Mark read
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
+      <div className="overflow-y-auto divide-y divide-slate-100">
         {notifications.length === 0 ? (
           <p className="text-xs text-slate-500 text-center py-6">No notifications.</p>
         ) : notifications.slice(0, 10).map((n) => (
@@ -150,15 +161,6 @@ export default function NotificationBell({ collapsed = false }: NotificationBell
             </div>
           </button>
         ))}
-      </div>
-      <div className="border-t border-slate-100 px-4 py-2.5">
-        <Link
-          href="/notifications"
-          onClick={() => setOpen(false)}
-          className="text-xs text-teal-700 hover:text-teal-800 font-semibold"
-        >
-          View all notifications →
-        </Link>
       </div>
     </div>
   ) : null;

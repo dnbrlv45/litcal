@@ -88,8 +88,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     include: TASK_INCLUDE,
   });
 
+  if (task.status === "DONE") {
+    await prisma.notification.deleteMany({
+      where: { workspaceId: workspace.id, taskId: task.id },
+    });
+  }
+
   // Notify newly added assignees
-  if (newlyAddedMemberIds.length > 0) {
+  if (task.status !== "DONE" && newlyAddedMemberIds.length > 0) {
     const assigner = currentUser;
     const assignerName = [assigner.firstName, assigner.lastName].filter(Boolean).join(" ") || assigner.email;
 
@@ -132,6 +138,9 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   const existing = await getTaskForWorkspace(id, workspace.id);
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  await prisma.notification.deleteMany({
+    where: { workspaceId: workspace.id, taskId: id },
+  });
   await prisma.task.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }
