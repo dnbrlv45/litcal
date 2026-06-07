@@ -21,12 +21,18 @@ export async function GET(request: NextRequest) {
   const end = searchParams.get("end");
   if (!start || !end) return NextResponse.json({ error: "Missing start/end" }, { status: 400 });
 
-  const timeFilter = { gte: new Date(start), lte: new Date(end) };
+  const rangeStart = new Date(start);
+  const rangeEnd   = new Date(end);
 
   const [events, connection, conflictedIds] = await Promise.all([
     prisma.event.findMany({
       where: {
-        startTime: timeFilter,
+        // Overlap query: event starts before range ends AND event ends after range starts.
+        // This ensures multi-day events that begin before the view window are still returned.
+        AND: [
+          { startTime: { lte: rangeEnd } },
+          { endTime:   { gte: rangeStart } },
+        ],
         OR: [
           { workspaceId: workspace.id },
           { userId, workspaceId: null },

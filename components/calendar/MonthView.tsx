@@ -68,14 +68,18 @@ export default function MonthView({ date, today, events, onCellClick, onSelectDa
 
       <div className="flex-1 grid" style={{ gridTemplateRows: `repeat(${weeks.length}, 1fr)` }}>
         {weeks.map((week, wi) => {
-          // Build the 7 Date objects for this week row
-          const weekDays = week.map((day) =>
+          // Build the 7 Date objects for this week row.
+          // Null cells are padding from prev/next month — compute their actual dates
+          // by anchoring off the first real day in this row.
+          const weekDaysRaw = week.map((day) =>
             day !== null ? new Date(year, month, day) : null
           );
-          // Use the first non-null day to anchor spanning layout
-          const firstReal = weekDays.find((d) => d !== null);
-          const weekDaysFull = weekDays.map((d, i) =>
-            d ?? (firstReal ? new Date(firstReal.getTime() + i * 86400000) : new Date())
+          const firstRealIndex = weekDaysRaw.findIndex((d) => d !== null);
+          const firstReal = weekDaysRaw[firstRealIndex];
+          const weekDaysFull = weekDaysRaw.map((d, i) =>
+            d ?? (firstReal
+              ? new Date(firstReal.getTime() - (firstRealIndex - i) * 86400000)
+              : new Date())
           );
           const spanLayout  = layoutSpanningEvents(events, weekDaysFull);
           const spanRows    = spanLayout.length > 0 ? Math.max(...spanLayout.map((s) => s.row)) + 1 : 0;
