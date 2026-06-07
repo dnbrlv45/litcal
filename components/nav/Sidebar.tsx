@@ -8,7 +8,6 @@ import {
   CalendarDays,
   Briefcase,
   CheckSquare,
-  Inbox,
   FileText,
   Users,
   BarChart2,
@@ -19,14 +18,13 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
-import NotificationBell from "./NotificationBell";
+import InboxNavItem from "./InboxNavItem";
 import { EVENT_TYPE_COLORS, EventType } from "@/lib/google-calendar";
 
 const NAV_ITEMS = [
   { label: "Calendar",  href: "/",         icon: CalendarDays },
   { label: "Cases",     href: "/cases",     icon: Briefcase },
   { label: "Tasks",     href: "/tasks",     icon: CheckSquare },
-  { label: "Inbox",     href: "/inbox",     icon: Inbox },
   { label: "Documents", href: "/documents", icon: FileText },
   { label: "Contacts",  href: "/contacts",  icon: Users },
   { label: "Reports",   href: "/reports",      icon: BarChart2 },
@@ -117,29 +115,31 @@ export default function Sidebar() {
         {NAV_ITEMS.map(({ label, href, icon: Icon }) => {
           const isActive = isNavItemActive(href);
           return (
-            <Link
-              key={href}
-              href={href}
-              aria-label={label}
-              className={`group relative flex items-center rounded-lg text-sm transition-all ${
-                collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5"
-              } ${
-                isActive
-                  ? "bg-white text-slate-950 shadow-sm ring-1 ring-sidebar-border"
-                  : "text-slate-600 hover:text-slate-950 hover:bg-white/65"
-              }`}
-            >
-              <span className={`grid size-7 place-items-center rounded-md transition-colors ${
-                isActive ? "bg-teal-50 text-teal-700" : "text-slate-500 group-hover:bg-slate-100 group-hover:text-slate-800"
-              }`}>
-                <Icon className="w-4 h-4 shrink-0" />
-              </span>
-              {!collapsed && <span className="flex-1 font-medium">{label}</span>}
-              {collapsed && <CollapsedTooltip label={label} />}
-            </Link>
+            <>
+              <Link
+                key={href}
+                href={href}
+                aria-label={label}
+                className={`group relative flex items-center rounded-lg text-sm transition-all ${
+                  collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5"
+                } ${
+                  isActive
+                    ? "bg-white text-slate-950 shadow-sm ring-1 ring-sidebar-border"
+                    : "text-slate-600 hover:text-slate-950 hover:bg-white/65"
+                }`}
+              >
+                <span className={`grid size-7 place-items-center rounded-md transition-colors ${
+                  isActive ? "bg-teal-50 text-teal-700" : "text-slate-500 group-hover:bg-slate-100 group-hover:text-slate-800"
+                }`}>
+                  <Icon className="w-4 h-4 shrink-0" />
+                </span>
+                {!collapsed && <span className="flex-1 font-medium">{label}</span>}
+                {collapsed && <CollapsedTooltip label={label} />}
+              </Link>
+              {href === "/tasks" && <InboxNavItem key="inbox" collapsed={collapsed} />}
+            </>
           );
         })}
-        <NotificationBell collapsed={collapsed} />
 
         {/* MY CALENDARS */}
         {!collapsed && (

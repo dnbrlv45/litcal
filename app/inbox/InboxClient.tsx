@@ -23,7 +23,7 @@ const TYPE_LABELS: Record<string, string> = {
   EVENT_REMINDER: "Reminder",
 };
 
-export default function NotificationsClient() {
+export default function InboxClient() {
   const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -102,7 +102,7 @@ export default function NotificationsClient() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <Bell className="w-5 h-5 text-slate-600" />
-          <h1 className="text-xl font-semibold">Notifications</h1>
+          <h1 className="text-xl font-semibold">Inbox</h1>
           {unread > 0 && (
             <span className="bg-rose-100 text-rose-700 text-xs font-semibold px-2 py-0.5 rounded-full">
               {unread} unread

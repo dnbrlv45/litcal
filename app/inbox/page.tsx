@@ -1,8 +1,9 @@
-export default function InboxPage() {
-  return (
-    <div className="p-8">
-      <h1 className="text-xl font-semibold">Inbox</h1>
-      <p className="text-sm text-muted-foreground mt-1">Notifications and updates — coming soon.</p>
-    </div>
-  );
+import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/auth";
+import InboxClient from "./InboxClient";
+
+export default async function InboxPage() {
+  const user = await getCurrentUser();
+  if (!user) redirect("/sign-in");
+  return <InboxClient />;
 }
