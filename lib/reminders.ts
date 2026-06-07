@@ -14,12 +14,12 @@ export const REMINDER_MINUTES: Partial<Record<string, number[]>> = {
 // We cap at 40320 for the Google payload but keep the full value in DB.
 export const GOOGLE_MAX_REMINDER_MINUTES = 40320;
 
-/** Move Saturday or Sunday backward to the preceding Friday. */
+/** Move Saturday or Sunday backward to the preceding Friday. Uses UTC to avoid timezone drift. */
 export function adjustToBusinessDay(date: Date): Date {
   const d = new Date(date);
-  const day = d.getDay(); // 0=Sun, 6=Sat
-  if (day === 6) d.setDate(d.getDate() - 1);
-  if (day === 0) d.setDate(d.getDate() - 2);
+  const day = d.getUTCDay(); // 0=Sun, 6=Sat
+  if (day === 6) d.setUTCDate(d.getUTCDate() - 1);
+  if (day === 0) d.setUTCDate(d.getUTCDate() - 2);
   return d;
 }
 

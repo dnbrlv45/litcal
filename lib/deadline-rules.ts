@@ -77,12 +77,19 @@ export const DEADLINE_RULES: DeadlineRule[] = [
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/** Calculate the deadline date for a rule relative to a trigger date. */
+/** Calculate the deadline date for a rule relative to a trigger date.
+ *  Works in UTC day boundaries to avoid timezone drift on all-day events. */
 export function computeDeadlineDate(triggerDate: Date, rule: DeadlineRule): Date {
+  // Snap to UTC midnight of the trigger date so offset arithmetic is day-accurate
+  const triggerUTCMidnight = new Date(Date.UTC(
+    triggerDate.getUTCFullYear(),
+    triggerDate.getUTCMonth(),
+    triggerDate.getUTCDate(),
+  ));
   const ms = rule.offsetDays * 24 * 60 * 60 * 1000;
   const raw = rule.offsetDirection === "before"
-    ? new Date(triggerDate.getTime() - ms)
-    : new Date(triggerDate.getTime() + ms);
+    ? new Date(triggerUTCMidnight.getTime() - ms)
+    : new Date(triggerUTCMidnight.getTime() + ms);
   return rule.weekendAdjustment === "prev_friday" ? adjustToBusinessDay(raw) : raw;
 }
 
@@ -155,9 +162,16 @@ export async function applyDeadlineRules(
       result.createdTaskIds.push(task.id);
 
     } else {
-      // deadline_event — all-day event on the deadline date
-      const dayStart = new Date(deadlineDate); dayStart.setHours(0, 0, 0, 0);
-      const dayEnd   = new Date(deadlineDate); dayEnd.setHours(23, 59, 59, 999);
+      // deadline_event — all-day event stored at UTC noon so any browser timezone
+      // renders the correct calendar date (avoids midnight-UTC → prev-day display).
+      const dayStart = new Date(Date.UTC(
+        deadlineDate.getUTCFullYear(), deadlineDate.getUTCMonth(), deadlineDate.getUTCDate(),
+        12, 0, 0, 0,
+      ));
+      const dayEnd = new Date(Date.UTC(
+        deadlineDate.getUTCFullYear(), deadlineDate.getUTCMonth(), deadlineDate.getUTCDate(),
+        23, 59, 59, 999,
+      ));
 
       const triggerLabel = trigger.startTime.toLocaleDateString("en-US", {
         month: "long", day: "numeric", year: "numeric",
@@ -229,8 +243,12 @@ export async function cascadeDeadlineDateChange(
     const newDate = computeDeadlineDate(newStartTime, rule);
 
     if (row.generatedEventId && row.generatedEvent) {
-      const dayStart = new Date(newDate); dayStart.setHours(0, 0, 0, 0);
-      const dayEnd   = new Date(newDate); dayEnd.setHours(23, 59, 59, 999);
+      const dayStart = new Date(Date.UTC(
+        newDate.getUTCFullYear(), newDate.getUTCMonth(), newDate.getUTCDate(), 12, 0, 0, 0,
+      ));
+      const dayEnd = new Date(Date.UTC(
+        newDate.getUTCFullYear(), newDate.getUTCMonth(), newDate.getUTCDate(), 23, 59, 59, 999,
+      ));
       await prisma.event.update({
         where: { id: row.generatedEventId },
         data: { startTime: dayStart, endTime: dayEnd },
