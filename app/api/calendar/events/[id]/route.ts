@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getAccessToken, deleteGoogleEvent } from "@/lib/google-calendar";
 import { getCurrentWorkspace } from "@/lib/workspaces";
 import { detectConflicts } from "@/lib/conflicts";
+import { cascadeDeadlineDateChange } from "@/lib/deadline-rules";
 
 // DELETE /api/calendar/events/[id]
 export async function DELETE(
@@ -96,6 +97,15 @@ export async function PATCH(
   const validTypes = ["DEADLINE","HEARING","DEPOSITION","TRIAL","CONFERENCE","MEETING","MEDIATION","COURT_CALL","CASE_MANAGEMENT_CONFERENCE","REMINDER","OTHER"];
   const safeEventType = body.eventType && validTypes.includes(body.eventType) ? body.eventType as never : undefined;
 
+  // Detect if this is a user edit of an auto-generated event — mark userModified
+  const isDateChanging = body.start !== undefined && new Date(body.start).getTime() !== event.startTime.getTime();
+  if (isDateChanging) {
+    await prisma.generatedDeadline.updateMany({
+      where: { generatedEventId: id },
+      data: { userModified: true },
+    });
+  }
+
   const updated = await prisma.event.update({
     where: { id },
     data: {
@@ -112,9 +122,16 @@ export async function PATCH(
     include: { assignedAttorney: { select: { id: true } } },
   });
 
-  // Check conflicts against the saved state (non-blocking)
+  // If this is a trigger event and its start date changed, cascade to unmodified generated deadlines
   const newStart = updated.startTime;
   const newEnd = updated.endTime;
+  let skippedModified = 0;
+  if (isDateChanging) {
+    const cascade = await cascadeDeadlineDateChange(id, newStart);
+    skippedModified = cascade.skippedModified;
+  }
+
+  // Check conflicts against the saved state (non-blocking)
   const conflicts = updated.assignedAttorney
     ? await detectConflicts(updated.assignedAttorney.id, newStart, newEnd, id)
     : [];
@@ -131,6 +148,7 @@ export async function PATCH(
       location: updated.location,
       department: updated.department,
     },
+    skippedModified,
     conflicts: conflicts.map((c) => ({
       eventId: c.eventId,
       title: c.title,

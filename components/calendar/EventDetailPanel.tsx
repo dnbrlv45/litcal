@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { X, MapPin, Calendar, Clock, Pencil, Trash2, Check, Briefcase, ChevronRight, FileText, Sparkles, AlertTriangle, Building2 } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { X, MapPin, Calendar, Clock, Pencil, Trash2, Check, Briefcase, ChevronRight, FileText, Sparkles, AlertTriangle, Building2, Zap, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -60,6 +60,26 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
   const [error, setError] = useState<string | null>(null);
   const [conflicts, setConflicts] = useState<ConflictDetail[]>([]);
 
+  // Generated deadlines
+  interface GeneratedItem {
+    ruleKey: string;
+    ruleName: string;
+    offsetDays: number | null;
+    offsetDirection: string | null;
+    userModified: boolean;
+    generatedEvent: { id: string; title: string; date: string; eventType: string } | null;
+    generatedTask:  { id: string; title: string; dueDate: string | null; status: string; priority: string } | null;
+  }
+  interface GeneratedFrom {
+    ruleKey: string;
+    ruleName: string;
+    offsetDays: number | null;
+    userModified: boolean;
+    triggerEvent: { id: string; title: string; date: string; eventType: string };
+  }
+  const [generatedDeadlines, setGeneratedDeadlines] = useState<GeneratedItem[]>([]);
+  const [generatedFrom, setGeneratedFrom] = useState<GeneratedFrom | null>(null);
+
   useEffect(() => {
     fetch("/api/cases").then((r) => r.json()).then((d) => setCases(d.cases ?? [])).catch(() => {});
   }, []);
@@ -73,6 +93,24 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
       });
     }
   }, [event?.id]);
+
+  const fetchGenerated = useCallback(async (eventId: string) => {
+    try {
+      const res = await fetch(`/api/calendar/events/${eventId}/generated`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setGeneratedDeadlines(data.generated ?? []);
+      setGeneratedFrom(data.generatedFrom ?? null);
+    } catch { /* silent */ }
+  }, []);
+
+  useEffect(() => {
+    if (event?.id) {
+      setGeneratedDeadlines([]);
+      setGeneratedFrom(null);
+      void fetchGenerated(event.id);
+    }
+  }, [event?.id, fetchGenerated]);
 
   function startEdit() {
     if (!event) return;
@@ -132,6 +170,7 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
       if (!res.ok) throw new Error();
       const data = await res.json();
       onUpdated();
+      void fetchGenerated(event.id);
       if (data.conflicts?.length > 0) {
         setConflicts(data.conflicts);
         setEditing(false);
@@ -268,11 +307,74 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
               </div>
             )}
 
+            {/* Auto-generated from */}
+            {generatedFrom && (
+              <div className="flex items-start gap-3 rounded-lg border border-violet-200 bg-violet-50/60 px-3 py-3 text-xs">
+                <Zap className="w-3.5 h-3.5 shrink-0 text-violet-600 mt-0.5" />
+                <div className="flex flex-col gap-0.5">
+                  <span className="font-semibold text-violet-900">Auto-generated deadline</span>
+                  <span className="text-violet-700">
+                    {generatedFrom.offsetDays} days before{" "}
+                    <Link href={`#`} className="font-semibold hover:underline">
+                      {generatedFrom.triggerEvent.title}
+                    </Link>
+                    {" "}({new Date(generatedFrom.triggerEvent.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })})
+                  </span>
+                  {generatedFrom.userModified && (
+                    <span className="text-violet-500 italic">Date manually adjusted</span>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Notes */}
             {event.description && (
               <div className="flex flex-col gap-2 border-b border-slate-200 pb-5">
                 <span className="text-sm font-semibold text-slate-950">Case Notes</span>
                 <p className="text-sm leading-6 text-slate-600 whitespace-pre-wrap">{event.description}</p>
+              </div>
+            )}
+
+            {/* Generated deadlines (shown for trigger events) */}
+            {generatedDeadlines.length > 0 && (
+              <div className="flex flex-col gap-3 border-b border-slate-200 pb-5">
+                <div className="flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-violet-600" />
+                  <span className="text-sm font-semibold text-slate-950">Generated Deadlines</span>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {generatedDeadlines.map((item) => {
+                    const deadline = item.generatedEvent ?? item.generatedTask;
+                    if (!deadline) return null;
+                    const dateStr = item.generatedEvent
+                      ? new Date(item.generatedEvent.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                      : item.generatedTask?.dueDate
+                        ? new Date(item.generatedTask.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                        : null;
+                    return (
+                      <div key={item.ruleKey} className="flex items-start gap-2.5 rounded-lg border border-violet-100 bg-violet-50/40 px-3 py-2.5">
+                        <Link2 className="w-3.5 h-3.5 shrink-0 text-violet-500 mt-0.5" />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-semibold text-slate-900 truncate">{item.ruleName}</span>
+                            {item.generatedTask && (
+                              <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">Task</span>
+                            )}
+                            {item.userModified && (
+                              <span className="text-[10px] text-slate-400 italic">edited</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500">
+                            {item.offsetDays && (
+                              <span>{item.offsetDays} days {item.offsetDirection}</span>
+                            )}
+                            {dateStr && <span>· {dateStr}</span>}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
