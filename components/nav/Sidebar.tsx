@@ -113,7 +113,7 @@ export default function Sidebar() {
       )}
 
       {/* Nav */}
-      <nav className={`flex flex-col gap-1 flex-1 min-h-0 overflow-y-auto ${collapsed ? "px-3" : "px-4"}`}>
+      <nav className={`flex flex-col gap-1 flex-1 min-h-0 ${collapsed ? "overflow-visible px-3" : "overflow-y-auto px-4"}`}>
         {NAV_ITEMS.map(({ label, href, icon: Icon }) => {
           const isActive = isNavItemActive(href);
           return (
@@ -184,7 +184,7 @@ export default function Sidebar() {
 
 function CollapsedTooltip({ label }: { label: string }) {
   return (
-    <span className="pointer-events-none absolute left-[calc(100%+10px)] top-1/2 z-50 flex -translate-y-1/2 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100">
+    <span className="pointer-events-none invisible absolute left-[calc(100%+10px)] top-1/2 z-50 flex -translate-y-1/2 items-center gap-2 whitespace-nowrap rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 opacity-0 shadow-lg transition-all duration-150 group-hover:visible group-hover:opacity-100 group-focus-visible:visible group-focus-visible:opacity-100">
       <span className="size-1.5 rounded-full bg-teal-500" />
       {label}
     </span>
