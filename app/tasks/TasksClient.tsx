@@ -218,7 +218,7 @@ export default function TasksClient() {
   const selectClass = "h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-400";
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 surface-grid">
+    <div className="flex-1 flex flex-col overflow-hidden bg-slate-50">
       {/* Header */}
       <div className="flex items-center justify-between gap-6 px-8 py-5 border-b border-slate-200/80 bg-white/90 backdrop-blur shrink-0">
         <div>

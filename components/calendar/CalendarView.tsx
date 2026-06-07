@@ -3,7 +3,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
+  AlertTriangle,
   Bell,
+  Briefcase,
+  CalendarCheck2,
   CalendarDays,
   ChevronDown,
   ChevronLeft,
@@ -96,6 +99,15 @@ function getDateRange(view: CalView, date: Date): { start: Date; end: Date } {
 function memberLabel(m: WorkspaceMember) {
   const name = [m.user.firstName, m.user.lastName].filter(Boolean).join(" ");
   return name || m.user.email;
+}
+
+function isSameDay(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function formatEventTime(e: CalEvent) {
+  if (e.allDay) return "All day";
+  return e.start.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
 export default function CalendarView() {
@@ -239,9 +251,18 @@ export default function CalendarView() {
 
   const selectClass = "h-8 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-400 transition-colors";
   const activeSelectClass = "border-teal-400 bg-teal-50 text-teal-800 ring-1 ring-teal-200";
+  const todayEvents = filteredEvents
+    .filter((e) => isSameDay(e.start, today))
+    .sort((a, b) => a.start.getTime() - b.start.getTime());
+  const upcomingEvents = filteredEvents
+    .filter((e) => e.start >= today)
+    .sort((a, b) => a.start.getTime() - b.start.getTime())
+    .slice(0, 6);
+  const conflictCount = filteredEvents.filter((e) => e.hasConflict).length;
+  const deadlineCount = filteredEvents.filter((e) => e.eventType === "DEADLINE").length;
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 overflow-hidden bg-slate-50 surface-grid">
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden bg-slate-50">
       {/* Top nav */}
       <div className="h-[72px] shrink-0 border-b border-slate-200/80 bg-white/90 backdrop-blur px-7 flex items-center justify-between gap-5">
         <div className="relative w-full max-w-[680px]">
@@ -464,13 +485,88 @@ export default function CalendarView() {
         </div>
 
         {/* Right detail panel */}
-        {selectedEvent && (
+        {selectedEvent ? (
           <EventDetailPanel
             event={selectedEvent}
             onClose={() => setSelectedEvent(null)}
             onDeleted={() => { fetchEvents(); setSelectedEvent(null); }}
             onUpdated={() => { fetchEvents(); setSelectedEvent(null); }}
           />
+        ) : (
+          <aside className="ml-5 hidden w-[340px] shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-white panel-shadow xl:flex xl:flex-col">
+            <div className="border-b border-slate-200 px-5 py-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-bold text-slate-950">Today&apos;s docket</h2>
+                  <p className="mt-0.5 text-xs font-medium text-slate-500">
+                    {today.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
+                  </p>
+                </div>
+                <div className="grid size-9 place-items-center rounded-lg bg-teal-50 text-teal-700">
+                  <CalendarCheck2 className="size-4" />
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 border-b border-slate-200 p-4">
+              <div className="rounded-lg bg-slate-50 px-3 py-2">
+                <div className="text-lg font-bold leading-none text-slate-950">{todayEvents.length}</div>
+                <div className="mt-1 text-[11px] font-medium text-slate-500">Today</div>
+              </div>
+              <div className="rounded-lg bg-rose-50 px-3 py-2">
+                <div className="text-lg font-bold leading-none text-rose-700">{deadlineCount}</div>
+                <div className="mt-1 text-[11px] font-medium text-rose-700/80">Deadlines</div>
+              </div>
+              <div className="rounded-lg bg-amber-50 px-3 py-2">
+                <div className="text-lg font-bold leading-none text-amber-700">{conflictCount}</div>
+                <div className="mt-1 text-[11px] font-medium text-amber-700/80">Conflicts</div>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500">Upcoming</h3>
+                <span className="text-xs font-medium text-slate-400">{periodLabel}</span>
+              </div>
+
+              {upcomingEvents.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center">
+                  <CalendarDays className="mx-auto mb-2 size-5 text-slate-400" />
+                  <p className="text-sm font-semibold text-slate-700">No upcoming events</p>
+                  <p className="mt-1 text-xs text-slate-500">Events in this view will appear here.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {upcomingEvents.map((ev) => {
+                    const colors = EVENT_TYPE_COLORS[ev.eventType ?? "OTHER"];
+                    return (
+                      <button
+                        key={ev.id}
+                        onClick={() => setSelectedEvent(ev)}
+                        className="flex w-full items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 text-left shadow-sm transition-colors hover:border-teal-200 hover:bg-teal-50/30"
+                      >
+                        <span className={`mt-1 size-2.5 rounded-full ${ev.hasConflict ? "bg-amber-500" : colors.dot}`} />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-slate-950">{ev.title}</span>
+                          <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium text-slate-500">
+                            <span>{formatEventTime(ev)}</span>
+                            <span>{ev.start.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                            {ev.caseTitle && (
+                              <span className="inline-flex min-w-0 items-center gap-1 truncate">
+                                <Briefcase className="size-3" />
+                                <span className="truncate">{ev.caseTitle}</span>
+                              </span>
+                            )}
+                          </span>
+                        </span>
+                        {ev.hasConflict && <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-500" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </aside>
         )}
       </div>
 

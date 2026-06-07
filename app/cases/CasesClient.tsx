@@ -75,7 +75,7 @@ export default function CasesClient() {
   ];
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 surface-grid">
+    <div className="flex-1 flex flex-col overflow-hidden bg-slate-50">
       {/* Header */}
       <div className="flex items-center justify-between gap-6 px-8 py-5 border-b border-slate-200/80 bg-white/90 backdrop-blur shrink-0">
         <div className="min-w-0">
