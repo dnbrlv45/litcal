@@ -15,18 +15,18 @@ export default async function SettingsPage() {
   return (
     <div className="flex-1 overflow-y-auto bg-slate-50 p-8">
       <div className="max-w-3xl">
-      <h1 className="text-2xl font-bold tracking-tight text-slate-950">Settings</h1>
-      <p className="text-sm text-muted-foreground mt-1">Manage account-level preferences, integrations, and workspace safety.</p>
-      <Separator className="my-6" />
-      <div className="flex flex-col gap-3">
-        <Link
-          href="/settings/calendar"
-          className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 shadow-sm transition-colors hover:border-teal-200 hover:bg-teal-50/30"
-        >
-          Calendar Connections
-        </Link>
-        {isOwner && <DeleteWorkspaceSection workspaceName={workspace.name} />}
-      </div>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-950">Settings</h1>
+        <p className="text-sm text-muted-foreground mt-1">Manage integrations, preferences, and workspace safety.</p>
+        <Separator className="my-6" />
+        <div className="flex flex-col gap-3">
+          <Link
+            href="/settings/calendar"
+            className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 shadow-sm transition-colors hover:border-teal-200 hover:bg-teal-50/30"
+          >
+            Integrations
+          </Link>
+          {isOwner && <DeleteWorkspaceSection workspaceName={workspace.name} />}
+        </div>
       </div>
     </div>
   );
