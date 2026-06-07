@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import type { CalEvent } from "@/lib/google-calendar";
 import { EVENT_TYPE_COLORS } from "@/lib/google-calendar";
 import { layoutDayEvents } from "@/lib/calendar-layout";
+import { layoutSpanningEvents } from "@/lib/multi-day-layout";
 
 const ROW_HEIGHT = 64;
 const DAY_ABBR = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
@@ -53,6 +54,9 @@ export default function WeekView({ date, today, events, onCellClick, onSelectDay
   const scrollRef = useRef<HTMLDivElement>(null);
   const days = getWeekDays(date);
   const allDayEvents = events.filter((e) => e.allDay);
+  const spanLayout = layoutSpanningEvents(allDayEvents, days);
+  const spanRows = spanLayout.length > 0 ? Math.max(...spanLayout.map((s) => s.row)) + 1 : 1;
+  const SPAN_ROW_H = 28; // px per stacking row
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = 7 * ROW_HEIGHT;
@@ -91,28 +95,53 @@ export default function WeekView({ date, today, events, onCellClick, onSelectDay
         })}
       </div>
 
+      {/* All-day / multi-day row */}
       <div className="flex shrink-0 border-b border-slate-200 bg-white">
-        <div className="w-16 shrink-0 border-r border-slate-100 px-2 py-3 text-right text-xs text-slate-500">all-day</div>
-        {days.map((day, di) => {
-          const dayAllDay = allDayEvents.filter((e) => isSameDay(e.start, day));
-          return (
-            <div key={di} className="min-h-16 flex-1 border-l border-slate-100 px-1.5 py-2">
-              {dayAllDay.slice(0, 2).map((ev) => {
-                const colors = EVENT_TYPE_COLORS[ev.eventType ?? "OTHER"];
-                return (
-                  <button
-                    key={ev.id}
-                    onClick={() => onEventClick(ev)}
-                    className={`mb-1 block w-full truncate rounded-md border px-2 py-1 text-left text-xs font-semibold shadow-sm ${colors.bg} ${colors.text} ${colors.border}`}
-                    title={ev.title}
-                  >
-                    {ev.title}
-                  </button>
-                );
-              })}
-            </div>
-          );
-        })}
+        <div className="w-16 shrink-0 border-r border-slate-100 px-2 py-2 text-right text-xs text-slate-500 self-center">all-day</div>
+        {/* 7-column grid for spanning events */}
+        <div
+          className="flex-1 relative"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(7, 1fr)",
+            minHeight: spanRows * SPAN_ROW_H + 8,
+          }}
+        >
+          {/* Column border lines */}
+          {days.map((_, i) => (
+            <div key={i} className={`${i > 0 ? "border-l border-slate-100" : ""}`} />
+          ))}
+
+          {/* Spanning event bars */}
+          {spanLayout.map(({ event, colStart, colSpan, row, continuesLeft, continuesRight }) => {
+            const colors = EVENT_TYPE_COLORS[event.eventType ?? "OTHER"];
+            return (
+              <button
+                key={event.id}
+                onClick={() => onEventClick(event)}
+                title={event.title}
+                style={{
+                  position: "absolute",
+                  top: row * SPAN_ROW_H + 4,
+                  left: `calc(${(colStart - 1) / 7 * 100}% + ${continuesLeft ? 0 : 3}px)`,
+                  width: `calc(${colSpan / 7 * 100}% - ${(continuesLeft ? 0 : 3) + (continuesRight ? 0 : 3)}px)`,
+                  height: SPAN_ROW_H - 5,
+                }}
+                className={`z-10 flex items-center overflow-hidden px-2 text-xs font-semibold shadow-sm transition hover:brightness-95 ${colors.bg} ${colors.text} ${
+                  continuesLeft  ? "rounded-l-none" : "rounded-l-md"
+                } ${
+                  continuesRight ? "rounded-r-none" : "rounded-r-md"
+                }`}
+              >
+                {!continuesLeft && (
+                  <span className={`mr-1.5 size-1.5 shrink-0 rounded-full ${colors.dot}`} />
+                )}
+                <span className="truncate">{event.title}</span>
+                {continuesRight && <span className="ml-auto shrink-0 pl-1 opacity-60">›</span>}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Scrollable body */}
