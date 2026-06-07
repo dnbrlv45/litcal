@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -15,6 +16,8 @@ import {
   Building2,
   Plus,
   LogOut,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import NotificationBell from "./NotificationBell";
 import { EVENT_TYPE_COLORS, EventType } from "@/lib/google-calendar";
@@ -43,38 +46,76 @@ const MY_CALENDARS: { label: string; type: EventType }[] = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    void Promise.resolve().then(() => {
+      setCollapsed(localStorage.getItem("litcal-sidebar-collapsed") === "true");
+    });
+  }, []);
+
+  function toggleCollapsed() {
+    setCollapsed((current) => {
+      const next = !current;
+      localStorage.setItem("litcal-sidebar-collapsed", String(next));
+      return next;
+    });
+  }
 
   return (
-    <aside className="w-[256px] shrink-0 flex flex-col bg-sidebar text-sidebar-foreground h-full border-r border-sidebar-border">
+    <aside className={`shrink-0 flex flex-col bg-sidebar text-sidebar-foreground h-full border-r border-sidebar-border transition-[width] duration-200 ${
+      collapsed ? "w-[76px]" : "w-[256px]"
+    }`}>
       {/* Logo */}
-      <div className="flex items-center gap-3 px-5 py-5 shrink-0">
+      <div className={`flex items-center gap-3 py-5 shrink-0 ${collapsed ? "justify-center px-3" : "px-5"}`}>
         <Image src="/litcal-logo.svg" alt="LitCal" width={36} height={36} className="size-9 shrink-0 rounded-lg shadow-sm ring-1 ring-black/5" priority />
-        <div className="leading-tight">
-          <div className="text-[15px] font-extrabold tracking-[0.1em] text-slate-950 uppercase">LitCal</div>
-          <div className="text-[11px] font-medium text-slate-500">Litigation calendar</div>
-        </div>
+        {!collapsed && (
+          <div className="min-w-0 leading-tight">
+            <div className="text-[15px] font-extrabold tracking-[0.1em] text-slate-950 uppercase">LitCal</div>
+            <div className="text-[11px] font-medium text-slate-500">Litigation calendar</div>
+          </div>
+        )}
       </div>
 
-      {/* Workspace */}
-      <div className="px-4 pb-4 shrink-0">
-        <Link
-          href="/settings/team"
-          className="flex w-full items-center gap-2 rounded-lg border border-sidebar-border bg-white/70 px-3 py-2.5 text-sm text-slate-700 shadow-sm transition-colors hover:bg-white"
+      <div className={`shrink-0 ${collapsed ? "px-3 pb-3" : "px-4 pb-3"}`}>
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className={`flex h-9 w-full items-center rounded-lg border border-sidebar-border bg-white/70 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-white hover:text-slate-950 ${
+            collapsed ? "justify-center px-2" : "justify-between px-3"
+          }`}
         >
-          <Building2 className="size-4 text-slate-500" />
-          <span className="truncate">LitCal Team</span>
-        </Link>
+          {!collapsed && <span>Collapse</span>}
+          {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+        </button>
       </div>
+
+      {!collapsed && (
+        <div className="px-4 pb-4 shrink-0">
+          <Link
+            href="/settings/team"
+            className="flex w-full items-center gap-2 rounded-lg border border-sidebar-border bg-white/70 px-3 py-2.5 text-sm text-slate-700 shadow-sm transition-colors hover:bg-white"
+          >
+            <Building2 className="size-4 text-slate-500" />
+            <span className="truncate">LitCal Team</span>
+          </Link>
+        </div>
+      )}
 
       {/* Nav */}
-      <nav className="flex flex-col gap-1 px-4 flex-1 min-h-0 overflow-y-auto">
+      <nav className={`flex flex-col gap-1 flex-1 min-h-0 overflow-y-auto ${collapsed ? "px-3" : "px-4"}`}>
         {NAV_ITEMS.map(({ label, href, icon: Icon }) => {
           const isActive = href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
           return (
             <Link
               key={href}
               href={href}
-              className={`group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
+              title={collapsed ? label : undefined}
+              className={`group flex items-center rounded-lg text-sm transition-all ${
+                collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5"
+              } ${
                 isActive
                   ? "bg-white text-slate-950 shadow-sm ring-1 ring-sidebar-border"
                   : "text-slate-600 hover:text-slate-950 hover:bg-white/65"
@@ -85,36 +126,46 @@ export default function Sidebar() {
               }`}>
                 <Icon className="w-4 h-4 shrink-0" />
               </span>
-              <span className="flex-1 font-medium">{label}</span>
+              {!collapsed && <span className="flex-1 font-medium">{label}</span>}
             </Link>
           );
         })}
-        <NotificationBell />
+        <NotificationBell collapsed={collapsed} />
 
         {/* MY CALENDARS */}
-        <div className="mt-6 mb-1 px-3">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-            My Calendars
-          </span>
-        </div>
-        {MY_CALENDARS.map(({ label, type }) => (
-          <div key={label} className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-600 hover:text-slate-950 hover:bg-white/65 cursor-pointer transition-colors">
-            <span className={`w-4 h-4 rounded-[5px] shrink-0 ${EVENT_TYPE_COLORS[type].dot} shadow-sm`} />
-            {label}
-          </div>
-        ))}
-        <div className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-800 cursor-pointer transition-colors">
-          <Plus className="w-4 h-4 shrink-0" />
-          Add Calendar
-        </div>
+        {!collapsed && (
+          <>
+            <div className="mt-6 mb-1 px-3">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                My Calendars
+              </span>
+            </div>
+            {MY_CALENDARS.map(({ label, type }) => (
+              <div key={label} className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-600 hover:text-slate-950 hover:bg-white/65 cursor-pointer transition-colors">
+                <span className={`w-4 h-4 rounded-[5px] shrink-0 ${EVENT_TYPE_COLORS[type].dot} shadow-sm`} />
+                {label}
+              </div>
+            ))}
+            <div className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-800 cursor-pointer transition-colors">
+              <Plus className="w-4 h-4 shrink-0" />
+              Add Calendar
+            </div>
+          </>
+        )}
       </nav>
 
       {/* Bottom */}
-      <div className="px-4 py-4 border-t border-sidebar-border flex items-center gap-2">
+      <div className={`py-4 border-t border-sidebar-border flex items-center gap-2 ${collapsed ? "px-3" : "px-4"}`}>
         <form action="/api/auth/sign-out" method="post" className="w-full">
-          <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-white/70 hover:text-slate-950">
+          <button
+            title={collapsed ? "Sign Out" : undefined}
+            aria-label="Sign Out"
+            className={`flex w-full items-center rounded-lg py-2 text-sm font-medium text-slate-600 hover:bg-white/70 hover:text-slate-950 ${
+              collapsed ? "justify-center px-2" : "gap-2 px-3"
+            }`}
+          >
             <LogOut className="size-4" />
-            Sign Out
+            {!collapsed && "Sign Out"}
           </button>
         </form>
       </div>

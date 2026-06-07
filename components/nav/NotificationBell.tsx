@@ -17,7 +17,11 @@ interface Notification {
   eventRef: { id: string; title: string } | null;
 }
 
-export default function NotificationBell() {
+interface NotificationBellProps {
+  collapsed?: boolean;
+}
+
+export default function NotificationBell({ collapsed = false }: NotificationBellProps) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unread, setUnread]               = useState(0);
   const [open, setOpen]                   = useState(false);
@@ -137,7 +141,11 @@ export default function NotificationBell() {
       <button
         ref={buttonRef}
         onClick={handleToggle}
-        className="group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all text-slate-600 hover:text-slate-950 hover:bg-white/65 w-full"
+        title={collapsed ? "Notifications" : undefined}
+        aria-label="Notifications"
+        className={`group flex items-center rounded-lg text-sm transition-all text-slate-600 hover:text-slate-950 hover:bg-white/65 w-full ${
+          collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5"
+        }`}
       >
         <span className="relative grid size-7 place-items-center rounded-md text-slate-500 transition-colors group-hover:bg-slate-100 group-hover:text-slate-800">
           <Bell className="w-4 h-4 shrink-0" />
@@ -147,7 +155,7 @@ export default function NotificationBell() {
             </span>
           )}
         </span>
-        <span className="flex-1 font-medium">Notifications</span>
+        {!collapsed && <span className="flex-1 text-left font-medium">Notifications</span>}
       </button>
 
       {typeof document !== "undefined" && dropdown && createPortal(dropdown, document.body)}
