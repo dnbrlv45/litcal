@@ -62,6 +62,14 @@ export default function Sidebar() {
     });
   }
 
+  function isNavItemActive(href: string) {
+    if (href === "/") return pathname === "/";
+    if (href === "/settings") {
+      return pathname === "/settings" || pathname.startsWith("/settings/calendar");
+    }
+    return pathname === href || pathname.startsWith(href + "/");
+  }
+
   return (
     <aside className={`shrink-0 flex flex-col bg-sidebar text-sidebar-foreground h-full border-r border-sidebar-border transition-[width] duration-200 ${
       collapsed ? "w-[76px]" : "w-[256px]"
@@ -107,7 +115,7 @@ export default function Sidebar() {
       {/* Nav */}
       <nav className={`flex flex-col gap-1 flex-1 min-h-0 overflow-y-auto ${collapsed ? "px-3" : "px-4"}`}>
         {NAV_ITEMS.map(({ label, href, icon: Icon }) => {
-          const isActive = href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
+          const isActive = isNavItemActive(href);
           return (
             <Link
               key={href}

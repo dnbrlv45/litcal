@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Building2, Mail, ShieldCheck, Trash2, Users, X } from "lucide-react";
+import { Building2, Mail, ShieldCheck, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -63,13 +63,10 @@ export default function TeamClient({ initialWorkspace, initialMembers, initialIn
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [savingTitleId, setSavingTitleId] = useState<string | null>(null);
-  const [deletingWorkspace, setDeletingWorkspace] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const canManage = currentRole === "OWNER" || currentRole === "ADMIN";
-  const isOwner = currentRole === "OWNER";
 
   function flash(msg: string, isError = false) {
     if (isError) { setError(msg); setMessage(null); }
@@ -177,18 +174,6 @@ export default function TeamClient({ initialWorkspace, initialMembers, initialIn
     }
   }
 
-  async function deleteWorkspace() {
-    setDeletingWorkspace(true);
-    try {
-      const res = await fetch("/api/workspaces/current", { method: "DELETE" });
-      if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
-      window.location.href = "/setup";
-    } catch (err) {
-      flash(err instanceof Error ? err.message : "Failed to delete workspace.", true);
-      setDeletingWorkspace(false);
-    }
-  }
-
   const select = "flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
 
   // ── Non-admin view ──────────────────────────────────────────────────────────
@@ -237,7 +222,7 @@ export default function TeamClient({ initialWorkspace, initialMembers, initialIn
         <div>
           <h1 className="text-xl font-semibold">Team</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Manage your team's workspace, members, and invitations.
+            Manage your team&apos;s workspace, members, and invitations.
           </p>
         </div>
 
@@ -375,32 +360,6 @@ export default function TeamClient({ initialWorkspace, initialMembers, initialIn
           </form>
         </section>
 
-        {/* Danger zone */}
-        {isOwner && (
-          <section className="rounded-xl border border-rose-200 bg-card p-5">
-            <div className="mb-4 flex items-center gap-3">
-              <Trash2 className="size-5 text-rose-600" />
-              <div>
-                <h2 className="font-semibold text-rose-700">Danger Zone</h2>
-                <p className="text-sm text-muted-foreground">Permanently delete this workspace and all its data.</p>
-              </div>
-            </div>
-            <div className="flex flex-col gap-3 max-w-xl">
-              <p className="text-sm text-muted-foreground">
-                Type <span className="font-mono font-semibold text-foreground">{workspace.name}</span> to confirm deletion.
-              </p>
-              <Input value={confirmDelete} onChange={(e) => setConfirmDelete(e.target.value)} placeholder={workspace.name} />
-              <Button
-                variant="destructive"
-                disabled={confirmDelete.trim() !== workspace.name.trim() || deletingWorkspace}
-                onClick={deleteWorkspace}
-                className="w-fit"
-              >
-                {deletingWorkspace ? "Deleting…" : "Delete Workspace"}
-              </Button>
-            </div>
-          </section>
-        )}
       </div>
     </div>
   );
