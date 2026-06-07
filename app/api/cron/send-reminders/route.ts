@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-export async function GET(_request: NextRequest) {
-  // BUILD_CHECK_v2
+export async function GET(request: NextRequest) {
+  // Verify CRON_SECRET so only cron-job.org (with the secret in the URL) can trigger this
+  const secret = request.nextUrl.searchParams.get("secret");
+  if (!secret || secret !== process.env.CRON_SECRET) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const now = new Date();
 
   // Find all unsent reminders whose sendAt has passed
