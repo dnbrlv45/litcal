@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { Plus, CheckCircle2, Circle, Clock, AlertCircle, ChevronDown, ListTodo } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -52,15 +52,21 @@ interface TaskCardProps {
   onEdit: (t: TaskData) => void;
   onDelete: (id: string) => void;
   onCycleStatus: (t: TaskData) => void;
+  highlighted?: boolean;
 }
 
-function TaskCard({ task, onEdit, onDelete, onCycleStatus }: TaskCardProps) {
+function TaskCard({ task, onEdit, onDelete, onCycleStatus, highlighted = false }: TaskCardProps) {
   const overdue = isOverdue(task.dueDate, task.status);
   const Meta = STATUS_META[task.status as keyof typeof STATUS_META] ?? STATUS_META.TODO;
   const Icon = Meta.icon;
 
   return (
-    <div className="flex items-start gap-3 p-3 rounded-lg border border-slate-200 bg-white shadow-sm hover:border-teal-200 hover:bg-teal-50/20 transition-colors group">
+    <div
+      id={`task-${task.id}`}
+      className={`flex items-start gap-3 p-3 rounded-lg border bg-white shadow-sm hover:border-teal-200 hover:bg-teal-50/20 transition-colors group ${
+        highlighted ? "border-teal-300 ring-4 ring-teal-100" : "border-slate-200"
+      }`}
+    >
       <button
         onClick={() => Meta.clickable && onCycleStatus(task)}
         disabled={!Meta.clickable}
@@ -119,10 +125,18 @@ interface GroupProps {
   onEdit: (t: TaskData) => void;
   onDelete: (id: string) => void;
   onCycleStatus: (t: TaskData) => void;
+  highlightedTaskId: string | null;
 }
 
-function TaskGroup({ title, tasks, defaultOpen = true, onEdit, onDelete, onCycleStatus }: GroupProps) {
+function TaskGroup({ title, tasks, defaultOpen = true, onEdit, onDelete, onCycleStatus, highlightedTaskId }: GroupProps) {
   const [open, setOpen] = useState(defaultOpen);
+  const containsHighlightedTask = !!highlightedTaskId && tasks.some((t) => t.id === highlightedTaskId);
+
+  useEffect(() => {
+    if (!containsHighlightedTask || open) return;
+    void Promise.resolve().then(() => setOpen(true));
+  }, [containsHighlightedTask, open]);
+
   return (
     <div className="mb-6">
       <button
@@ -138,7 +152,14 @@ function TaskGroup({ title, tasks, defaultOpen = true, onEdit, onDelete, onCycle
           {tasks.length === 0 ? (
             <p className="text-xs text-muted-foreground py-2 pl-1">No tasks</p>
           ) : tasks.map((t) => (
-            <TaskCard key={t.id} task={t} onEdit={onEdit} onDelete={onDelete} onCycleStatus={onCycleStatus} />
+            <TaskCard
+              key={t.id}
+              task={t}
+              highlighted={t.id === highlightedTaskId}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onCycleStatus={onCycleStatus}
+            />
           ))}
         </div>
       )}
@@ -160,7 +181,7 @@ export default function TasksClient() {
   const [filterPriority, setFilterPriority] = useState("");
   const [filterCase, setFilterCase] = useState("");
   const [filterAssignee, setFilterAssignee] = useState("");
-  const openedTaskId = useRef<string | null>(null);
+  const highlightedTaskId = searchParams.get("taskId");
 
   const fetchTasks = useCallback(async () => {
     setLoading(true);
@@ -188,16 +209,12 @@ export default function TasksClient() {
   }, []);
 
   useEffect(() => {
-    const taskId = searchParams.get("taskId");
-    if (!taskId || loading || openedTaskId.current === taskId) return;
-    const task = tasks.find((t) => t.id === taskId);
-    if (!task) return;
-    openedTaskId.current = taskId;
-    void Promise.resolve().then(() => {
-      setEditingTask(task);
-      setModalOpen(true);
-    });
-  }, [loading, searchParams, tasks]);
+    if (!highlightedTaskId || loading || !tasks.some((t) => t.id === highlightedTaskId)) return;
+    const timeout = window.setTimeout(() => {
+      document.getElementById(`task-${highlightedTaskId}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+    }, 80);
+    return () => window.clearTimeout(timeout);
+  }, [highlightedTaskId, loading, tasks]);
 
   function openCreate() { setEditingTask(null); setModalOpen(true); }
   function openEdit(t: TaskData) { setEditingTask(t); setModalOpen(true); }
@@ -306,9 +323,9 @@ export default function TasksClient() {
           </div>
         ) : (
           <>
-            <TaskGroup title="To Do" tasks={todo} onEdit={openEdit} onDelete={handleDelete} onCycleStatus={handleCycleStatus} />
-            <TaskGroup title="In Progress" tasks={inProgress} onEdit={openEdit} onDelete={handleDelete} onCycleStatus={handleCycleStatus} />
-            <TaskGroup title="Done" tasks={done} defaultOpen={false} onEdit={openEdit} onDelete={handleDelete} onCycleStatus={handleCycleStatus} />
+            <TaskGroup title="To Do" tasks={todo} highlightedTaskId={highlightedTaskId} onEdit={openEdit} onDelete={handleDelete} onCycleStatus={handleCycleStatus} />
+            <TaskGroup title="In Progress" tasks={inProgress} highlightedTaskId={highlightedTaskId} onEdit={openEdit} onDelete={handleDelete} onCycleStatus={handleCycleStatus} />
+            <TaskGroup title="Done" tasks={done} highlightedTaskId={highlightedTaskId} defaultOpen={false} onEdit={openEdit} onDelete={handleDelete} onCycleStatus={handleCycleStatus} />
           </>
         )}
       </div>

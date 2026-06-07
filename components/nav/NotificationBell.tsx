@@ -74,6 +74,14 @@ export default function NotificationBell({ collapsed = false }: NotificationBell
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
+  useEffect(() => {
+    if (toasts.length === 0) return;
+    const timers = toasts.map((toast) => window.setTimeout(() => {
+      dismissToast(toast.id);
+    }, 10000));
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [toasts]);
+
   function handleToggle() {
     if (!open && buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
