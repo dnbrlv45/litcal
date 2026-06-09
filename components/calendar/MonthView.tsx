@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect, useRef } from "react";
 import type { CalEvent } from "@/lib/google-calendar";
 import { EVENT_TYPE_COLORS } from "@/lib/google-calendar";
 import { layoutSpanningEvents } from "@/lib/multi-day-layout";
@@ -22,7 +23,35 @@ interface Props {
   onEventClick: (ev: CalEvent) => void;
 }
 
+const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+interface PopoverState {
+  day: number;
+  rect: DOMRect;
+}
+
 export default function MonthView({ date, today, events, onCellClick, onSelectDay, onEventClick }: Props) {
+  const [popover, setPopover] = useState<PopoverState | null>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!popover) return;
+    function handleClick(e: MouseEvent) {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        setPopover(null);
+      }
+    }
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setPopover(null);
+    }
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [popover]);
+
   const year = date.getFullYear();
   const month = date.getMonth();
   const daysInMonth = getDaysInMonth(year, month);
@@ -130,7 +159,15 @@ export default function MonthView({ date, today, events, onCellClick, onSelectDa
                       );
                     })}
                     {dayEvents.length > 2 && (
-                      <div className="px-1 text-xs font-medium text-slate-500">+{dayEvents.length - 2} more</div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPopover(popover?.day === day ? null : { day: day!, rect: e.currentTarget.getBoundingClientRect() });
+                        }}
+                        className="px-1 text-xs font-medium text-teal-700 hover:text-teal-900 hover:underline text-left"
+                      >
+                        +{dayEvents.length - 2} more
+                      </button>
                     )}
                   </div>
                 );
@@ -169,6 +206,52 @@ export default function MonthView({ date, today, events, onCellClick, onSelectDa
           );
         })}
       </div>
+      {/* "+X more" popover */}
+      {popover && (() => {
+        const popoverEvents = eventsForDay(popover.day);
+        const r = popover.rect;
+        // Position below the button, clamped so it doesn't overflow the right edge
+        const left = Math.min(r.left, window.innerWidth - 280);
+        const top = r.bottom + 6;
+        return (
+          <div
+            ref={popoverRef}
+            style={{ position: "fixed", top, left, zIndex: 50, width: 268 }}
+            className="rounded-lg border border-slate-200 bg-white shadow-xl overflow-hidden"
+          >
+            <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100 bg-slate-50">
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">
+                {MONTH_NAMES[month]} {popover.day}
+              </span>
+              <button
+                onClick={() => setPopover(null)}
+                className="text-slate-400 hover:text-slate-700 text-sm leading-none"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex flex-col gap-1 p-2 max-h-64 overflow-y-auto">
+              {popoverEvents.map((ev) => {
+                const colors = EVENT_TYPE_COLORS[ev.eventType ?? "OTHER"];
+                return (
+                  <button
+                    key={ev.id}
+                    onClick={() => { setPopover(null); onEventClick(ev); }}
+                    className={`flex items-center gap-1.5 w-full rounded-md border px-2 py-1.5 text-xs font-semibold text-left transition hover:brightness-95 ${colors.bg} ${colors.text} ${ev.hasConflict ? "border-amber-400" : colors.border}`}
+                  >
+                    {ev.hasConflict
+                      ? <span className="shrink-0 inline-block w-1.5 h-1.5 rounded-full bg-amber-500" />
+                      : <span className={`shrink-0 inline-block w-1.5 h-1.5 rounded-full ${colors.dot}`} />
+                    }
+                    <span className="truncate">{ev.title}</span>
+                    {ev.hasConflict && <span className="ml-auto shrink-0 text-amber-600">⚠</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
