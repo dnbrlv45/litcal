@@ -52,6 +52,8 @@ export interface CalEvent {
   bridge?: string | null;
   remotePassword?: string | null;
   requestRequired?: boolean | null;
+  requestContactEmail?: string | null;
+  requestNotes?: string | null;
 }
 
 export const EVENT_TYPE_COLORS: Record<EventType, { bg: string; text: string; dot: string; border: string; ring: string }> = {

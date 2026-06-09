@@ -174,6 +174,8 @@ export default function CalendarView() {
           bridge: e.bridge ?? null,
           remotePassword: e.remotePassword ?? null,
           requestRequired: e.requestRequired ?? null,
+          requestContactEmail: e.requestContactEmail ?? null,
+          requestNotes: e.requestNotes ?? null,
         }))
       );
     } catch { /* silently fail */ }

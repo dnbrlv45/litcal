@@ -26,6 +26,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     password?: string;
     remoteLink?: string;
     requestRequired?: boolean;
+    requestContactEmail?: string;
+    requestNotes?: string;
+    requestDaysBefore?: number | null;
     active?: boolean;
   };
 
@@ -40,8 +43,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       bridge:         "bridge"         in body ? (body.bridge?.trim()         || null) : undefined,
       password:       "password"       in body ? (body.password?.trim()       || null) : undefined,
       remoteLink:     "remoteLink"     in body ? (body.remoteLink?.trim()     || null) : undefined,
-      requestRequired: "requestRequired" in body ? body.requestRequired : undefined,
-      active:          "active"          in body ? body.active          : undefined,
+      requestRequired:     "requestRequired"     in body ? body.requestRequired                         : undefined,
+      requestContactEmail: "requestContactEmail" in body ? (body.requestContactEmail?.trim() || null)   : undefined,
+      requestNotes:        "requestNotes"        in body ? (body.requestNotes?.trim()        || null)   : undefined,
+      requestDaysBefore:   "requestDaysBefore"   in body ? body.requestDaysBefore                      : undefined,
+      active:              "active"              in body ? body.active                                  : undefined,
     },
   });
 

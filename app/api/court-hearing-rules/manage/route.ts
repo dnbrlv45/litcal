@@ -41,6 +41,9 @@ export async function POST(request: NextRequest) {
     password?: string;
     remoteLink?: string;
     requestRequired?: boolean;
+    requestContactEmail?: string;
+    requestNotes?: string;
+    requestDaysBefore?: number;
   };
 
   if (!body.countyName?.trim())
@@ -96,6 +99,9 @@ export async function POST(request: NextRequest) {
         password: body.password?.trim() || null,
         remoteLink: body.remoteLink?.trim() || null,
         requestRequired: body.requestRequired ?? false,
+        requestContactEmail: body.requestContactEmail?.trim() || null,
+        requestNotes: body.requestNotes?.trim() || null,
+        requestDaysBefore: body.requestDaysBefore ?? null,
         active: true,
       },
     });

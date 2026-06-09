@@ -177,8 +177,10 @@ model Event {
   remoteLink          String?
   phoneNumber         String?
   bridge              String?
-  remotePassword      String?
-  requestRequired     Boolean?
+  remotePassword        String?
+  requestRequired       Boolean?
+  requestContactEmail   String?
+  requestNotes          String?
 
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
@@ -545,9 +547,12 @@ model CourtHearingRule {
   phoneNumber    String?
   bridge         String?
   password       String?
-  remoteLink     String?
-  requestRequired Boolean    @default(false)
-  active         Boolean     @default(true)
+  remoteLink            String?
+  requestRequired       Boolean  @default(false)
+  requestContactEmail   String?  // email to send request to (instead of a direct join link)
+  requestNotes          String?  // e.g. "File via portal, max 5 days before hearing"
+  requestDaysBefore     Int?     // how many days before the event to file; defaults to 7
+  active                Boolean  @default(true)
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 

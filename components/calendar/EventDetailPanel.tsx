@@ -325,6 +325,23 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
                       </a>
                     </div>
                   )}
+                  {event.requestContactEmail && (
+                    <div className="flex items-start gap-2 text-slate-600">
+                      <span className="w-20 shrink-0 text-xs font-medium text-slate-400 uppercase tracking-wide pt-0.5">Request</span>
+                      <a
+                        href={`mailto:${event.requestContactEmail}`}
+                        className="text-teal-700 hover:text-teal-800 font-semibold break-all"
+                      >
+                        {event.requestContactEmail}
+                      </a>
+                    </div>
+                  )}
+                  {event.requestNotes && (
+                    <div className="flex items-start gap-2 text-slate-600">
+                      <span className="w-20 shrink-0 text-xs font-medium text-slate-400 uppercase tracking-wide pt-0.5">Notes</span>
+                      <span className="text-slate-600 leading-5">{event.requestNotes}</span>
+                    </div>
+                  )}
                   {event.phoneNumber && (
                     <div className="flex items-center gap-2 text-slate-600">
                       <span className="w-20 shrink-0 text-xs font-medium text-slate-400 uppercase tracking-wide">Phone</span>

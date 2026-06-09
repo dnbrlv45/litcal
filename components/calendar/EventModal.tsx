@@ -83,6 +83,9 @@ interface ResolvedRule {
   password: string | null;
   remoteLink: string | null;
   requestRequired: boolean;
+  requestContactEmail: string | null;
+  requestNotes: string | null;
+  requestDaysBefore: number | null;
 }
 
 export default function EventModal({ open, onClose, defaultStart, googleConnected, onCreated }: Props) {
@@ -486,11 +489,15 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
                       <p className="font-semibold text-teal-800">Remote Appearance</p>
                       {rule.appearanceType && <p className="text-teal-700">Type: <span className="font-medium">{rule.appearanceType}</span></p>}
                       {rule.remoteLink && <p className="text-teal-700 break-all">Link: <a href={rule.remoteLink} target="_blank" rel="noopener noreferrer" className="underline font-medium">{rule.remoteLink}</a></p>}
+                      {rule.requestContactEmail && <p className="text-teal-700">Request email: <span className="font-medium">{rule.requestContactEmail}</span></p>}
                       {rule.phoneNumber && <p className="text-teal-700">Phone: <span className="font-medium">{rule.phoneNumber}</span></p>}
                       {rule.bridge && <p className="text-teal-700">Bridge: <span className="font-mono font-medium">{rule.bridge}</span></p>}
                       {rule.password && <p className="text-teal-700">Password: <span className="font-mono font-medium">{rule.password}</span></p>}
+                      {rule.requestNotes && <p className="text-teal-600 italic">{rule.requestNotes}</p>}
                       {rule.requestRequired && (
-                        <p className="mt-0.5 font-semibold text-amber-700">Request required — task will be auto-created 7 days before.</p>
+                        <p className="mt-0.5 font-semibold text-amber-700">
+                          Request required — task will be auto-created {rule.requestDaysBefore ?? 7} days before.
+                        </p>
                       )}
                     </div>
                   ) : (

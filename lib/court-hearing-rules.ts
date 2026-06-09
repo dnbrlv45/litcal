@@ -8,6 +8,9 @@ export interface ResolvedRule {
   password: string | null;
   remoteLink: string | null;
   requestRequired: boolean;
+  requestContactEmail: string | null;
+  requestNotes: string | null;
+  requestDaysBefore: number | null;
 }
 
 function norm(s: string | null | undefined): string {
@@ -45,6 +48,9 @@ export async function findCourtHearingRule(opts: {
       password: true,
       remoteLink: true,
       requestRequired: true,
+      requestContactEmail: true,
+      requestNotes: true,
+      requestDaysBefore: true,
     },
   });
 
@@ -77,6 +83,9 @@ function toResolved(r: {
   password: string | null;
   remoteLink: string | null;
   requestRequired: boolean;
+  requestContactEmail: string | null;
+  requestNotes: string | null;
+  requestDaysBefore: number | null;
 }): ResolvedRule {
   return {
     id: r.id,
@@ -86,18 +95,22 @@ function toResolved(r: {
     password: r.password,
     remoteLink: r.remoteLink,
     requestRequired: r.requestRequired,
+    requestContactEmail: r.requestContactEmail,
+    requestNotes: r.requestNotes,
+    requestDaysBefore: r.requestDaysBefore,
   };
 }
 
 /**
- * Compute the remote appearance task due date:
- * 7 calendar days before the event, adjusted off weekends to Friday.
+ * Compute the remote appearance task due date.
+ * Defaults to 7 calendar days before the event; uses requestDaysBefore if set.
+ * Weekend adjustment: Sat/Sun → Friday.
  */
-export function computeRemoteAppearanceDueDate(eventDate: Date): Date {
+export function computeRemoteAppearanceDueDate(eventDate: Date, daysBefore?: number | null): Date {
   const d = new Date(eventDate);
-  d.setDate(d.getDate() - 7);
-  const dow = d.getDay(); // 0=Sun, 6=Sat
-  if (dow === 0) d.setDate(d.getDate() - 2); // Sun → Fri
-  if (dow === 6) d.setDate(d.getDate() - 1); // Sat → Fri
+  d.setDate(d.getDate() - (daysBefore ?? 7));
+  const dow = d.getDay();
+  if (dow === 0) d.setDate(d.getDate() - 2);
+  if (dow === 6) d.setDate(d.getDate() - 1);
   return d;
 }

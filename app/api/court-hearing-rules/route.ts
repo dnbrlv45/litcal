@@ -54,8 +54,12 @@ export async function POST(request: NextRequest) {
     const phoneNumber = norm(raw["phone_number"]) || null;
     const bridge      = norm(raw["bridge"])        || null;
     const password    = norm(raw["password"])      || null;
-    const remoteLink  = norm(raw["remote_link"])   || null;
-    const requestRequired = normKey(raw["request_required_bool"]) === "yes";
+    const remoteLink          = norm(raw["remote_link"])           || null;
+    const requestRequired     = normKey(raw["request_required_bool"]) === "yes";
+    const requestContactEmail = norm(raw["request_contact_email"]) || null;
+    const requestNotes        = norm(raw["request_notes"])          || null;
+    const requestDaysRaw      = parseInt(norm(raw["reqest_task_days_before"]), 10);
+    const requestDaysBefore   = isNaN(requestDaysRaw) ? null : requestDaysRaw;
 
     // Try to resolve countyId / courtId
     let countyId: string | null = null;
@@ -109,6 +113,9 @@ export async function POST(request: NextRequest) {
         password,
         remoteLink,
         requestRequired,
+        requestContactEmail,
+        requestNotes,
+        requestDaysBefore,
         active: true,
       };
 

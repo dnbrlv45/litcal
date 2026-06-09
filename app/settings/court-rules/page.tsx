@@ -22,6 +22,9 @@ interface Rule {
   password: string | null;
   remoteLink: string | null;
   requestRequired: boolean;
+  requestContactEmail: string | null;
+  requestNotes: string | null;
+  requestDaysBefore: number | null;
   active: boolean;
 }
 
@@ -71,12 +74,15 @@ function RuleRow({ rule, onSaved }: { rule: Rule; onSaved: (updated: Rule) => vo
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
-    appearanceType: rule.appearanceType ?? "",
-    phoneNumber:    rule.phoneNumber    ?? "",
-    bridge:         rule.bridge         ?? "",
-    password:       rule.password       ?? "",
-    remoteLink:     rule.remoteLink     ?? "",
-    requestRequired: rule.requestRequired,
+    appearanceType:     rule.appearanceType     ?? "",
+    phoneNumber:        rule.phoneNumber        ?? "",
+    bridge:             rule.bridge             ?? "",
+    password:           rule.password           ?? "",
+    remoteLink:         rule.remoteLink         ?? "",
+    requestRequired:    rule.requestRequired,
+    requestContactEmail: rule.requestContactEmail ?? "",
+    requestNotes:        rule.requestNotes        ?? "",
+    requestDaysBefore:   rule.requestDaysBefore?.toString() ?? "",
   });
 
   function scopeLabel() {
@@ -91,12 +97,15 @@ function RuleRow({ rule, onSaved }: { rule: Rule; onSaved: (updated: Rule) => vo
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        appearanceType:  form.appearanceType  || null,
-        phoneNumber:     form.phoneNumber     || null,
-        bridge:          form.bridge          || null,
-        password:        form.password        || null,
-        remoteLink:      form.remoteLink      || null,
-        requestRequired: form.requestRequired,
+        appearanceType:      form.appearanceType      || null,
+        phoneNumber:         form.phoneNumber         || null,
+        bridge:              form.bridge              || null,
+        password:            form.password            || null,
+        remoteLink:          form.remoteLink          || null,
+        requestRequired:     form.requestRequired,
+        requestContactEmail: form.requestContactEmail || null,
+        requestNotes:        form.requestNotes        || null,
+        requestDaysBefore:   form.requestDaysBefore ? parseInt(form.requestDaysBefore, 10) : null,
       }),
     });
     setSaving(false);
@@ -164,11 +173,12 @@ function RuleRow({ rule, onSaved }: { rule: Rule; onSaved: (updated: Rule) => vo
       {/* Quick summary (non-editing) */}
       {!editing && (
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
-          {rule.remoteLink  && <span>Link: <a href={rule.remoteLink} target="_blank" rel="noopener noreferrer" className="text-teal-700 underline truncate max-w-[200px] inline-block align-bottom">{rule.remoteLink}</a></span>}
-          {rule.phoneNumber && <span>Phone: {rule.phoneNumber}</span>}
-          {rule.bridge      && <span>Bridge: <span className="font-mono">{rule.bridge}</span></span>}
-          {rule.password    && <span>Password: <span className="font-mono">{rule.password}</span></span>}
-          {!rule.remoteLink && !rule.phoneNumber && !rule.bridge && (
+          {rule.remoteLink          && <span>Link: <a href={rule.remoteLink} target="_blank" rel="noopener noreferrer" className="text-teal-700 underline truncate max-w-[200px] inline-block align-bottom">{rule.remoteLink}</a></span>}
+          {rule.requestContactEmail && <span>Request: <span className="text-teal-700">{rule.requestContactEmail}</span></span>}
+          {rule.phoneNumber         && <span>Phone: {rule.phoneNumber}</span>}
+          {rule.bridge              && <span>Bridge: <span className="font-mono">{rule.bridge}</span></span>}
+          {rule.requestNotes        && <span className="italic text-slate-400">{rule.requestNotes}</span>}
+          {!rule.remoteLink && !rule.requestContactEmail && !rule.phoneNumber && !rule.bridge && (
             <span className="italic text-slate-300">No appearance details</span>
           )}
         </div>
@@ -184,15 +194,32 @@ function RuleRow({ rule, onSaved }: { rule: Rule; onSaved: (updated: Rule) => vo
             <Field label="Password"        value={form.password}       onChange={(v) => setForm((f) => ({ ...f, password: v }))} />
           </div>
           <Field label="Remote Link" value={form.remoteLink} onChange={(v) => setForm((f) => ({ ...f, remoteLink: v }))} />
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={form.requestRequired}
-              onChange={(e) => setForm((f) => ({ ...f, requestRequired: e.target.checked }))}
-              className="h-4 w-4 rounded border-slate-300 accent-slate-900"
-            />
-            <span className="text-sm text-slate-700">Request required</span>
-          </label>
+          <Field label="Request Email" value={form.requestContactEmail} onChange={(v) => setForm((f) => ({ ...f, requestContactEmail: v }))} />
+          <Field label="Request Notes" value={form.requestNotes} onChange={(v) => setForm((f) => ({ ...f, requestNotes: v }))} />
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 cursor-pointer select-none flex-1">
+              <input
+                type="checkbox"
+                checked={form.requestRequired}
+                onChange={(e) => setForm((f) => ({ ...f, requestRequired: e.target.checked }))}
+                className="h-4 w-4 rounded border-slate-300 accent-slate-900"
+              />
+              <span className="text-sm text-slate-700">Request required</span>
+            </label>
+            {form.requestRequired && (
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-slate-500 shrink-0">Days before</label>
+                <Input
+                  type="number"
+                  min="1"
+                  placeholder="7"
+                  value={form.requestDaysBefore}
+                  onChange={(e) => setForm((f) => ({ ...f, requestDaysBefore: e.target.value }))}
+                  className="h-7 w-16 text-sm"
+                />
+              </div>
+            )}
+          </div>
           <div className="flex gap-2">
             <Button size="sm" disabled={saving} onClick={() => void handleSave()} className="h-8">
               <Check className="w-3.5 h-3.5 mr-1" />
@@ -200,12 +227,15 @@ function RuleRow({ rule, onSaved }: { rule: Rule; onSaved: (updated: Rule) => vo
             </Button>
             <Button size="sm" variant="ghost" className="h-8" onClick={() => {
               setForm({
-                appearanceType: rule.appearanceType ?? "",
-                phoneNumber:    rule.phoneNumber    ?? "",
-                bridge:         rule.bridge         ?? "",
-                password:       rule.password       ?? "",
-                remoteLink:     rule.remoteLink     ?? "",
-                requestRequired: rule.requestRequired,
+                appearanceType:      rule.appearanceType      ?? "",
+                phoneNumber:         rule.phoneNumber         ?? "",
+                bridge:              rule.bridge              ?? "",
+                password:            rule.password            ?? "",
+                remoteLink:          rule.remoteLink          ?? "",
+                requestRequired:     rule.requestRequired,
+                requestContactEmail: rule.requestContactEmail ?? "",
+                requestNotes:        rule.requestNotes        ?? "",
+                requestDaysBefore:   rule.requestDaysBefore?.toString() ?? "",
               });
               setEditing(false);
             }}>
@@ -256,7 +286,10 @@ function AddRuleForm({
   const [bridge, setBridge]                 = useState("");
   const [password, setPassword]             = useState("");
   const [remoteLink, setRemoteLink]         = useState("");
-  const [requestRequired, setRequestRequired] = useState(false);
+  const [requestRequired, setRequestRequired]     = useState(false);
+  const [requestContactEmail, setRequestContactEmail] = useState("");
+  const [requestNotes, setRequestNotes]           = useState("");
+  const [requestDaysBefore, setRequestDaysBefore] = useState("");
 
   const selectedCounty = counties.find((c) => c.id === countyId);
   const availableCourts = selectedCounty?.courts ?? [];
@@ -267,6 +300,7 @@ function AddRuleForm({
     setDepartment("");
     setAppearanceType(""); setPhoneNumber(""); setBridge("");
     setPassword(""); setRemoteLink(""); setRequestRequired(false);
+    setRequestContactEmail(""); setRequestNotes(""); setRequestDaysBefore("");
     setApiError(null);
   }
 
@@ -322,8 +356,11 @@ function AddRuleForm({
         phoneNumber:     phoneNumber.trim()    || undefined,
         bridge:          bridge.trim()         || undefined,
         password:        password.trim()       || undefined,
-        remoteLink:      remoteLink.trim()     || undefined,
+        remoteLink:          remoteLink.trim()           || undefined,
         requestRequired,
+        requestContactEmail: requestContactEmail.trim()   || undefined,
+        requestNotes:        requestNotes.trim()           || undefined,
+        requestDaysBefore:   requestDaysBefore ? parseInt(requestDaysBefore, 10) : undefined,
       }),
     });
     setSaving(false);
@@ -438,15 +475,32 @@ function AddRuleForm({
           <Field label="Password"        value={password}       onChange={setPassword} />
         </div>
         <Field label="Remote Link" value={remoteLink} onChange={setRemoteLink} />
-        <label className="flex items-center gap-2 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={requestRequired}
-            onChange={(e) => setRequestRequired(e.target.checked)}
-            className="h-4 w-4 rounded border-slate-300 accent-slate-900"
-          />
-          <span className="text-sm text-slate-700">Request required</span>
-        </label>
+        <Field label="Request Email" value={requestContactEmail} onChange={setRequestContactEmail} />
+        <Field label="Request Notes" value={requestNotes} onChange={setRequestNotes} />
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 cursor-pointer select-none flex-1">
+            <input
+              type="checkbox"
+              checked={requestRequired}
+              onChange={(e) => setRequestRequired(e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300 accent-slate-900"
+            />
+            <span className="text-sm text-slate-700">Request required</span>
+          </label>
+          {requestRequired && (
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-slate-500 shrink-0">Days before</label>
+              <Input
+                type="number"
+                min="1"
+                placeholder="7"
+                value={requestDaysBefore}
+                onChange={(e) => setRequestDaysBefore(e.target.value)}
+                className="h-7 w-16 text-sm"
+              />
+            </div>
+          )}
+        </div>
       </div>
 
       {apiError && (
