@@ -167,6 +167,13 @@ export default function CalendarView() {
           assignedAttorneyId: e.assignedAttorneyId ?? undefined,
           assignedAttorneyName: e.assignedAttorneyName ?? undefined,
           hasConflict: e.hasConflict ?? false,
+          inPerson: e.inPerson ?? false,
+          appearanceType: e.appearanceType ?? null,
+          remoteLink: e.remoteLink ?? null,
+          phoneNumber: e.phoneNumber ?? null,
+          bridge: e.bridge ?? null,
+          remotePassword: e.remotePassword ?? null,
+          requestRequired: e.requestRequired ?? null,
         }))
       );
     } catch { /* silently fail */ }

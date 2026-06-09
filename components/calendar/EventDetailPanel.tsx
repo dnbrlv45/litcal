@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { X, MapPin, Calendar, Clock, Pencil, Trash2, Check, Briefcase, ChevronRight, FileText, Sparkles, AlertTriangle, Building2, Zap, Link2 } from "lucide-react";
+import { X, MapPin, Calendar, Clock, Pencil, Trash2, Check, Briefcase, ChevronRight, FileText, Sparkles, AlertTriangle, Building2, Zap, Link2, Video, Phone, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -290,6 +290,68 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
                   <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Department</span>
                   <span className="text-slate-800">{event.department}</span>
                 </div>
+              </div>
+            )}
+
+            {/* Remote Appearance */}
+            {!event.inPerson && (event.appearanceType || event.remoteLink || event.phoneNumber) && (
+              <div className="flex flex-col gap-3 border-b border-slate-200 pb-5">
+                <div className="flex items-center gap-2">
+                  <Video className="w-4 h-4 text-slate-500" />
+                  <span className="text-sm font-semibold text-slate-950">Remote Appearance</span>
+                  {event.requestRequired && (
+                    <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                      Request Required
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-col gap-2 text-sm">
+                  {event.appearanceType && (
+                    <div className="flex items-center gap-2 text-slate-600">
+                      <span className="w-20 shrink-0 text-xs font-medium text-slate-400 uppercase tracking-wide">Type</span>
+                      <span className="text-slate-800">{event.appearanceType}</span>
+                    </div>
+                  )}
+                  {event.remoteLink && (
+                    <div className="flex items-start gap-2 text-slate-600">
+                      <span className="w-20 shrink-0 text-xs font-medium text-slate-400 uppercase tracking-wide pt-0.5">Link</span>
+                      <a
+                        href={event.remoteLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-teal-700 hover:text-teal-800 font-semibold break-all"
+                      >
+                        Join <ExternalLink className="w-3 h-3 shrink-0" />
+                      </a>
+                    </div>
+                  )}
+                  {event.phoneNumber && (
+                    <div className="flex items-center gap-2 text-slate-600">
+                      <span className="w-20 shrink-0 text-xs font-medium text-slate-400 uppercase tracking-wide">Phone</span>
+                      <a href={`tel:${event.phoneNumber}`} className="text-teal-700 hover:text-teal-800 font-semibold flex items-center gap-1">
+                        <Phone className="w-3 h-3" />{event.phoneNumber}
+                      </a>
+                    </div>
+                  )}
+                  {event.bridge && (
+                    <div className="flex items-center gap-2 text-slate-600">
+                      <span className="w-20 shrink-0 text-xs font-medium text-slate-400 uppercase tracking-wide">Bridge</span>
+                      <span className="text-slate-800 font-mono">{event.bridge}</span>
+                    </div>
+                  )}
+                  {event.remotePassword && (
+                    <div className="flex items-center gap-2 text-slate-600">
+                      <span className="w-20 shrink-0 text-xs font-medium text-slate-400 uppercase tracking-wide">Password</span>
+                      <span className="text-slate-800 font-mono">{event.remotePassword}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            {event.inPerson && (
+              <div className="flex items-center gap-3 border-b border-slate-200 pb-5 text-sm text-slate-500">
+                <MapPin className="w-4 h-4 shrink-0" />
+                <span className="italic">In-person appearance</span>
               </div>
             )}
 

@@ -44,6 +44,14 @@ export interface CalEvent {
   assignedAttorneyName?: string;
   hasConflict?: boolean;
   conflicts?: ConflictDetail[];
+  // Remote appearance
+  inPerson?: boolean;
+  appearanceType?: string | null;
+  remoteLink?: string | null;
+  phoneNumber?: string | null;
+  bridge?: string | null;
+  remotePassword?: string | null;
+  requestRequired?: boolean | null;
 }
 
 export const EVENT_TYPE_COLORS: Record<EventType, { bg: string; text: string; dot: string; border: string; ring: string }> = {

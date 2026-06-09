@@ -163,11 +163,22 @@ model Event {
   workspaceId String?
   caseId      String?
   assignedAttorneyId String?
+  departmentId String?
 
   eventType   EventType   @default(OTHER)
   status      EventStatus @default(SCHEDULED)
   location    String?
-  department  String?
+  department  String?     // free-text fallback; departmentId is preferred when set
+
+  // Remote appearance fields (populated from CourtHearingRule at creation)
+  inPerson            Boolean  @default(false)
+  courtHearingRuleId  String?
+  appearanceType      String?
+  remoteLink          String?
+  phoneNumber         String?
+  bridge              String?
+  remotePassword      String?
+  requestRequired     Boolean?
 
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
@@ -176,6 +187,7 @@ model Event {
   workspace        Workspace?          @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
   caseRef          Case?               @relation(fields: [caseId], references: [id], onDelete: SetNull)
   assignedAttorney User?               @relation("EventAttorney", fields: [assignedAttorneyId], references: [id], onDelete: SetNull)
+  departmentRef    Department?         @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   googleSync         GoogleCalendarSync?
   tasks              Task[]
   reminders          EventReminder[]
@@ -190,6 +202,8 @@ model Event {
   @@index([caseId])
   @@index([assignedAttorneyId])
   @@index([assignedAttorneyId, startTime, endTime])
+  @@index([departmentId])
+  @@index([courtHearingRuleId])
 }
 
 enum EventType {
@@ -251,14 +265,27 @@ model County {
 }
 
 model Court {
-  id       String  @id @default(cuid())
-  name     String
-  countyId String
-  county   County  @relation(fields: [countyId], references: [id], onDelete: Cascade)
-  cases    Case[]
+  id          String       @id @default(cuid())
+  name        String
+  countyId    String
+  county      County       @relation(fields: [countyId], references: [id], onDelete: Cascade)
+  cases       Case[]
+  departments Department[]
 
   @@unique([countyId, name])
   @@index([countyId])
+}
+
+model Department {
+  id               String             @id @default(cuid())
+  name             String             // "10A", "285", "18b", etc.
+  courtId          String
+  court            Court              @relation(fields: [courtId], references: [id], onDelete: Cascade)
+  events           Event[]
+  courtHearingRules CourtHearingRule[]
+
+  @@unique([courtId, name])
+  @@index([courtId])
 }
 
 // ─── CASES ────────────────────────────────────────────────────────────────────
@@ -500,6 +527,37 @@ model GeneratedDeadline {
   @@index([triggerEventId])
   @@index([generatedEventId])
   @@index([generatedTaskId])
+}
+
+// ─── COURT HEARING RULES ──────────────────────────────────────────────────────
+// Imported from the Court Hearings CSV. Supports county-wide, court-wide, and
+// department-level rules. Deduped on (countyName, courtName, department).
+
+model CourtHearingRule {
+  id             String      @id @default(cuid())
+  countyId       String?
+  courtId        String?
+  departmentId   String?
+  countyName     String
+  courtName      String?
+  department     String?     // raw string, e.g. "10A" — preserved for matching
+  appearanceType String?
+  phoneNumber    String?
+  bridge         String?
+  password       String?
+  remoteLink     String?
+  requestRequired Boolean    @default(false)
+  active         Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  departmentRef  Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  @@unique([countyName, courtName, department])
+  @@index([countyName])
+  @@index([countyId])
+  @@index([courtId])
+  @@index([departmentId])
 }
 
 // ─── FUTURE ───────────────────────────────────────────────────────────────────

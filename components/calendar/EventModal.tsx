@@ -43,19 +43,47 @@ function toDateInputValue(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
-// "HH:MM" → minutes since midnight
 function timeToMinutes(t: string) {
   const [h, m] = t.split(":").map(Number);
   return h * 60 + m;
 }
 
-// minutes since midnight → "HH:MM"
 function minutesToTime(mins: number) {
   const clamped = ((mins % 1440) + 1440) % 1440;
   return `${String(Math.floor(clamped / 60)).padStart(2, "0")}:${String(clamped % 60).padStart(2, "0")}`;
 }
 
-interface CaseOption { id: string; title: string; caseNumber: string | null; status: string; }
+interface CaseOption {
+  id: string;
+  title: string;
+  caseNumber: string | null;
+  status: string;
+  county: string | null;
+  court: string | null;
+  countyId: string | null;
+  courtId: string | null;
+}
+
+interface CountyOption {
+  id: string;
+  name: string;
+  courts: { id: string; name: string }[];
+}
+
+interface DeptOption {
+  id: string;
+  name: string;
+}
+
+interface ResolvedRule {
+  id: string;
+  appearanceType: string | null;
+  phoneNumber: string | null;
+  bridge: string | null;
+  password: string | null;
+  remoteLink: string | null;
+  requestRequired: boolean;
+}
 
 export default function EventModal({ open, onClose, defaultStart, googleConnected, onCreated }: Props) {
   const [title, setTitle] = useState("");
@@ -64,7 +92,6 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
   const [startTime, setStartTime] = useState(DEFAULT_START);
   const [endTime, setEndTime] = useState(DEFAULT_END);
   const [location, setLocation] = useState("");
-  const [department, setDepartment] = useState("");
   const [description, setDescription] = useState("");
   const [caseId, setCaseId] = useState("");
   const [cases, setCases] = useState<CaseOption[]>([]);
@@ -74,37 +101,98 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conflicts, setConflicts] = useState<ConflictDetail[]>([]);
+
+  // In-person / remote appearance
+  const [inPerson, setInPerson] = useState(false);
+
+  // County / court / department selection (used when no case provides context, or to override)
+  const [counties, setCounties] = useState<CountyOption[]>([]);
+  const [selectedCountyId, setSelectedCountyId] = useState("");
+  const [selectedCourtId, setSelectedCourtId] = useState("");
+  const [departments, setDepartments] = useState<DeptOption[]>([]);
+  const [selectedDeptId, setSelectedDeptId] = useState("");
+  const [newDeptName, setNewDeptName] = useState("");
+  const [addingDept, setAddingDept] = useState(false);
+  const [deptLoading, setDeptLoading] = useState(false);
+
+  // Resolved rule preview
+  const [rule, setRule] = useState<ResolvedRule | null>(null);
+  const [ruleLoading, setRuleLoading] = useState(false);
+
   const fetchedRef = useRef(false);
 
+  // ── load cases + counties once ──────────────────────────────────────────────
   useEffect(() => {
     if (!fetchedRef.current) {
       fetchedRef.current = true;
       fetch("/api/cases").then((r) => r.json()).then((d) => setCases(d.cases ?? [])).catch(() => {});
+      fetch("/api/counties").then((r) => r.json()).then((d) => setCounties(d.counties ?? [])).catch(() => {});
     }
   }, []);
 
+  // ── reset on open ───────────────────────────────────────────────────────────
   useEffect(() => {
     if (open) {
       void Promise.resolve().then(() => {
         const d = toDateInputValue(defaultStart ?? new Date());
-        setTitle("");
-        setEventType("HEARING");
-        setDate(d);
-        setEndDate(d);
-        setAutoTrialEnd(false);
-        setStartTime(DEFAULT_START);
-        setEndTime(DEFAULT_END);
-        setAllDay(false);
-        setLocation("");
-        setDepartment("");
-        setDescription("");
-        setCaseId("");
-        setError(null);
-        setConflicts([]);
+        setTitle(""); setEventType("HEARING"); setDate(d); setEndDate(d);
+        setAutoTrialEnd(false); setStartTime(DEFAULT_START); setEndTime(DEFAULT_END);
+        setAllDay(false); setLocation(""); setDescription(""); setCaseId("");
+        setError(null); setConflicts([]);
+        setInPerson(false);
+        setSelectedCountyId(""); setSelectedCourtId(""); setSelectedDeptId("");
+        setNewDeptName(""); setAddingDept(false);
+        setDepartments([]); setRule(null);
       });
     }
   }, [open, defaultStart]);
 
+  // ── load departments when court selected ────────────────────────────────────
+  useEffect(() => {
+    setSelectedDeptId("");
+    setNewDeptName("");
+    setAddingDept(false);
+    setDepartments([]);
+    if (!selectedCourtId) return;
+    setDeptLoading(true);
+    fetch(`/api/departments?courtId=${selectedCourtId}`)
+      .then((r) => r.json())
+      .then((d) => setDepartments(d.departments ?? []))
+      .catch(() => {})
+      .finally(() => setDeptLoading(false));
+  }, [selectedCourtId]);
+
+  // ── derive county/court context from linked case ─────────────────────────────
+  const linkedCase = cases.find((c) => c.id === caseId) ?? null;
+  const effectiveCountyId = selectedCountyId || linkedCase?.countyId || "";
+  const effectiveCounty = counties.find((c) => c.id === effectiveCountyId);
+  const availableCourts = effectiveCounty?.courts ?? [];
+  const effectiveCourtId = selectedCourtId || linkedCase?.courtId || "";
+  const effectiveCourt = availableCourts.find((c) => c.id === effectiveCourtId)
+    ?? (linkedCase?.court ? { id: linkedCase.courtId ?? "", name: linkedCase.court } : null);
+
+  // county/court names for rule lookup
+  const countyName = effectiveCounty?.name ?? linkedCase?.county ?? null;
+  const courtName  = effectiveCourt?.name ?? linkedCase?.court ?? null;
+  const selectedDept = departments.find((d) => d.id === selectedDeptId);
+  const deptName = selectedDept?.name ?? null;
+
+  // ── look up rule whenever county/court/dept changes ─────────────────────────
+  useEffect(() => {
+    if (inPerson || !countyName) { setRule(null); return; }
+    setRuleLoading(true);
+    const params = new URLSearchParams();
+    if (countyName) params.set("county", countyName);
+    if (courtName)  params.set("court",  courtName);
+    if (deptName)   params.set("department", deptName);
+    fetch(`/api/court-hearing-rules?${params}`)
+      .then((r) => r.json())
+      .then((d) => setRule(d.rule ?? null))
+      .catch(() => setRule(null))
+      .finally(() => setRuleLoading(false));
+  }, [inPerson, countyName, courtName, deptName]);
+
+  // ── trial helpers ────────────────────────────────────────────────────────────
   function addDays(dateStr: string, days: number): string {
     const d = new Date(`${dateStr}T12:00:00`);
     d.setDate(d.getDate() + days);
@@ -114,40 +202,52 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
   function handleEventTypeChange(newType: EventType) {
     setEventType(newType);
     if (newType === "TRIAL") {
-      setAllDay(true);
-      setEndDate(addDays(date, 7));
-      setAutoTrialEnd(true);
+      setAllDay(true); setEndDate(addDays(date, 7)); setAutoTrialEnd(true);
     } else if (eventType === "TRIAL") {
-      // Switching away from Trial — restore to timed, single-day
-      setAllDay(false);
-      setEndDate(date);
-      setAutoTrialEnd(false);
+      setAllDay(false); setEndDate(date); setAutoTrialEnd(false);
     }
   }
 
   function handleDateChange(newDate: string) {
     setDate(newDate);
-    if (autoTrialEnd) {
-      setEndDate(addDays(newDate, 7));
-    } else if (!allDay) {
-      setEndDate(newDate);
-    }
+    if (autoTrialEnd) setEndDate(addDays(newDate, 7));
+    else if (!allDay) setEndDate(newDate);
   }
 
   function handleStartChange(newStart: string) {
-    const oldStartMins = timeToMinutes(startTime);
-    const oldEndMins   = timeToMinutes(endTime);
-    const duration     = oldEndMins > oldStartMins ? oldEndMins - oldStartMins : 60;
-    const newStartMins = timeToMinutes(newStart);
+    const duration = timeToMinutes(endTime) > timeToMinutes(startTime)
+      ? timeToMinutes(endTime) - timeToMinutes(startTime) : 60;
     setStartTime(newStart);
-    setEndTime(minutesToTime(newStartMins + duration));
+    setEndTime(minutesToTime(timeToMinutes(newStart) + duration));
   }
 
   function handleEndChange(newEnd: string) {
     const startMins = timeToMinutes(startTime);
     const endMins   = timeToMinutes(newEnd);
-    // If end <= start, push end to start + 1 hour
     setEndTime(endMins > startMins ? newEnd : minutesToTime(startMins + 60));
+  }
+
+  async function handleAddDept() {
+    if (!newDeptName.trim() || !effectiveCourtId) return;
+    setAddingDept(true);
+    try {
+      const res = await fetch("/api/departments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ courtId: effectiveCourtId, name: newDeptName.trim() }),
+      });
+      if (res.ok) {
+        const d = await res.json();
+        setDepartments((prev) => {
+          if (prev.find((x) => x.id === d.department.id)) return prev;
+          return [...prev, d.department].sort((a, b) => a.name.localeCompare(b.name));
+        });
+        setSelectedDeptId(d.department.id);
+        setNewDeptName("");
+      }
+    } catch { /* ignore */ } finally {
+      setAddingDept(false);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -155,8 +255,6 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
     if (!title.trim()) { setError("Title is required."); return; }
 
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    // All-day events: store at noon UTC so they render on the correct date
-    // in every timezone (midnight UTC appears as the previous day in UTC-X zones)
     const toNoonUTC = (dateStr: string) => {
       const d = new Date(`${dateStr}T00:00:00`);
       return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0, 0)).toISOString();
@@ -164,24 +262,21 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
     const startISO = allDay ? toNoonUTC(date) : new Date(`${date}T${startTime}`).toISOString();
     const endISO   = allDay ? new Date(`${endDate}T23:59:59`).toISOString() : new Date(`${date}T${endTime}`).toISOString();
 
-    setSaving(true);
-    setError(null);
-
+    setSaving(true); setError(null);
     try {
       const res = await fetch("/api/calendar/events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title,
-          description,
-          start: startISO,
-          end: endISO,
-          timeZone,
-          eventType,
-          location,
-          department,
+          title, description, start: startISO, end: endISO, timeZone,
+          eventType, location,
+          department: deptName ?? undefined,
+          departmentId: selectedDeptId || undefined,
           caseId: caseId || undefined,
           allDay,
+          inPerson,
+          countyName: countyName ?? undefined,
+          courtName: courtName ?? undefined,
         }),
       });
       if (!res.ok) { setError("Failed to create event. Please try again."); return; }
@@ -189,7 +284,6 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
       onCreated();
       if (data.conflicts?.length > 0) {
         setConflicts(data.conflicts);
-        // Keep modal open to show conflicts — user can close manually
       } else {
         onClose();
       }
@@ -200,9 +294,11 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
     }
   }
 
+  const selectedCounty = counties.find((c) => c.id === selectedCountyId);
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>New Event</DialogTitle>
         </DialogHeader>
@@ -216,6 +312,7 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
             </div>
           )}
 
+          {/* Title */}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="event-title">Title</Label>
             <Input
@@ -227,6 +324,7 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
             />
           </div>
 
+          {/* Event type */}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="event-type">Event Type</Label>
             <select
@@ -241,13 +339,14 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
             </select>
           </div>
 
+          {/* Case */}
           {cases.filter((c) => c.status !== "ARCHIVED" && c.status !== "CLOSED").length > 0 && (
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="event-case">Case <span className="text-muted-foreground font-normal">(optional)</span></Label>
               <select
                 id="event-case"
                 value={caseId}
-                onChange={(e) => setCaseId(e.target.value)}
+                onChange={(e) => { setCaseId(e.target.value); setSelectedCountyId(""); setSelectedCourtId(""); setSelectedDeptId(""); }}
                 className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
                 <option value="">— No case —</option>
@@ -260,6 +359,162 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
             </div>
           )}
 
+          {/* In-person checkbox */}
+          <label className="flex items-center gap-2.5 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={inPerson}
+              onChange={(e) => setInPerson(e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300 accent-slate-900"
+            />
+            <span className="text-sm text-slate-700">In-person appearance</span>
+          </label>
+
+          {/* County / Court / Department — shown only for remote */}
+          {!inPerson && (
+            <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Court Location</p>
+
+              {/* County */}
+              {counties.length > 0 && (
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="event-county" className="text-xs">County <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                  <select
+                    id="event-county"
+                    value={selectedCountyId || (linkedCase?.countyId ?? "")}
+                    onChange={(e) => { setSelectedCountyId(e.target.value); setSelectedCourtId(""); setSelectedDeptId(""); }}
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    disabled={!!linkedCase?.countyId && !selectedCountyId}
+                  >
+                    <option value="">— Select county —</option>
+                    {counties.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  {linkedCase?.county && !selectedCountyId && (
+                    <p className="text-[11px] text-slate-400">From linked case: {linkedCase.county}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Court */}
+              {availableCourts.length > 0 && (
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="event-court" className="text-xs">Courthouse <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                  <select
+                    id="event-court"
+                    value={selectedCourtId || (linkedCase?.courtId ?? "")}
+                    onChange={(e) => { setSelectedCourtId(e.target.value); setSelectedDeptId(""); }}
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    disabled={!!linkedCase?.courtId && !selectedCourtId}
+                  >
+                    <option value="">— Select courthouse —</option>
+                    {availableCourts.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  {linkedCase?.court && !selectedCourtId && (
+                    <p className="text-[11px] text-slate-400">From linked case: {linkedCase.court}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Department */}
+              {effectiveCourtId && (
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="event-dept" className="text-xs">Department <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                  {deptLoading ? (
+                    <p className="text-xs text-slate-400">Loading…</p>
+                  ) : (
+                    <select
+                      id="event-dept"
+                      value={selectedDeptId}
+                      onChange={(e) => {
+                        if (e.target.value === "__add__") { setNewDeptName(""); }
+                        else setSelectedDeptId(e.target.value);
+                      }}
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    >
+                      <option value="">— Select department —</option>
+                      {departments.map((d) => (
+                        <option key={d.id} value={d.id}>Dept. {d.name}</option>
+                      ))}
+                      <option value="__add__" className="font-semibold text-teal-700">+ Add new department</option>
+                    </select>
+                  )}
+
+                  {/* Inline add-department */}
+                  {selectedDeptId === "__add__" && (
+                    <div className="flex gap-2 mt-1">
+                      <Input
+                        placeholder="e.g. 10A"
+                        value={newDeptName}
+                        onChange={(e) => setNewDeptName(e.target.value)}
+                        className="h-8 text-sm"
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void handleAddDept(); } }}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-8 shrink-0"
+                        disabled={!newDeptName.trim() || addingDept}
+                        onClick={() => void handleAddDept()}
+                      >
+                        Add
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 shrink-0"
+                        onClick={() => { setSelectedDeptId(""); setNewDeptName(""); }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Rule preview */}
+              {!inPerson && countyName && (
+                <div className="mt-1">
+                  {ruleLoading ? (
+                    <p className="text-[11px] text-slate-400">Looking up appearance info…</p>
+                  ) : rule ? (
+                    <div className="rounded-md border border-teal-200 bg-teal-50 px-3 py-2.5 text-xs flex flex-col gap-1.5">
+                      <p className="font-semibold text-teal-800">Remote Appearance</p>
+                      {rule.appearanceType && <p className="text-teal-700">Type: <span className="font-medium">{rule.appearanceType}</span></p>}
+                      {rule.remoteLink && <p className="text-teal-700 break-all">Link: <a href={rule.remoteLink} target="_blank" rel="noopener noreferrer" className="underline font-medium">{rule.remoteLink}</a></p>}
+                      {rule.phoneNumber && <p className="text-teal-700">Phone: <span className="font-medium">{rule.phoneNumber}</span></p>}
+                      {rule.bridge && <p className="text-teal-700">Bridge: <span className="font-mono font-medium">{rule.bridge}</span></p>}
+                      {rule.password && <p className="text-teal-700">Password: <span className="font-mono font-medium">{rule.password}</span></p>}
+                      {rule.requestRequired && (
+                        <p className="mt-0.5 font-semibold text-amber-700">Request required — task will be auto-created 7 days before.</p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-slate-400">No remote appearance rule found for this location.</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* In-person address (optional) */}
+          {inPerson && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="event-location">Courthouse Address <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <Input
+                id="event-location"
+                placeholder="e.g. Stanley Mosk Courthouse, Los Angeles"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+              />
+            </div>
+          )}
+
+          {/* Date / time */}
           <div className={`grid gap-3 ${allDay ? "grid-cols-2" : "grid-cols-1"}`}>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="event-date">{allDay ? "Start date" : "Date"}</Label>
@@ -305,26 +560,20 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
             </div>
           )}
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="event-location">Location <span className="text-muted-foreground font-normal">(optional)</span></Label>
-            <Input
-              id="event-location"
-              placeholder="e.g. Stanley Mosk Courthouse"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-            />
-          </div>
+          {/* Location (remote only) */}
+          {!inPerson && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="event-location-remote">Location <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <Input
+                id="event-location-remote"
+                placeholder="e.g. Stanley Mosk Courthouse"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+              />
+            </div>
+          )}
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="event-department">Department <span className="text-muted-foreground font-normal">(optional)</span></Label>
-            <Input
-              id="event-department"
-              placeholder="e.g. Dept. 43"
-              value={department}
-              onChange={(e) => setDepartment(e.target.value)}
-            />
-          </div>
-
+          {/* Notes */}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="event-desc">Notes <span className="text-muted-foreground font-normal">(optional)</span></Label>
             <Textarea

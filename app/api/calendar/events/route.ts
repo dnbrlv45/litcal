@@ -7,6 +7,7 @@ import { computeReminders, googleReminderOverrides } from "@/lib/reminders";
 import { getCurrentWorkspace } from "@/lib/workspaces";
 import { detectConflicts, getConflictedEventIds } from "@/lib/conflicts";
 import { applyDeadlineRules } from "@/lib/deadline-rules";
+import { findCourtHearingRule, computeRemoteAppearanceDueDate } from "@/lib/court-hearing-rules";
 
 // GET /api/calendar/events?start=ISO&end=ISO
 export async function GET(request: NextRequest) {
@@ -70,6 +71,13 @@ export async function GET(request: NextRequest) {
         ? [e.assignedAttorney.firstName, e.assignedAttorney.lastName].filter(Boolean).join(" ") || null
         : null,
       hasConflict: conflictedIds.has(e.id),
+      inPerson: e.inPerson,
+      appearanceType: e.appearanceType,
+      remoteLink: e.remoteLink,
+      phoneNumber: e.phoneNumber,
+      bridge: e.bridge,
+      remotePassword: e.remotePassword,
+      requestRequired: e.requestRequired,
     })),
     connected: !!connection,
   });
@@ -84,7 +92,11 @@ export async function POST(request: NextRequest) {
   if (!workspace) return NextResponse.json({ error: "No workspace" }, { status: 403 });
 
   const body = await request.json();
-  const { title, description, start, end, timeZone, eventType, location, department, caseId, allDay } = body as {
+  const {
+    title, description, start, end, timeZone, eventType,
+    location, department, departmentId, caseId, allDay,
+    inPerson, countyName, courtName,
+  } = body as {
     title: string;
     description?: string;
     start: string;
@@ -93,26 +105,52 @@ export async function POST(request: NextRequest) {
     eventType?: string;
     location?: string;
     department?: string;
+    departmentId?: string;
     caseId?: string;
     allDay?: boolean;
+    inPerson?: boolean;
+    countyName?: string;
+    courtName?: string;
   };
 
   if (!title?.trim() || !start || !end)
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
 
   let inheritedAttorneyId: string | null = null;
+  let caseCountyName: string | null = null;
+  let caseCourtName: string | null = null;
+  let caseStaffForTask: { userId: string; role: string }[] = [];
+
   if (caseId) {
     const linkedCase = await prisma.case.findUnique({
       where: { id: caseId },
       select: {
         status: true,
-        staff: { where: { role: "ATTORNEY" }, select: { userId: true }, orderBy: { createdAt: "asc" }, take: 1 },
+        county: true,
+        court: true,
+        staff: { where: { role: { in: ["ATTORNEY", "PARALEGAL"] } }, select: { userId: true, role: true }, orderBy: { createdAt: "asc" } },
       },
     });
     if (!linkedCase) return NextResponse.json({ error: "Case not found" }, { status: 404 });
     if (linkedCase.status === "ARCHIVED" || linkedCase.status === "CLOSED")
       return NextResponse.json({ error: "Cannot add events to an archived or closed case" }, { status: 422 });
-    inheritedAttorneyId = linkedCase.staff[0]?.userId ?? null;
+    inheritedAttorneyId = linkedCase.staff.find((s) => s.role === "ATTORNEY")?.userId ?? null;
+    caseCountyName = linkedCase.county ?? null;
+    caseCourtName = linkedCase.court ?? null;
+    caseStaffForTask = linkedCase.staff;
+  }
+
+  // Resolve court hearing rule (remote appearance only)
+  const isInPerson = inPerson === true;
+  let hearingRule = null;
+  if (!isInPerson) {
+    const resolvedCounty = countyName || caseCountyName;
+    const resolvedCourt  = courtName  || caseCourtName;
+    hearingRule = await findCourtHearingRule({
+      countyName: resolvedCounty,
+      courtName: resolvedCourt,
+      department: department,
+    });
   }
 
   const validTypes = ["DEADLINE","HEARING","DEPOSITION","TRIAL","CONFERENCE","MEETING","MEDIATION","COURT_CALL","CASE_MANAGEMENT_CONFERENCE","REMINDER","OTHER"];
@@ -140,8 +178,17 @@ export async function POST(request: NextRequest) {
       eventType: safeEventType,
       location: location || null,
       department: department?.trim() || null,
+      departmentId: departmentId || null,
       caseId: caseId || null,
       assignedAttorneyId: inheritedAttorneyId,
+      inPerson: isInPerson,
+      courtHearingRuleId: hearingRule?.id ?? null,
+      appearanceType: hearingRule?.appearanceType ?? null,
+      remoteLink: hearingRule?.remoteLink ?? null,
+      phoneNumber: hearingRule?.phoneNumber ?? null,
+      bridge: hearingRule?.bridge ?? null,
+      remotePassword: hearingRule?.password ?? null,
+      requestRequired: hearingRule?.requestRequired ?? null,
     },
   });
 
@@ -155,6 +202,66 @@ export async function POST(request: NextRequest) {
         sendAt: r.sendAt,
       })),
     });
+  }
+
+  // Remote appearance task — only when requestRequired = true and not in-person
+  if (!isInPerson && hearingRule?.requestRequired) {
+    const existingRemoteTask = await prisma.generatedDeadline.findUnique({
+      where: { triggerEventId_ruleKey: { triggerEventId: event.id, ruleKey: "REMOTE_APPEARANCE_REQUEST" } },
+    });
+
+    if (!existingRemoteTask) {
+      const dueDate = computeRemoteAppearanceDueDate(startDate);
+
+      // Resolve workspace member IDs for attorney + paralegal
+      const staffUserIds = caseStaffForTask.map((s) => s.userId);
+      const memberRows = staffUserIds.length > 0
+        ? await prisma.workspaceMember.findMany({
+            where: { workspaceId: workspace.id, userId: { in: staffUserIds } },
+            select: { id: true, userId: true },
+          })
+        : [];
+      const memberIds = memberRows.map((m) => m.id);
+
+      const remoteTask = await prisma.task.create({
+        data: {
+          workspaceId: workspace.id,
+          caseId: caseId || null,
+          eventId: event.id,
+          title: `Request Remote Appearance — ${event.title}`,
+          isAutoGenerated: true,
+          dueDate,
+          assignees: memberIds.length > 0
+            ? { create: memberIds.map((memberId) => ({ memberId })) }
+            : undefined,
+        },
+      });
+
+      if (memberRows.length > 0) {
+        await prisma.notification.createMany({
+          data: memberRows.map((m) => ({
+            userId: m.userId,
+            workspaceId: workspace.id,
+            type: "TASK_ASSIGNED" as never,
+            title: `Task Assigned: Request Remote Appearance`,
+            body: `${event.title}\nAuto-generated task`,
+            taskId: remoteTask.id,
+            eventId: event.id,
+            caseId: caseId || null,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      await prisma.generatedDeadline.create({
+        data: {
+          workspaceId: workspace.id,
+          triggerEventId: event.id,
+          ruleKey: "REMOTE_APPEARANCE_REQUEST",
+          generatedTaskId: remoteTask.id,
+        },
+      });
+    }
   }
 
   // Apply deadline automation rules (idempotent, handles CMC + Trial + future rules)
@@ -269,6 +376,13 @@ export async function POST(request: NextRequest) {
       location: event.location,
       department: event.department,
       caseId: event.caseId,
+      inPerson: event.inPerson,
+      appearanceType: event.appearanceType,
+      remoteLink: event.remoteLink,
+      phoneNumber: event.phoneNumber,
+      bridge: event.bridge,
+      remotePassword: event.remotePassword,
+      requestRequired: event.requestRequired,
     },
     googlePush,
     conflicts: preConflicts.map((c) => ({
