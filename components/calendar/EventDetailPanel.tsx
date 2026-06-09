@@ -80,6 +80,19 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
   const [generatedDeadlines, setGeneratedDeadlines] = useState<GeneratedItem[]>([]);
   const [generatedFrom, setGeneratedFrom] = useState<GeneratedFrom | null>(null);
 
+  // Live rule lookup — used when the event was created before rule matching existed
+  interface LiveRule {
+    appearanceType: string | null;
+    remoteLink: string | null;
+    phoneNumber: string | null;
+    bridge: string | null;
+    password: string | null;
+    requestRequired: boolean;
+    requestContactEmail: string | null;
+    requestNotes: string | null;
+  }
+  const [liveRule, setLiveRule] = useState<LiveRule | null>(null);
+
   useEffect(() => {
     fetch("/api/cases").then((r) => r.json()).then((d) => setCases(d.cases ?? [])).catch(() => {});
   }, []);
@@ -111,6 +124,27 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
       void fetchGenerated(event.id);
     }
   }, [event?.id, fetchGenerated]);
+
+  // If the event has no stored rule data, look one up live from the case's county/court
+  useEffect(() => {
+    setLiveRule(null);
+    if (!event || event.inPerson) return;
+    // Already has stored data — no need for live lookup
+    if (event.appearanceType || event.remoteLink || event.phoneNumber || event.requestContactEmail) return;
+
+    const county = event.caseCounty;
+    const court  = event.caseCourt;
+    if (!county) return;
+
+    const params = new URLSearchParams({ county });
+    if (court)            params.set("court",      court);
+    if (event.department) params.set("department", event.department);
+
+    fetch(`/api/court-hearing-rules?${params}`)
+      .then((r) => r.json())
+      .then((d) => setLiveRule(d.rule ?? null))
+      .catch(() => {});
+  }, [event?.id, event?.inPerson, event?.appearanceType, event?.remoteLink, event?.phoneNumber, event?.requestContactEmail, event?.caseCounty, event?.caseCourt, event?.department]);
 
   function startEdit() {
     if (!event) return;
@@ -294,77 +328,92 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
             )}
 
             {/* Remote Appearance */}
-            {!event.inPerson && (event.appearanceType || event.remoteLink || event.phoneNumber) && (
-              <div className="flex flex-col gap-3 border-b border-slate-200 pb-5">
-                <div className="flex items-center gap-2">
-                  <Video className="w-4 h-4 text-slate-500" />
-                  <span className="text-sm font-semibold text-slate-950">Remote Appearance</span>
-                  {event.requestRequired && (
-                    <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
-                      Request Required
-                    </span>
-                  )}
+            {(() => {
+              const appearance = {
+                appearanceType:     event.appearanceType     ?? liveRule?.appearanceType     ?? null,
+                remoteLink:         event.remoteLink         ?? liveRule?.remoteLink         ?? null,
+                phoneNumber:        event.phoneNumber        ?? liveRule?.phoneNumber        ?? null,
+                bridge:             event.bridge             ?? liveRule?.bridge             ?? null,
+                remotePassword:     event.remotePassword     ?? liveRule?.password           ?? null,
+                requestRequired:    event.requestRequired    ?? liveRule?.requestRequired    ?? false,
+                requestContactEmail: event.requestContactEmail ?? liveRule?.requestContactEmail ?? null,
+                requestNotes:       event.requestNotes       ?? liveRule?.requestNotes       ?? null,
+              };
+              const hasAny = appearance.appearanceType || appearance.remoteLink
+                || appearance.phoneNumber || appearance.requestContactEmail;
+              if (event.inPerson || !hasAny) return null;
+              return (
+                <div className="flex flex-col gap-3 border-b border-slate-200 pb-5">
+                  <div className="flex items-center gap-2">
+                    <Video className="w-4 h-4 text-slate-500" />
+                    <span className="text-sm font-semibold text-slate-950">Remote Appearance</span>
+                    {appearance.requestRequired && (
+                      <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                        Request Required
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-2 text-sm">
+                    {appearance.appearanceType && (
+                      <div className="flex items-center gap-2 text-slate-600">
+                        <span className="w-20 shrink-0 text-xs font-medium text-slate-400 uppercase tracking-wide">Type</span>
+                        <span className="text-slate-800">{appearance.appearanceType}</span>
+                      </div>
+                    )}
+                    {appearance.remoteLink && (
+                      <div className="flex items-start gap-2 text-slate-600">
+                        <span className="w-20 shrink-0 text-xs font-medium text-slate-400 uppercase tracking-wide pt-0.5">Link</span>
+                        <a
+                          href={appearance.remoteLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-teal-700 hover:text-teal-800 font-semibold break-all"
+                        >
+                          Join <ExternalLink className="w-3 h-3 shrink-0" />
+                        </a>
+                      </div>
+                    )}
+                    {appearance.requestContactEmail && (
+                      <div className="flex items-start gap-2 text-slate-600">
+                        <span className="w-20 shrink-0 text-xs font-medium text-slate-400 uppercase tracking-wide pt-0.5">Request</span>
+                        <a
+                          href={`mailto:${appearance.requestContactEmail}`}
+                          className="text-teal-700 hover:text-teal-800 font-semibold break-all"
+                        >
+                          {appearance.requestContactEmail}
+                        </a>
+                      </div>
+                    )}
+                    {appearance.requestNotes && (
+                      <div className="flex items-start gap-2 text-slate-600">
+                        <span className="w-20 shrink-0 text-xs font-medium text-slate-400 uppercase tracking-wide pt-0.5">Notes</span>
+                        <span className="text-slate-600 leading-5">{appearance.requestNotes}</span>
+                      </div>
+                    )}
+                    {appearance.phoneNumber && (
+                      <div className="flex items-center gap-2 text-slate-600">
+                        <span className="w-20 shrink-0 text-xs font-medium text-slate-400 uppercase tracking-wide">Phone</span>
+                        <a href={`tel:${appearance.phoneNumber}`} className="text-teal-700 hover:text-teal-800 font-semibold flex items-center gap-1">
+                          <Phone className="w-3 h-3" />{appearance.phoneNumber}
+                        </a>
+                      </div>
+                    )}
+                    {appearance.bridge && (
+                      <div className="flex items-center gap-2 text-slate-600">
+                        <span className="w-20 shrink-0 text-xs font-medium text-slate-400 uppercase tracking-wide">Bridge</span>
+                        <span className="text-slate-800 font-mono">{appearance.bridge}</span>
+                      </div>
+                    )}
+                    {appearance.remotePassword && (
+                      <div className="flex items-center gap-2 text-slate-600">
+                        <span className="w-20 shrink-0 text-xs font-medium text-slate-400 uppercase tracking-wide">Password</span>
+                        <span className="text-slate-800 font-mono">{appearance.remotePassword}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="flex flex-col gap-2 text-sm">
-                  {event.appearanceType && (
-                    <div className="flex items-center gap-2 text-slate-600">
-                      <span className="w-20 shrink-0 text-xs font-medium text-slate-400 uppercase tracking-wide">Type</span>
-                      <span className="text-slate-800">{event.appearanceType}</span>
-                    </div>
-                  )}
-                  {event.remoteLink && (
-                    <div className="flex items-start gap-2 text-slate-600">
-                      <span className="w-20 shrink-0 text-xs font-medium text-slate-400 uppercase tracking-wide pt-0.5">Link</span>
-                      <a
-                        href={event.remoteLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-teal-700 hover:text-teal-800 font-semibold break-all"
-                      >
-                        Join <ExternalLink className="w-3 h-3 shrink-0" />
-                      </a>
-                    </div>
-                  )}
-                  {event.requestContactEmail && (
-                    <div className="flex items-start gap-2 text-slate-600">
-                      <span className="w-20 shrink-0 text-xs font-medium text-slate-400 uppercase tracking-wide pt-0.5">Request</span>
-                      <a
-                        href={`mailto:${event.requestContactEmail}`}
-                        className="text-teal-700 hover:text-teal-800 font-semibold break-all"
-                      >
-                        {event.requestContactEmail}
-                      </a>
-                    </div>
-                  )}
-                  {event.requestNotes && (
-                    <div className="flex items-start gap-2 text-slate-600">
-                      <span className="w-20 shrink-0 text-xs font-medium text-slate-400 uppercase tracking-wide pt-0.5">Notes</span>
-                      <span className="text-slate-600 leading-5">{event.requestNotes}</span>
-                    </div>
-                  )}
-                  {event.phoneNumber && (
-                    <div className="flex items-center gap-2 text-slate-600">
-                      <span className="w-20 shrink-0 text-xs font-medium text-slate-400 uppercase tracking-wide">Phone</span>
-                      <a href={`tel:${event.phoneNumber}`} className="text-teal-700 hover:text-teal-800 font-semibold flex items-center gap-1">
-                        <Phone className="w-3 h-3" />{event.phoneNumber}
-                      </a>
-                    </div>
-                  )}
-                  {event.bridge && (
-                    <div className="flex items-center gap-2 text-slate-600">
-                      <span className="w-20 shrink-0 text-xs font-medium text-slate-400 uppercase tracking-wide">Bridge</span>
-                      <span className="text-slate-800 font-mono">{event.bridge}</span>
-                    </div>
-                  )}
-                  {event.remotePassword && (
-                    <div className="flex items-center gap-2 text-slate-600">
-                      <span className="w-20 shrink-0 text-xs font-medium text-slate-400 uppercase tracking-wide">Password</span>
-                      <span className="text-slate-800 font-mono">{event.remotePassword}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+              );
+            })()}
             {event.inPerson && (
               <div className="flex items-center gap-3 border-b border-slate-200 pb-5 text-sm text-slate-500">
                 <MapPin className="w-4 h-4 shrink-0" />

@@ -40,6 +40,8 @@ export interface CalEvent {
   caseId?: string;
   caseTitle?: string;
   caseStatus?: string;
+  caseCounty?: string | null;
+  caseCourt?: string | null;
   assignedAttorneyId?: string;
   assignedAttorneyName?: string;
   hasConflict?: boolean;

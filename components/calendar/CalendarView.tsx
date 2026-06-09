@@ -167,6 +167,8 @@ export default function CalendarView() {
           assignedAttorneyId: e.assignedAttorneyId ?? undefined,
           assignedAttorneyName: e.assignedAttorneyName ?? undefined,
           hasConflict: e.hasConflict ?? false,
+          caseCounty: e.caseCounty ?? null,
+          caseCourt:  e.caseCourt  ?? null,
           inPerson: e.inPerson ?? false,
           appearanceType: e.appearanceType ?? null,
           remoteLink: e.remoteLink ?? null,

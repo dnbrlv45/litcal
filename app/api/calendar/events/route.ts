@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
       },
       include: {
         googleSync: true,
-        caseRef: { select: { id: true, title: true, status: true } },
+        caseRef: { select: { id: true, title: true, status: true, county: true, court: true } },
         assignedAttorney: { select: { id: true, firstName: true, lastName: true } },
       },
       orderBy: { startTime: "asc" },
@@ -71,6 +71,8 @@ export async function GET(request: NextRequest) {
         ? [e.assignedAttorney.firstName, e.assignedAttorney.lastName].filter(Boolean).join(" ") || null
         : null,
       hasConflict: conflictedIds.has(e.id),
+      caseCounty: e.caseRef?.county ?? null,
+      caseCourt:  e.caseRef?.court  ?? null,
       inPerson: e.inPerson,
       appearanceType: e.appearanceType,
       remoteLink: e.remoteLink,
