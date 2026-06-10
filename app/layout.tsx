@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import Sidebar from "@/components/nav/Sidebar";
 import MobileNav from "@/components/nav/MobileNav";
+import { getCurrentUser } from "@/lib/auth";
 import "./globals.css";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -15,18 +16,21 @@ export const metadata: Metadata = {
   description: "Calendar-first litigation management",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const user = await getCurrentUser();
+  const isSuperAdmin = user?.isSuperAdmin ?? false;
+
   return (
     <html
       lang="en"
       className={`${jakarta.variable} h-full antialiased`}
     >
       <body className="h-full flex bg-background text-foreground overflow-hidden">
-        <Sidebar />
+        <Sidebar isSuperAdmin={isSuperAdmin} />
         <main className="flex-1 flex flex-col min-w-0 overflow-hidden pb-16 md:pb-0">{children}</main>
         <MobileNav />
       </body>
