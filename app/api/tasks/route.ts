@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCurrentWorkspace } from "@/lib/workspaces";
+import { addTimelineEntry } from "@/lib/case-timeline";
 
 export const TASK_INCLUDE = {
   assignees: {
@@ -132,6 +133,17 @@ export async function POST(request: NextRequest) {
         caseId:      task.caseId ?? null,
       })),
       skipDuplicates: true,
+    });
+  }
+
+  if (task.caseId) {
+    void addTimelineEntry({
+      caseId: task.caseId,
+      workspaceId: workspace.id,
+      actorUserId: currentUser.id,
+      type: "task.created",
+      title: `Task created: ${task.title}`,
+      metadata: { taskId: task.id, priority: task.priority },
     });
   }
 

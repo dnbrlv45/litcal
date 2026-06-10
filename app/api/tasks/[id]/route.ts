@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCurrentWorkspace } from "@/lib/workspaces";
 import { TASK_INCLUDE } from "../route";
+import { addTimelineEntry } from "@/lib/case-timeline";
 
 async function getTaskForWorkspace(id: string, workspaceId: string) {
   return prisma.task.findFirst({ where: { id, workspaceId }, include: TASK_INCLUDE });
@@ -104,6 +105,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     await prisma.notification.deleteMany({
       where: { workspaceId: workspace.id, taskId: task.id },
     });
+    if (task.caseId) {
+      void addTimelineEntry({
+        caseId: task.caseId,
+        workspaceId: workspace.id,
+        actorUserId: currentUser.id,
+        type: "task.completed",
+        title: `Task completed: ${task.title}`,
+        metadata: { taskId: task.id },
+      });
+    }
   }
 
   // Notify newly added assignees

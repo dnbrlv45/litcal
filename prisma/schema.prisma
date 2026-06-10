@@ -32,6 +32,7 @@ model User {
   caseStaffAssignments CaseStaff[]
   assignedEvents       Event[]    @relation("EventAttorney")
   courtRuleRequests    CourtRuleRequest[]
+  caseTimeline         CaseTimeline[]
 }
 
 model AuthSession {
@@ -66,6 +67,7 @@ model Workspace {
   generatedDeadlines   GeneratedDeadline[]
   courtCoverageAlerts  CourtCoverageAlert[]
   courtRuleRequests    CourtRuleRequest[]
+  caseTimeline         CaseTimeline[]
 
   @@index([createdBy])
 }
@@ -338,7 +340,8 @@ model Case {
   parties   CaseParty[]
   events    Event[]
   tasks     Task[]
-  notifications Notification[]
+  notifications  Notification[]
+  timeline       CaseTimeline[]
 
   @@index([orgId])
   @@index([workspaceId])
@@ -639,3 +642,24 @@ model CourtRuleRequest {
 // model InboxItem { ... }
 // enum InboxSource { EMAIL DOCUMENT MANUAL }
 // enum InboxStatus { UNREAD PROCESSING PROCESSED ARCHIVED }
+
+// ─── CASE TIMELINE ────────────────────────────────────────────────────────────
+
+model CaseTimeline {
+  id          String   @id @default(cuid())
+  caseId      String
+  workspaceId String
+  actorUserId String?
+  type        String
+  title       String
+  description String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  caseRef   Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  actor     User?     @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([caseId, createdAt])
+  @@index([workspaceId])
+}

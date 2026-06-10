@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getAccessToken, deleteGoogleEvent, patchGoogleEvent } from "@/lib/google-calendar";
 import { buildGoogleEventPayload } from "@/lib/google-calendar-payload";
+import { addTimelineEntry } from "@/lib/case-timeline";
 import { getCurrentWorkspace } from "@/lib/workspaces";
 import { detectConflicts } from "@/lib/conflicts";
 import { cascadeDeadlineDateChange } from "@/lib/deadline-rules";
@@ -54,6 +55,17 @@ export async function DELETE(
 
   // Delete from Supabase — cascades to GoogleCalendarSync and GeneratedDeadline rows
   await prisma.event.delete({ where: { id } });
+
+  if (event.caseId && workspace) {
+    void addTimelineEntry({
+      caseId: event.caseId,
+      workspaceId: workspace.id,
+      actorUserId: userId,
+      type: "event.deleted",
+      title: `Event removed: ${event.title}`,
+      metadata: { eventType: event.eventType },
+    });
+  }
 
   // Mirror deletion to Google Calendar
   if (event.googleSync) {
@@ -163,6 +175,18 @@ export async function PATCH(
     ? await detectConflicts(updated.assignedAttorney.id, newStart, newEnd, id)
     : [];
 
+  // Timeline: event edited
+  if (updated.caseId && workspace) {
+    void addTimelineEntry({
+      caseId: updated.caseId,
+      workspaceId: workspace.id,
+      actorUserId: userId,
+      type: "event.edited",
+      title: `Event updated: ${updated.title}`,
+      metadata: { eventId: id },
+    });
+  }
+
   // Mirror edits to Google Calendar
   if (updated.googleSync) {
     try {
@@ -216,6 +240,16 @@ export async function PATCH(
               colorId: googlePayload.colorId,
             }
           );
+          if (updated.caseId && workspace) {
+            void addTimelineEntry({
+              caseId: updated.caseId,
+              workspaceId: workspace.id,
+              actorUserId: null,
+              type: "event.google_synced",
+              title: "Google Calendar event updated",
+              metadata: { eventId: id },
+            });
+          }
         }
       }
     } catch (err) {

@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getAccessToken, patchGoogleEvent } from "@/lib/google-calendar";
 import { buildGoogleEventPayload } from "@/lib/google-calendar-payload";
+import { addTimelineEntry } from "@/lib/case-timeline";
 
 // POST /api/admin/court-rule-requests/accept
 // Body: { requestId: string }
@@ -155,6 +156,25 @@ export async function POST(request: NextRequest) {
     });
 
     for (const ev of events) {
+      // Timeline: rule backfilled
+      if (ev.caseRef) {
+        const caseIdForTimeline = await prisma.event.findUnique({
+          where: { id: ev.id },
+          select: { caseId: true, workspaceId: true },
+        });
+        if (caseIdForTimeline?.caseId && caseIdForTimeline.workspaceId) {
+          void addTimelineEntry({
+            caseId: caseIdForTimeline.caseId,
+            workspaceId: caseIdForTimeline.workspaceId,
+            actorUserId: null,
+            type: "event.rule_backfilled",
+            title: `Remote appearance info added to: ${ev.title}`,
+            description: rule.appearanceType ? `Type: ${rule.appearanceType}` : undefined,
+            metadata: { eventId: ev.id, ruleId: rule.id },
+          });
+        }
+      }
+
       await prisma.event.update({
         where: { id: ev.id },
         data: {

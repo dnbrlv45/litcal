@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCurrentWorkspace } from "@/lib/workspaces";
+import { addTimelineEntry } from "@/lib/case-timeline";
 
 const CASE_TYPE_VALUES = ["AUTO_ACCIDENT","SLIP_AND_FALL","GOVERNMENT_CLAIM","DOG_BITE","PREMISES_LIABILITY","MEDICAL_MALPRACTICE","WRONGFUL_DEATH","PRODUCT_LIABILITY","OTHER"];
 
@@ -132,6 +133,15 @@ export async function POST(request: NextRequest) {
       countyRef: { select: { id: true, name: true } },
       courtRef:  { select: { id: true, name: true } },
     },
+  });
+
+  void addTimelineEntry({
+    caseId: newCase.id,
+    workspaceId: workspace.id,
+    actorUserId: userId,
+    type: "case.created",
+    title: "Case created",
+    description: newCase.caseNumber ? `Case #${newCase.caseNumber}` : undefined,
   });
 
   return NextResponse.json({ case: newCase }, { status: 201 });

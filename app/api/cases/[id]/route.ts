@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getAccessToken, deleteGoogleEvent } from "@/lib/google-calendar";
 import { getCurrentWorkspace } from "@/lib/workspaces";
+import { addTimelineEntry } from "@/lib/case-timeline";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -195,6 +196,67 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       await prisma.event.updateMany({
         where: { caseId: id },
         data: { assignedAttorneyId: addedAttorneys[0].userId },
+      });
+    }
+  }
+
+  // Timeline: status change
+  if (newStatus && newStatus !== existing.status) {
+    void addTimelineEntry({
+      caseId: id,
+      workspaceId: workspace.id,
+      actorUserId: userId,
+      type: "case.status_changed",
+      title: `Status changed to ${newStatus.charAt(0) + newStatus.slice(1).toLowerCase()}`,
+      metadata: { from: existing.status, to: newStatus },
+    });
+  }
+
+  // Timeline: field edits (only if something substantive changed)
+  const editedFields: string[] = [];
+  if (body.title !== undefined && body.title.trim() !== existing.title) editedFields.push("title");
+  if (body.caseNumber !== undefined && (body.caseNumber?.trim() || null) !== existing.caseNumber) editedFields.push("case number");
+  if (body.judge !== undefined && (body.judge?.trim() || null) !== existing.judge) editedFields.push("judge");
+  if (body.countyName !== undefined) editedFields.push("county/court");
+  if (body.description !== undefined && (body.description?.trim() || null) !== existing.description) editedFields.push("description");
+  if (body.defendant !== undefined) editedFields.push("defendant info");
+  if (editedFields.length > 0 && !newStatus) {
+    void addTimelineEntry({
+      caseId: id,
+      workspaceId: workspace.id,
+      actorUserId: userId,
+      type: "case.edited",
+      title: "Case details updated",
+      description: `Changed: ${editedFields.join(", ")}`,
+    });
+  }
+
+  // Timeline: staff added
+  if (toAdd.length > 0) {
+    const existingIds = new Set(existing.staff.map((s) => `${s.userId}:${s.role}`));
+    const newOnes = toAdd.filter((a) => !existingIds.has(`${a.userId}:${a.role}`));
+    for (const { userId: uid, role } of newOnes) {
+      void addTimelineEntry({
+        caseId: id,
+        workspaceId: workspace.id,
+        actorUserId: userId,
+        type: "case.staff_added",
+        title: `${role.charAt(0) + role.slice(1).toLowerCase()} assigned`,
+        metadata: { userId: uid, role },
+      });
+    }
+  }
+
+  // Timeline: staff removed
+  if (toRemove.length > 0) {
+    for (const { userId: uid, role } of toRemove) {
+      void addTimelineEntry({
+        caseId: id,
+        workspaceId: workspace.id,
+        actorUserId: userId,
+        type: "case.staff_removed",
+        title: `${role.charAt(0) + role.slice(1).toLowerCase()} removed`,
+        metadata: { userId: uid, role },
       });
     }
   }

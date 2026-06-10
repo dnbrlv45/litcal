@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getAccessToken, createGoogleEvent, createLitCalCalendar } from "@/lib/google-calendar";
 import type { GoogleCalEvent } from "@/lib/google-calendar";
 import { buildGoogleEventPayload, getGoogleColorId } from "@/lib/google-calendar-payload";
+import { addTimelineEntry } from "@/lib/case-timeline";
 import { computeReminders, googleReminderOverrides } from "@/lib/reminders";
 import { getCurrentWorkspace } from "@/lib/workspaces";
 import { detectConflicts, getConflictedEventIds } from "@/lib/conflicts";
@@ -337,6 +338,67 @@ export async function POST(request: NextRequest) {
     timeZone: timeZone ?? "UTC",
   });
 
+  // Timeline entries (fire-and-forget, caseId required)
+  if (caseId) {
+    void addTimelineEntry({
+      caseId,
+      workspaceId: workspace.id,
+      actorUserId: userId,
+      type: "event.created",
+      title: `Event added: ${event.title}`,
+      description: safeEventType !== "OTHER" ? safeEventType as string : undefined,
+      metadata: { eventId: event.id, eventType: safeEventType },
+    });
+
+    if (hearingRule) {
+      void addTimelineEntry({
+        caseId,
+        workspaceId: workspace.id,
+        actorUserId: null,
+        type: "event.rule_applied",
+        title: "Remote appearance rule applied",
+        description: hearingRule.appearanceType ? `Type: ${hearingRule.appearanceType}` : undefined,
+        metadata: { eventId: event.id, ruleId: hearingRule.id },
+      });
+    }
+
+    if (deadlineResult.createdEventIds.length > 0) {
+      const isTrialType = (safeEventType as string) === "TRIAL";
+      void addTimelineEntry({
+        caseId,
+        workspaceId: workspace.id,
+        actorUserId: null,
+        type: isTrialType ? "event.trial_deadlines_generated" : "event.cmc_task_generated",
+        title: isTrialType
+          ? `${deadlineResult.createdEventIds.length} trial deadline${deadlineResult.createdEventIds.length > 1 ? "s" : ""} generated`
+          : "CMS task generated",
+        metadata: { eventId: event.id, generatedEventIds: deadlineResult.createdEventIds },
+      });
+    }
+
+    if (deadlineResult.createdTaskIds.length > 0 && (safeEventType as string) === "CASE_MANAGEMENT_CONFERENCE") {
+      void addTimelineEntry({
+        caseId,
+        workspaceId: workspace.id,
+        actorUserId: null,
+        type: "event.cmc_task_generated",
+        title: "Case Management Statement task generated",
+        metadata: { eventId: event.id, taskIds: deadlineResult.createdTaskIds },
+      });
+    }
+
+    if (!isInPerson && hearingRule?.requestRequired) {
+      void addTimelineEntry({
+        caseId,
+        workspaceId: workspace.id,
+        actorUserId: null,
+        type: "event.remote_task_generated",
+        title: "Remote appearance request task generated",
+        metadata: { eventId: event.id },
+      });
+    }
+  }
+
   // Push to Google Calendar if connected
   let googlePush: { ok: boolean; error?: string | null } = { ok: false, error: "Google not connected" };
 
@@ -404,6 +466,16 @@ export async function POST(request: NextRequest) {
           syncStatus: "SYNCED",
         },
       });
+      if (caseId) {
+        void addTimelineEntry({
+          caseId,
+          workspaceId: workspace.id,
+          actorUserId: null,
+          type: "event.google_synced",
+          title: "Synced to Google Calendar",
+          metadata: { eventId: event.id, googleEventId: gEvent.id },
+        });
+      }
 
       // Push any generated deadline events to Google Calendar too
       if (deadlineResult.createdEventIds.length > 0) {

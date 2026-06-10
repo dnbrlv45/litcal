@@ -28,6 +28,7 @@ import { EVENT_TYPE_COLORS } from "@/lib/google-calendar";
 import type { EventType } from "@/lib/google-calendar";
 import { COUNTIES_AND_COURTS } from "@/lib/counties-courts";
 import CaseTasksSection from "./CaseTasksSection";
+import CaseTimeline from "./CaseTimeline";
 
 const STATUS_OPTIONS = ["ACTIVE", "PENDING", "CLOSED", "ARCHIVED"] as const;
 const STATUS_COLORS = {
@@ -493,6 +494,9 @@ export default function CaseDetailClient({ id }: { id: string }) {
             caseTitle={caseData.title}
             caseNumber={caseData.caseNumber}
           />
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <CaseTimeline caseId={caseData.id} />
+          </div>
         </div>
         </div>
       </div>
