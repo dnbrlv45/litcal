@@ -88,13 +88,13 @@ export default function CourtCoveragePage() {
     }
   }
 
-  async function acceptRequest(requestId: string) {
+  async function acceptRequest(requestId: string, overrides: Record<string, unknown>) {
     setPendingId(requestId);
     try {
       const res = await fetch("/api/admin/court-rule-requests/accept", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requestId }),
+        body: JSON.stringify({ requestId, overrides }),
       });
       const data = await res.json();
       if (!res.ok) { alert(data.error ?? "Failed"); return; }
@@ -277,6 +277,170 @@ function AlertTable({
   );
 }
 
+function RequestCard({
+  r,
+  busy,
+  onAccept,
+  onDismiss,
+}: {
+  r: RuleRequest;
+  busy: boolean;
+  onAccept: (id: string, overrides: Record<string, unknown>) => void;
+  onDismiss: (id: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({
+    appearanceType:      r.appearanceType      ?? "",
+    remoteLink:          r.remoteLink          ?? "",
+    phoneNumber:         r.phoneNumber         ?? "",
+    bridge:              r.bridge              ?? "",
+    password:            r.password            ?? "",
+    requestRequired:     r.requestRequired,
+    requestContactEmail: r.requestContactEmail ?? "",
+    notes:               r.notes              ?? "",
+  });
+
+  const name = [r.requestedBy.firstName, r.requestedBy.lastName].filter(Boolean).join(" ") || r.requestedBy.email;
+  const hasRuleInfo = !!(r.remoteLink || r.phoneNumber);
+
+  function handleAccept() {
+    onAccept(r.id, {
+      appearanceType:      form.appearanceType      || null,
+      remoteLink:          form.remoteLink          || null,
+      phoneNumber:         form.phoneNumber         || null,
+      bridge:              form.bridge              || null,
+      password:            form.password            || null,
+      requestRequired:     form.requestRequired,
+      requestContactEmail: form.requestContactEmail || null,
+      notes:               form.notes              || null,
+    });
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white shadow-sm p-4 flex flex-col gap-3">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-semibold text-slate-900 capitalize">
+            {r.county} <span className="uppercase text-xs text-slate-400 font-normal">{r.state}</span>
+            {r.court && <span className="text-slate-500 font-normal"> · {r.court}</span>}
+            {r.department && <span className="text-slate-400 font-normal"> · Dept. {r.department.toUpperCase()}</span>}
+          </p>
+          <p className="text-xs text-slate-400 mt-0.5">{name} · {r.workspace.name} · {new Date(r.createdAt).toLocaleDateString()}</p>
+        </div>
+        {hasRuleInfo && !editing && (
+          <span className="shrink-0 inline-flex items-center rounded-full bg-teal-50 border border-teal-200 px-2 py-0.5 text-xs text-teal-700 font-medium">
+            Ready to accept
+          </span>
+        )}
+      </div>
+
+      {/* Read view */}
+      {!editing && (
+        <>
+          <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-600">
+            {r.appearanceType && <span className="capitalize"><span className="text-slate-400">Type:</span> {r.appearanceType}</span>}
+            {r.remoteLink && (
+              <span><span className="text-slate-400">Link:</span>{" "}
+                <a href={r.remoteLink} target="_blank" rel="noopener noreferrer" className="text-teal-700 underline truncate max-w-[220px] inline-block align-bottom">{r.remoteLink}</a>
+              </span>
+            )}
+            {r.phoneNumber && <span><span className="text-slate-400">Phone:</span> {r.phoneNumber}</span>}
+            {r.bridge && <span><span className="text-slate-400">Bridge:</span> <span className="font-mono">{r.bridge}</span></span>}
+            {r.password && <span><span className="text-slate-400">Password:</span> <span className="font-mono">{r.password}</span></span>}
+            {r.requestRequired && <span className="text-amber-700 font-medium">Request required{r.requestContactEmail ? ` · ${r.requestContactEmail}` : ""}</span>}
+            {!r.appearanceType && !r.remoteLink && !r.phoneNumber && !r.bridge && (
+              <span className="italic text-slate-300">No appearance details submitted</span>
+            )}
+          </div>
+          {r.notes && <p className="text-xs text-slate-500 italic border-t border-slate-100 pt-2">{r.notes}</p>}
+        </>
+      )}
+
+      {/* Inline edit form */}
+      {editing && (
+        <div className="flex flex-col gap-3 border-t border-slate-100 pt-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-slate-500">Appearance Type</label>
+              <select
+                value={form.appearanceType}
+                onChange={(e) => setForm((f) => ({ ...f, appearanceType: e.target.value }))}
+                className="flex h-8 w-full rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="">— Unknown —</option>
+                <option value="zoom">Zoom</option>
+                <option value="teams">Microsoft Teams</option>
+                <option value="court call">CourtCall</option>
+                <option value="phone">Phone</option>
+                <option value="webex">Webex</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-slate-500">Phone Number</label>
+              <input value={form.phoneNumber} onChange={(e) => setForm((f) => ({ ...f, phoneNumber: e.target.value }))} className="flex h-8 w-full rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-slate-500">Bridge / Access Code</label>
+              <input value={form.bridge} onChange={(e) => setForm((f) => ({ ...f, bridge: e.target.value }))} className="flex h-8 w-full rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-slate-500">Password / PIN</label>
+              <input value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} className="flex h-8 w-full rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+            </div>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-slate-500">Remote Link</label>
+            <input value={form.remoteLink} onChange={(e) => setForm((f) => ({ ...f, remoteLink: e.target.value }))} className="flex h-8 w-full rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+          </div>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" checked={form.requestRequired} onChange={(e) => setForm((f) => ({ ...f, requestRequired: e.target.checked }))} className="h-4 w-4 rounded border-slate-300 accent-slate-900" />
+              <span className="text-sm text-slate-700">Request required</span>
+            </label>
+          </div>
+          {form.requestRequired && (
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-slate-500">Request Email</label>
+              <input value={form.requestContactEmail} onChange={(e) => setForm((f) => ({ ...f, requestContactEmail: e.target.value }))} className="flex h-8 w-full rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+            </div>
+          )}
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-slate-500">Notes</label>
+            <textarea rows={2} value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} className="flex w-full rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none" />
+          </div>
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+        <button
+          disabled={busy}
+          onClick={handleAccept}
+          className="rounded bg-teal-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 disabled:opacity-50"
+        >
+          {busy ? "Accepting…" : "Accept & create rule"}
+        </button>
+        <button
+          disabled={busy}
+          onClick={() => setEditing((v) => !v)}
+          className="rounded border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+        >
+          {editing ? "Hide edit" : "Edit before accepting"}
+        </button>
+        <button
+          disabled={busy}
+          onClick={() => onDismiss(r.id)}
+          className="rounded px-3 py-1.5 text-xs font-medium text-slate-400 hover:text-slate-600 disabled:opacity-50"
+        >
+          Dismiss
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function RequestsSection({
   requests,
   pendingId,
@@ -285,7 +449,7 @@ function RequestsSection({
 }: {
   requests: RuleRequest[];
   pendingId: string | null;
-  onAccept: (id: string) => void;
+  onAccept: (id: string, overrides: Record<string, unknown>) => void;
   onDismiss: (id: string) => void;
 }) {
   const pending = requests.filter((r) => !r.reviewed);
@@ -294,7 +458,7 @@ function RequestsSection({
   return (
     <div>
       <h2 className="text-base font-semibold text-slate-800 mb-1">Rule Requests</h2>
-      <p className="text-xs text-slate-400 mb-4">Submitted by users. Accept to create the rule instantly, or dismiss to close without adding.</p>
+      <p className="text-xs text-slate-400 mb-4">Submitted by users. Edit if needed, then accept to create the rule, or dismiss to close without adding.</p>
 
       {pending.length === 0 && reviewed.length === 0 && (
         <p className="text-sm text-slate-400">No requests yet.</p>
@@ -302,68 +466,15 @@ function RequestsSection({
 
       {pending.length > 0 && (
         <div className="flex flex-col gap-3">
-          {pending.map((r) => {
-            const name = [r.requestedBy.firstName, r.requestedBy.lastName].filter(Boolean).join(" ") || r.requestedBy.email;
-            const busy = pendingId === r.id;
-            const hasRuleInfo = !!(r.remoteLink || r.phoneNumber);
-
-            return (
-              <div key={r.id} className="rounded-lg border border-slate-200 bg-white shadow-sm p-4 flex flex-col gap-3">
-                {/* Header */}
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900 capitalize">
-                      {r.county} <span className="uppercase text-xs text-slate-400 font-normal">{r.state}</span>
-                      {r.court && <span className="text-slate-500 font-normal"> · {r.court}</span>}
-                      {r.department && <span className="text-slate-400 font-normal"> · Dept. {r.department.toUpperCase()}</span>}
-                    </p>
-                    <p className="text-xs text-slate-400 mt-0.5">{name} · {r.workspace.name} · {new Date(r.createdAt).toLocaleDateString()}</p>
-                  </div>
-                  {hasRuleInfo && (
-                    <span className="shrink-0 inline-flex items-center rounded-full bg-teal-50 border border-teal-200 px-2 py-0.5 text-xs text-teal-700 font-medium">
-                      Ready to accept
-                    </span>
-                  )}
-                </div>
-
-                {/* Rule details */}
-                <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-600">
-                  {r.appearanceType && <span className="capitalize"><span className="text-slate-400">Type:</span> {r.appearanceType}</span>}
-                  {r.remoteLink && (
-                    <span><span className="text-slate-400">Link:</span>{" "}
-                      <a href={r.remoteLink} target="_blank" rel="noopener noreferrer" className="text-teal-700 underline truncate max-w-[220px] inline-block align-bottom">{r.remoteLink}</a>
-                    </span>
-                  )}
-                  {r.phoneNumber && <span><span className="text-slate-400">Phone:</span> {r.phoneNumber}</span>}
-                  {r.bridge && <span><span className="text-slate-400">Bridge:</span> <span className="font-mono">{r.bridge}</span></span>}
-                  {r.password && <span><span className="text-slate-400">Password:</span> <span className="font-mono">{r.password}</span></span>}
-                  {r.requestRequired && <span className="text-amber-700 font-medium">Request required{r.requestContactEmail ? ` · ${r.requestContactEmail}` : ""}</span>}
-                </div>
-
-                {r.notes && (
-                  <p className="text-xs text-slate-500 italic border-t border-slate-100 pt-2">{r.notes}</p>
-                )}
-
-                {/* Actions */}
-                <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
-                  <button
-                    disabled={busy}
-                    onClick={() => onAccept(r.id)}
-                    className="rounded bg-teal-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 disabled:opacity-50"
-                  >
-                    {busy ? "Accepting…" : "Accept & create rule"}
-                  </button>
-                  <button
-                    disabled={busy}
-                    onClick={() => onDismiss(r.id)}
-                    className="rounded border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+          {pending.map((r) => (
+            <RequestCard
+              key={r.id}
+              r={r}
+              busy={pendingId === r.id}
+              onAccept={onAccept}
+              onDismiss={onDismiss}
+            />
+          ))}
         </div>
       )}
 

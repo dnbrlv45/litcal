@@ -10,7 +10,19 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!user.isSuperAdmin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const { requestId } = (await request.json()) as { requestId: string };
+  const { requestId, overrides } = (await request.json()) as {
+    requestId: string;
+    overrides?: {
+      appearanceType?: string | null;
+      remoteLink?: string | null;
+      phoneNumber?: string | null;
+      bridge?: string | null;
+      password?: string | null;
+      requestRequired?: boolean;
+      requestContactEmail?: string | null;
+      notes?: string | null;
+    };
+  };
   if (!requestId) return NextResponse.json({ error: "Missing requestId" }, { status: 400 });
 
   const req = await prisma.courtRuleRequest.findUnique({ where: { id: requestId } });
@@ -58,6 +70,7 @@ export async function POST(request: NextRequest) {
     },
   });
 
+  const o = overrides ?? {};
   const ruleData = {
     state,
     countyId: countyRecord?.id ?? null,
@@ -66,14 +79,14 @@ export async function POST(request: NextRequest) {
     countyName,
     courtName,
     department,
-    appearanceType: req.appearanceType || null,
-    remoteLink: req.remoteLink || null,
-    phoneNumber: req.phoneNumber || null,
-    bridge: req.bridge || null,
-    password: req.password || null,
-    requestRequired: req.requestRequired,
-    requestContactEmail: req.requestContactEmail || null,
-    requestNotes: req.notes || null,
+    appearanceType:      "appearanceType"      in o ? (o.appearanceType      || null) : (req.appearanceType      || null),
+    remoteLink:          "remoteLink"          in o ? (o.remoteLink          || null) : (req.remoteLink          || null),
+    phoneNumber:         "phoneNumber"         in o ? (o.phoneNumber         || null) : (req.phoneNumber         || null),
+    bridge:              "bridge"              in o ? (o.bridge              || null) : (req.bridge              || null),
+    password:            "password"            in o ? (o.password            || null) : (req.password            || null),
+    requestRequired:     "requestRequired"     in o ? (o.requestRequired     ?? false) : req.requestRequired,
+    requestContactEmail: "requestContactEmail" in o ? (o.requestContactEmail || null) : (req.requestContactEmail || null),
+    requestNotes:        "notes"               in o ? (o.notes               || null) : (req.notes               || null),
     active: true,
   };
 
