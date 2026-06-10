@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getAccessToken, createGoogleEvent, createLitCalCalendar } from "@/lib/google-calendar";
 import type { GoogleCalEvent } from "@/lib/google-calendar";
+import { buildGoogleEventPayload, getGoogleColorId } from "@/lib/google-calendar-payload";
 import { computeReminders, googleReminderOverrides } from "@/lib/reminders";
 import { getCurrentWorkspace } from "@/lib/workspaces";
 import { detectConflicts, getConflictedEventIds } from "@/lib/conflicts";
@@ -62,6 +63,8 @@ export async function GET(request: NextRequest) {
       end: e.endTime.toISOString(),
       allDay: e.allDay,
       eventType: e.eventType,
+      subtype: e.subtype,
+      subtypeReason: e.subtypeReason,
       location: e.location,
       department: e.department,
       caseId: e.caseId,
@@ -100,7 +103,7 @@ export async function POST(request: NextRequest) {
   const {
     title, description, start, end, timeZone, eventType,
     location, department, departmentId, caseId, allDay,
-    inPerson, countyName, courtName,
+    inPerson, countyName, courtName, subtype, subtypeReason,
   } = body as {
     title: string;
     description?: string;
@@ -116,6 +119,8 @@ export async function POST(request: NextRequest) {
     inPerson?: boolean;
     countyName?: string;
     courtName?: string;
+    subtype?: string;
+    subtypeReason?: string;
   };
 
   if (!title?.trim() || !start || !end)
@@ -125,6 +130,10 @@ export async function POST(request: NextRequest) {
   let caseCountyName: string | null = null;
   let caseCourtName: string | null = null;
   let caseStaffForTask: { userId: string; role: string }[] = [];
+  let caseTitleForGoogle: string | null = null;
+  let caseNumberForGoogle: string | null = null;
+  let attorneyNameForGoogle: string | null = null;
+  let paralegalNameForGoogle: string | null = null;
 
   let caseState: string | null = null;
   if (caseId) {
@@ -132,10 +141,16 @@ export async function POST(request: NextRequest) {
       where: { id: caseId },
       select: {
         status: true,
+        title: true,
+        caseNumber: true,
         county: true,
         court: true,
         countyId: true,
-        staff: { where: { role: { in: ["ATTORNEY", "PARALEGAL"] } }, select: { userId: true, role: true }, orderBy: { createdAt: "asc" } },
+        staff: {
+          where: { role: { in: ["ATTORNEY", "PARALEGAL"] } },
+          select: { userId: true, role: true, user: { select: { firstName: true, lastName: true } } },
+          orderBy: { createdAt: "asc" },
+        },
       },
     });
     if (!linkedCase) return NextResponse.json({ error: "Case not found" }, { status: 404 });
@@ -145,6 +160,12 @@ export async function POST(request: NextRequest) {
     caseCountyName = linkedCase.county ?? null;
     caseCourtName = linkedCase.court ?? null;
     caseStaffForTask = linkedCase.staff;
+    caseTitleForGoogle = linkedCase.title ?? null;
+    caseNumberForGoogle = linkedCase.caseNumber ?? null;
+    const atty = linkedCase.staff.find((s) => s.role === "ATTORNEY");
+    const para = linkedCase.staff.find((s) => s.role === "PARALEGAL");
+    attorneyNameForGoogle  = atty ? [atty.user.firstName, atty.user.lastName].filter(Boolean).join(" ") || null : null;
+    paralegalNameForGoogle = para ? [para.user.firstName, para.user.lastName].filter(Boolean).join(" ") || null : null;
     // Resolve state from the case's county record
     if (linkedCase.countyId) {
       const countyRecord = await prisma.county.findUnique({
@@ -205,6 +226,8 @@ export async function POST(request: NextRequest) {
       timeZone: timeZone ?? "UTC",
       allDay: allDay ?? false,
       eventType: safeEventType,
+      subtype: subtype?.trim() || null,
+      subtypeReason: subtypeReason?.trim() || null,
       location: location || null,
       department: department?.trim() || null,
       departmentId: departmentId || null,
@@ -336,15 +359,36 @@ export async function POST(request: NextRequest) {
       }
 
       const reminderOverrides = googleReminderOverrides(safeEventType as string);
-      const googleDescription = [
-        event.department ? `Department: ${event.department}` : null,
-        event.description,
-      ].filter(Boolean).join("\n\n") || undefined;
+      const googlePayload = buildGoogleEventPayload({
+        title: event.title,
+        eventType: safeEventType as string,
+        subtype: event.subtype,
+        subtypeReason: event.subtypeReason,
+        description: event.description,
+        location: event.location,
+        department: event.department,
+        inPerson: isInPerson,
+        caseName: caseTitleForGoogle,
+        caseNumber: caseNumberForGoogle,
+        countyName: caseCountyName ?? countyName,
+        courtName: caseCourtName ?? courtName,
+        appearanceType: hearingRule?.appearanceType,
+        remoteLink: hearingRule?.remoteLink,
+        phoneNumber: hearingRule?.phoneNumber,
+        bridge: hearingRule?.bridge,
+        password: hearingRule?.password,
+        requestRequired: hearingRule?.requestRequired ?? null,
+        requestTaskCreated: !!(hearingRule?.requestRequired),
+        attorneyName: attorneyNameForGoogle,
+        paralegalName: paralegalNameForGoogle,
+      });
       const gEvent: GoogleCalEvent = await createGoogleEvent(
         accessToken,
         {
-          summary: event.title,
-          description: googleDescription,
+          summary: googlePayload.summary,
+          description: googlePayload.description,
+          location: googlePayload.location,
+          colorId: googlePayload.colorId,
           start,
           end,
           timeZone: timeZone ?? "UTC",
@@ -365,6 +409,7 @@ export async function POST(request: NextRequest) {
       if (deadlineResult.createdEventIds.length > 0) {
         const generatedEvents = await prisma.event.findMany({
           where: { id: { in: deadlineResult.createdEventIds } },
+          include: { caseRef: { select: { title: true, county: true, court: true } } },
         });
         for (const ge of generatedEvents) {
           try {
@@ -374,8 +419,10 @@ export async function POST(request: NextRequest) {
               {
                 summary: ge.title,
                 description: ge.description ?? undefined,
+                colorId: getGoogleColorId(ge.eventType),
                 start: dayStr,
                 end: dayStr,
+                allDay: true,
                 timeZone: timeZone ?? "UTC",
                 reminderOverrides: [{ method: "popup", minutes: 1440 }],
               },

@@ -169,10 +169,12 @@ model Event {
   assignedAttorneyId String?
   departmentId String?
 
-  eventType   EventType   @default(OTHER)
-  status      EventStatus @default(SCHEDULED)
-  location    String?
-  department  String?     // free-text fallback; departmentId is preferred when set
+  eventType     EventType   @default(OTHER)
+  subtype       String?     // hearing subtype label: "CMC", "MSC", "OSC", "Motion Hearing", etc.
+  subtypeReason String?     // OSC reason, e.g. "Proof of Service"
+  status        EventStatus @default(SCHEDULED)
+  location      String?
+  department    String?     // free-text fallback; departmentId is preferred when set
 
   // Remote appearance fields (populated from CourtHearingRule at creation)
   inPerson              Boolean  @default(false)

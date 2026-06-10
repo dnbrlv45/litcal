@@ -130,9 +130,12 @@ export async function createGoogleEvent(
   event: {
     summary: string;
     description?: string;
+    location?: string;
+    colorId?: number;
     start: string;
     end: string;
     timeZone: string;
+    allDay?: boolean;
     reminderOverrides?: Array<{ method: "popup"; minutes: number }>;
   },
   calendarId = "primary"
@@ -141,6 +144,13 @@ export async function createGoogleEvent(
     event.reminderOverrides && event.reminderOverrides.length > 0
       ? { useDefault: false, overrides: event.reminderOverrides }
       : { useDefault: true };
+
+  const startField = event.allDay
+    ? { date: event.start.slice(0, 10) }
+    : { dateTime: event.start, timeZone: event.timeZone };
+  const endField = event.allDay
+    ? { date: event.end.slice(0, 10) }
+    : { dateTime: event.end, timeZone: event.timeZone };
 
   const res = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
@@ -152,9 +162,11 @@ export async function createGoogleEvent(
       },
       body: JSON.stringify({
         summary: event.summary,
-        description: event.description,
-        start: { dateTime: event.start, timeZone: event.timeZone },
-        end: { dateTime: event.end, timeZone: event.timeZone },
+        ...(event.description && { description: event.description }),
+        ...(event.location    && { location: event.location }),
+        ...(event.colorId     && { colorId: String(event.colorId) }),
+        start: startField,
+        end: endField,
         reminders,
       }),
     }
@@ -166,12 +178,12 @@ export async function createGoogleEvent(
   return res.json();
 }
 
-/** Patches an existing Google Calendar event's description field. */
+/** Patches fields on an existing Google Calendar event. */
 export async function patchGoogleEvent(
   accessToken: string,
   calendarId: string,
   googleEventId: string,
-  patch: { description?: string }
+  patch: { summary?: string; description?: string; location?: string; colorId?: number }
 ): Promise<void> {
   const res = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(googleEventId)}`,
@@ -181,7 +193,12 @@ export async function patchGoogleEvent(
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(patch),
+      body: JSON.stringify({
+        ...(patch.summary     !== undefined && { summary: patch.summary }),
+        ...(patch.description !== undefined && { description: patch.description }),
+        ...(patch.location    !== undefined && { location: patch.location }),
+        ...(patch.colorId     !== undefined && { colorId: String(patch.colorId) }),
+      }),
     }
   );
   if (!res.ok && res.status !== 410) {

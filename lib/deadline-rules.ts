@@ -154,7 +154,7 @@ export async function applyDeadlineRules(
           }),
           prisma.case.findUnique({
             where: { id: trigger.caseId },
-            select: { title: true },
+            select: { title: true, caseNumber: true },
           }),
         ]);
         caseTitle = caseRecord?.title ?? null;
@@ -240,14 +240,38 @@ export async function applyDeadlineRules(
       const triggerLabel = trigger.startTime.toLocaleDateString("en-US", {
         month: "long", day: "numeric", year: "numeric",
       });
-      const triggerTypeName = trigger.eventType === "TRIAL" ? "Trial" : trigger.eventType;
+      const triggerTypeName = trigger.eventType === "TRIAL" ? "Trial"
+        : trigger.eventType === "CASE_MANAGEMENT_CONFERENCE" ? "Case Management Conference"
+        : trigger.eventType;
+
+      // Load case info for description (may have been fetched already for task rules)
+      let deadlineCaseTitle: string | null = null;
+      let deadlineCaseNumber: string | null = null;
+      if (trigger.caseId) {
+        const cRec = await prisma.case.findUnique({
+          where: { id: trigger.caseId },
+          select: { title: true, caseNumber: true },
+        });
+        deadlineCaseTitle  = cRec?.title ?? null;
+        deadlineCaseNumber = cRec?.caseNumber ?? null;
+      }
+
+      const deadlineTitle = deadlineCaseTitle
+        ? `${deadlineCaseTitle} — ${rule.name}`
+        : rule.name;
+
+      const descLines: string[] = [];
+      if (deadlineCaseTitle)  descLines.push(`Case:\n${deadlineCaseTitle}`);
+      if (deadlineCaseNumber) descLines.push(`Case Number:\n${deadlineCaseNumber}`);
+      descLines.push(`Deadline Type:\n${rule.name}`);
+      descLines.push(`Generated from:\n${triggerTypeName} on ${triggerLabel}`);
 
       const event = await prisma.event.create({
         data: {
           userId: trigger.userId,
           workspaceId: trigger.workspaceId,
-          title: rule.name,
-          description: `${rule.name} — generated from ${triggerTypeName} on ${triggerLabel}.\nOffset: ${rule.offsetDays} days before.`,
+          title: deadlineTitle,
+          description: descLines.join("\n\n"),
           startTime: dayStart,
           endTime: dayEnd,
           timeZone: trigger.timeZone,

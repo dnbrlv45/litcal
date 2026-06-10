@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { EventType, ConflictDetail } from "@/lib/google-calendar";
+import { HEARING_SUBTYPES, HEARING_EVENT_TYPES } from "@/lib/google-calendar-payload";
 
 const EVENT_TYPES: { value: EventType; label: string }[] = [
   { value: "HEARING",                    label: "Hearing" },
@@ -118,6 +119,10 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
   const [addingDept, setAddingDept] = useState(false);
   const [deptLoading, setDeptLoading] = useState(false);
 
+  // Hearing subtype
+  const [subtype, setSubtype] = useState("");
+  const [subtypeReason, setSubtypeReason] = useState("");
+
   // Resolved rule preview
   const [rule, setRule] = useState<ResolvedRule | null>(null);
   const [ruleLoading, setRuleLoading] = useState(false);
@@ -146,6 +151,7 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
         setSelectedCountyId(""); setSelectedCourtId(""); setSelectedDeptId("");
         setNewDeptName(""); setAddingDept(false);
         setDepartments([]); setRule(null);
+        setSubtype(""); setSubtypeReason("");
       });
     }
   }, [open, defaultStart]);
@@ -204,6 +210,7 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
 
   function handleEventTypeChange(newType: EventType) {
     setEventType(newType);
+    if (!HEARING_EVENT_TYPES.has(newType)) { setSubtype(""); setSubtypeReason(""); }
     if (newType === "TRIAL") {
       setAllDay(true); setEndDate(addDays(date, 7)); setAutoTrialEnd(true);
     } else if (eventType === "TRIAL") {
@@ -272,7 +279,10 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title, description, start: startISO, end: endISO, timeZone,
-          eventType, location,
+          eventType,
+          subtype: subtype || undefined,
+          subtypeReason: subtypeReason || undefined,
+          location,
           department: deptName ?? undefined,
           departmentId: selectedDeptId || undefined,
           caseId: caseId || undefined,
@@ -341,6 +351,32 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
               ))}
             </select>
           </div>
+
+          {/* Hearing subtype — shown only for hearing-category event types */}
+          {HEARING_EVENT_TYPES.has(eventType) && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="event-subtype">Hearing Type <span className="text-muted-foreground font-normal text-xs">(optional)</span></Label>
+              <select
+                id="event-subtype"
+                value={subtype}
+                onChange={(e) => { setSubtype(e.target.value); setSubtypeReason(""); }}
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="">— Select type —</option>
+                {HEARING_SUBTYPES.map((s) => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+              {subtype === "OSC" && (
+                <Input
+                  placeholder='Reason — e.g. "Proof of Service" or "Dismissal"'
+                  value={subtypeReason}
+                  onChange={(e) => setSubtypeReason(e.target.value)}
+                  className="h-9 text-sm mt-1"
+                />
+              )}
+            </div>
+          )}
 
           {/* Case */}
           {cases.filter((c) => c.status !== "ARCHIVED" && c.status !== "CLOSED").length > 0 && (

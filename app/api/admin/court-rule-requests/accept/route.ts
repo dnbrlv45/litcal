@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getAccessToken, patchGoogleEvent } from "@/lib/google-calendar";
+import { buildGoogleEventPayload } from "@/lib/google-calendar-payload";
 
 // POST /api/admin/court-rule-requests/accept
 // Body: { requestId: string }
@@ -139,9 +140,17 @@ export async function POST(request: NextRequest) {
       select: {
         id: true,
         userId: true,
-        department: true,
+        title: true,
         description: true,
+        location: true,
+        department: true,
+        eventType: true,
+        subtype: true,
+        subtypeReason: true,
+        inPerson: true,
         googleSync: { select: { googleEventId: true, googleCalendarId: true } },
+        caseRef: { select: { title: true, caseNumber: true, county: true, court: true } },
+        assignedAttorney: { select: { firstName: true, lastName: true } },
       },
     });
 
@@ -170,15 +179,39 @@ export async function POST(request: NextRequest) {
           });
           if (connection) {
             const accessToken = await getAccessToken(connection.refreshToken);
-            const googleDescription = [
-              ev.department ? `Department: ${ev.department}` : null,
-              ev.description,
-            ].filter(Boolean).join("\n\n") || undefined;
+            const googlePayload = buildGoogleEventPayload({
+              title: ev.title,
+              eventType: ev.eventType,
+              subtype: ev.subtype,
+              subtypeReason: ev.subtypeReason,
+              description: ev.description,
+              location: ev.location,
+              department: ev.department,
+              inPerson: ev.inPerson,
+              caseName: ev.caseRef?.title ?? null,
+              caseNumber: ev.caseRef?.caseNumber ?? null,
+              countyName: ev.caseRef?.county ?? countyName,
+              courtName: ev.caseRef?.court ?? courtName,
+              appearanceType: rule.appearanceType,
+              remoteLink: rule.remoteLink,
+              phoneNumber: rule.phoneNumber,
+              bridge: rule.bridge,
+              password: rule.password,
+              requestRequired: rule.requestRequired,
+              attorneyName: ev.assignedAttorney
+                ? [ev.assignedAttorney.firstName, ev.assignedAttorney.lastName].filter(Boolean).join(" ") || null
+                : null,
+            });
             await patchGoogleEvent(
               accessToken,
               ev.googleSync.googleCalendarId,
               ev.googleSync.googleEventId,
-              { description: googleDescription }
+              {
+                summary: googlePayload.summary,
+                description: googlePayload.description,
+                location: googlePayload.location,
+                colorId: googlePayload.colorId,
+              }
             );
           }
         } catch (err) {
