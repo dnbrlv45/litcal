@@ -189,7 +189,10 @@ function Section({
             {resolved.length} resolved
           </summary>
           <div className="mt-2">
-            <AlertTable alerts={resolved} pendingId={pendingId} previews={previews} onResolve={onResolve} />
+            <AlertTable alerts={resolved.slice(0, 10)} pendingId={pendingId} previews={previews} onResolve={onResolve} />
+            {resolved.length > 10 && (
+              <p className="text-xs text-slate-400 mt-2 px-1">+ {resolved.length - 10} more (oldest not shown)</p>
+            )}
           </div>
         </details>
       )}
@@ -484,7 +487,7 @@ function RequestsSection({
             {reviewed.length} reviewed
           </summary>
           <div className="mt-2 flex flex-col gap-2">
-            {reviewed.map((r) => {
+            {reviewed.slice(0, 10).map((r) => {
               const name = [r.requestedBy.firstName, r.requestedBy.lastName].filter(Boolean).join(" ") || r.requestedBy.email;
               return (
                 <div key={r.id} className="rounded-lg border border-slate-100 bg-white px-4 py-2.5 flex items-center gap-3 opacity-60">
@@ -499,6 +502,9 @@ function RequestsSection({
                 </div>
               );
             })}
+            {reviewed.length > 10 && (
+              <p className="text-xs text-slate-400 px-1">+ {reviewed.length - 10} more (oldest not shown)</p>
+            )}
           </div>
         </details>
       )}

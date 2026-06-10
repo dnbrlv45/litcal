@@ -524,7 +524,7 @@ function AddRuleForm({
 // ─── County group ─────────────────────────────────────────────────────────────
 
 function CountyGroup({ countyName, rules, onSaved }: { countyName: string; rules: Rule[]; onSaved: (r: Rule) => void }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const active   = rules.filter((r) => r.active).length;
   const inactive = rules.filter((r) => !r.active).length;
 
