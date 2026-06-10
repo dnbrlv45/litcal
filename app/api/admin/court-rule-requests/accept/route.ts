@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getAccessToken, patchGoogleEvent } from "@/lib/google-calendar";
 
 // POST /api/admin/court-rule-requests/accept
 // Body: { requestId: string }
@@ -101,5 +102,91 @@ export async function POST(request: NextRequest) {
     data: { reviewed: true, accepted: true, reviewedAt: new Date() },
   });
 
-  return NextResponse.json({ ok: true });
+  // Backfill matching future unmatched events with the new rule data.
+  const now = new Date();
+  const where =
+    !courtName && !department
+      ? {
+          courtRuleUnmatched: true,
+          startTime: { gte: now },
+          OR: [
+            { countyName: { equals: countyName, mode: "insensitive" as const } },
+            { caseRef: { county: { equals: countyName, mode: "insensitive" as const } } },
+          ],
+        }
+      : {
+          courtRuleUnmatched: true,
+          startTime: { gte: now },
+          department: department ? { equals: department, mode: "insensitive" as const } : undefined,
+        };
+
+  const rule = existing
+    ? await prisma.courtHearingRule.findUnique({ where: { id: existing.id } })
+    : await prisma.courtHearingRule.findUnique({
+        where: {
+          state_countyName_courtName_department: {
+            state,
+            countyName,
+            courtName: courtName ?? "",
+            department: department ?? "",
+          },
+        },
+      });
+
+  if (rule) {
+    const events = await prisma.event.findMany({
+      where,
+      select: {
+        id: true,
+        userId: true,
+        department: true,
+        description: true,
+        googleSync: { select: { googleEventId: true, googleCalendarId: true } },
+      },
+    });
+
+    for (const ev of events) {
+      await prisma.event.update({
+        where: { id: ev.id },
+        data: {
+          courtHearingRuleId:  rule.id,
+          courtRuleUnmatched:  false,
+          appearanceType:      rule.appearanceType,
+          remoteLink:          rule.remoteLink,
+          phoneNumber:         rule.phoneNumber,
+          bridge:              rule.bridge,
+          remotePassword:      rule.password,
+          requestRequired:     rule.requestRequired,
+          requestContactEmail: rule.requestContactEmail,
+          requestNotes:        rule.requestNotes,
+        },
+      });
+
+      if (ev.googleSync) {
+        try {
+          const connection = await prisma.userCalendarConnection.findFirst({
+            where: { userId: ev.userId, provider: "GOOGLE", isActive: true },
+            select: { refreshToken: true },
+          });
+          if (connection) {
+            const accessToken = await getAccessToken(connection.refreshToken);
+            const googleDescription = [
+              ev.department ? `Department: ${ev.department}` : null,
+              ev.description,
+            ].filter(Boolean).join("\n\n") || undefined;
+            await patchGoogleEvent(
+              accessToken,
+              ev.googleSync.googleCalendarId,
+              ev.googleSync.googleEventId,
+              { description: googleDescription }
+            );
+          }
+        } catch (err) {
+          console.error(`Google patch failed for event ${ev.id}:`, err);
+        }
+      }
+    }
+  }
+
+  return NextResponse.json({ ok: true, eventsUpdated: rule ? (await prisma.event.count({ where })) : 0 });
 }
