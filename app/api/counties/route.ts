@@ -11,6 +11,7 @@ export async function GET() {
     orderBy: { name: "asc" },
     select: {
       id: true,
+      state: true,
       name: true,
       courts: {
         orderBy: { name: "asc" },

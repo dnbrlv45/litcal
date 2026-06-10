@@ -18,16 +18,36 @@ interface CoverageAlert {
   futureEventCount: number;
 }
 
+interface RuleRequest {
+  id: string;
+  state: string;
+  county: string;
+  court: string | null;
+  department: string | null;
+  notes: string | null;
+  reviewed: boolean;
+  reviewedAt: string | null;
+  createdAt: string;
+  requestedBy: { firstName: string | null; lastName: string | null; email: string };
+  workspace: { name: string };
+}
+
 export default function CourtCoveragePage() {
   const [alerts, setAlerts] = useState<CoverageAlert[]>([]);
+  const [requests, setRequests] = useState<RuleRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [updatePreviews, setUpdatePreviews] = useState<Record<string, { count: number; hasRule: boolean }>>({});
 
   async function load() {
-    const res = await fetch("/api/admin/court-coverage/alerts");
-    const data = await res.json();
-    setAlerts(data.alerts ?? []);
+    const [alertsRes, requestsRes] = await Promise.all([
+      fetch("/api/admin/court-coverage/alerts"),
+      fetch("/api/admin/court-rule-requests"),
+    ]);
+    const alertsData = await alertsRes.json();
+    const requestsData = await requestsRes.json();
+    setAlerts(alertsData.alerts ?? []);
+    setRequests(requestsData.requests ?? []);
     setLoading(false);
   }
 
@@ -45,6 +65,20 @@ export default function CourtCoveragePage() {
     for (const a of unresolved) loadPreview(a.id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [alerts]);
+
+  async function markReviewed(requestId: string) {
+    setPendingId(requestId);
+    try {
+      await fetch("/api/admin/court-rule-requests/review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId }),
+      });
+      await load();
+    } finally {
+      setPendingId(null);
+    }
+  }
 
   async function resolve(alertId: string, updateEvents: boolean) {
     setPendingId(alertId);
@@ -88,6 +122,10 @@ export default function CourtCoveragePage() {
         <div className="mt-10" />
 
         <Section title="Unknown Departments" alerts={deptAlerts} pendingId={pendingId} previews={updatePreviews} onResolve={resolve} />
+
+        <div className="mt-10" />
+
+        <RequestsSection requests={requests} pendingId={pendingId} onMarkReviewed={markReviewed} />
       </div>
     </div>
   );
@@ -211,6 +249,99 @@ function AlertTable({
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function RequestsSection({
+  requests,
+  pendingId,
+  onMarkReviewed,
+}: {
+  requests: RuleRequest[];
+  pendingId: string | null;
+  onMarkReviewed: (id: string) => void;
+}) {
+  const pending = requests.filter((r) => !r.reviewed);
+  const reviewed = requests.filter((r) => r.reviewed);
+
+  return (
+    <div>
+      <h2 className="text-base font-semibold text-slate-800 mb-3">Rule Requests</h2>
+      <p className="text-xs text-slate-400 mb-4">Submitted by users for courts not yet covered. Review and add the rule in <a href="/admin/court-rules" className="underline hover:text-slate-600">Court Rules</a>.</p>
+
+      {pending.length === 0 && reviewed.length === 0 && (
+        <p className="text-sm text-slate-400">No requests yet.</p>
+      )}
+
+      {pending.length > 0 && (
+        <div className="rounded-lg border border-slate-200 bg-white overflow-hidden shadow-sm">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-100 bg-slate-50 text-xs font-medium text-slate-500 uppercase tracking-wide">
+                <th className="px-4 py-2 text-left">County</th>
+                <th className="px-4 py-2 text-left">Court</th>
+                <th className="px-4 py-2 text-left">Dept</th>
+                <th className="px-4 py-2 text-left">Notes</th>
+                <th className="px-4 py-2 text-left">From</th>
+                <th className="px-4 py-2 text-left">Date</th>
+                <th className="px-4 py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {pending.map((r) => {
+                const name = [r.requestedBy.firstName, r.requestedBy.lastName].filter(Boolean).join(" ") || r.requestedBy.email;
+                const busy = pendingId === r.id;
+                return (
+                  <tr key={r.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60">
+                    <td className="px-4 py-3 font-medium text-slate-900 capitalize">{r.county} <span className="text-slate-400 font-normal uppercase text-xs">{r.state}</span></td>
+                    <td className="px-4 py-3 text-slate-600 capitalize">{r.court || "—"}</td>
+                    <td className="px-4 py-3 text-slate-600 uppercase">{r.department || "—"}</td>
+                    <td className="px-4 py-3 text-slate-500 max-w-xs truncate">{r.notes || "—"}</td>
+                    <td className="px-4 py-3 text-slate-500 text-xs">{name}<br /><span className="text-slate-400">{r.workspace.name}</span></td>
+                    <td className="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">{new Date(r.createdAt).toLocaleDateString()}</td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        disabled={busy}
+                        onClick={() => onMarkReviewed(r.id)}
+                        className="rounded border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                      >
+                        {busy ? "…" : "Mark reviewed"}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {reviewed.length > 0 && (
+        <details className="mt-4">
+          <summary className="cursor-pointer text-xs text-slate-400 hover:text-slate-600">
+            {reviewed.length} reviewed
+          </summary>
+          <div className="mt-2 rounded-lg border border-slate-100 bg-white overflow-hidden">
+            <table className="w-full text-sm">
+              <tbody>
+                {reviewed.map((r) => {
+                  const name = [r.requestedBy.firstName, r.requestedBy.lastName].filter(Boolean).join(" ") || r.requestedBy.email;
+                  return (
+                    <tr key={r.id} className="border-b border-slate-100 last:border-0 opacity-60">
+                      <td className="px-4 py-2 text-slate-500 capitalize">{r.county} <span className="uppercase text-xs text-slate-400">{r.state}</span></td>
+                      <td className="px-4 py-2 text-slate-400 capitalize">{r.court || "—"}</td>
+                      <td className="px-4 py-2 text-slate-400 uppercase">{r.department || "—"}</td>
+                      <td className="px-4 py-2 text-slate-400 text-xs">{name}</td>
+                      <td className="px-4 py-2 text-slate-400 text-xs">{new Date(r.createdAt).toLocaleDateString()}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
     </div>
   );
 }

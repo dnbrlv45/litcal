@@ -167,21 +167,38 @@ export default function Sidebar({ isSuperAdmin = false }: { isSuperAdmin?: boole
       {/* Bottom */}
       <div className={`py-4 border-t border-sidebar-border flex flex-col gap-1 ${collapsed ? "px-3" : "px-4"}`}>
         {isSuperAdmin && (
-          <Link
-            href="/admin/court-coverage"
-            aria-label="Court Coverage"
-            className={`group relative flex items-center rounded-lg text-sm transition-all ${
-              collapsed ? "justify-center px-2 py-2.5" : "gap-2 px-3 py-2"
-            } ${
-              pathname.startsWith("/admin")
-                ? "bg-white text-slate-950 shadow-sm ring-1 ring-sidebar-border"
-                : "text-slate-600 hover:text-slate-950 hover:bg-white/65"
-            }`}
-          >
-            <ShieldAlert className="size-4 shrink-0" />
-            {!collapsed && <span className="font-medium">Court Coverage</span>}
-            {collapsed && <CollapsedTooltip label="Court Coverage" />}
-          </Link>
+          <>
+            <Link
+              href="/admin/court-coverage"
+              aria-label="Court Coverage"
+              className={`group relative flex items-center rounded-lg text-sm transition-all ${
+                collapsed ? "justify-center px-2 py-2.5" : "gap-2 px-3 py-2"
+              } ${
+                pathname === "/admin/court-coverage"
+                  ? "bg-white text-slate-950 shadow-sm ring-1 ring-sidebar-border"
+                  : "text-slate-600 hover:text-slate-950 hover:bg-white/65"
+              }`}
+            >
+              <ShieldAlert className="size-4 shrink-0" />
+              {!collapsed && <span className="font-medium">Court Coverage</span>}
+              {collapsed && <CollapsedTooltip label="Court Coverage" />}
+            </Link>
+            <Link
+              href="/admin/court-rules"
+              aria-label="Court Rules"
+              className={`group relative flex items-center rounded-lg text-sm transition-all ${
+                collapsed ? "justify-center px-2 py-2.5" : "gap-2 px-3 py-2"
+              } ${
+                pathname.startsWith("/admin/court-rules")
+                  ? "bg-white text-slate-950 shadow-sm ring-1 ring-sidebar-border"
+                  : "text-slate-600 hover:text-slate-950 hover:bg-white/65"
+              }`}
+            >
+              <Building2 className="size-4 shrink-0" />
+              {!collapsed && <span className="font-medium">Court Rules</span>}
+              {collapsed && <CollapsedTooltip label="Court Rules" />}
+            </Link>
+          </>
         )}
         <form action="/api/auth/sign-out" method="post" className="w-full">
           <button

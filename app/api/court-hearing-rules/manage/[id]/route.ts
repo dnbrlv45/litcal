@@ -6,9 +6,7 @@ import { prisma } from "@/lib/prisma";
 async function requireAdmin() {
   const user = await requireUser();
   if (!user) return { user: null, error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
-  const { membership } = await getCurrentWorkspace(user.id);
-  if (!membership || !canManageWorkspace(membership.role))
-    return { user: null, error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+  if (!user.isSuperAdmin) return { user: null, error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   return { user, error: null };
 }
 
