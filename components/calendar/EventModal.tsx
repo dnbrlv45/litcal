@@ -22,7 +22,6 @@ const EVENT_TYPES: { value: EventType; label: string }[] = [
   { value: "DEADLINE",                   label: "Deadline" },
   { value: "CONFERENCE",                 label: "Conference" },
   { value: "MEDIATION",                  label: "Mediation" },
-  { value: "CASE_MANAGEMENT_CONFERENCE", label: "Case Management Conference" },
   { value: "MEETING",                    label: "Meeting" },
   { value: "REMINDER",                   label: "Reminder" },
   { value: "OTHER",                      label: "Other" },
