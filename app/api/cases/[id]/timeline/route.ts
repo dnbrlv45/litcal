@@ -2,10 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCurrentWorkspace } from "@/lib/workspaces";
+import { FILTER_TYPES } from "@/lib/case-timeline";
+import type { TimelineFilter } from "@/lib/case-timeline";
 
-// GET /api/cases/[id]/timeline
+const PAGE_SIZE = 25;
+
+// GET /api/cases/[id]/timeline?order=desc&filter=all&importance=normal&cursor=<id>
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const currentUser = await requireUser();
@@ -15,7 +19,6 @@ export async function GET(
 
   const { id: caseId } = await params;
 
-  // Verify the case belongs to this workspace
   const c = await prisma.case.findFirst({
     where: {
       id: caseId,
@@ -28,20 +31,46 @@ export async function GET(
   });
   if (!c) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  const { searchParams } = new URL(req.url);
+  const order      = searchParams.get("order") === "asc" ? "asc" : "desc";
+  const filterKey  = (searchParams.get("filter") ?? "all") as TimelineFilter;
+  const importanceMode = searchParams.get("importance") ?? "normal"; // "all" | "normal" (HIGH+NORMAL) | "high"
+  const cursor     = searchParams.get("cursor"); // last seen entry id
+
+  const typeFilter = FILTER_TYPES[filterKey] ?? null;
+
+  const importanceFilter =
+    importanceMode === "high"   ? ["HIGH"] :
+    importanceMode === "normal" ? ["HIGH", "NORMAL"] :
+    null; // "all" = no filter
+
+  const where = {
+    caseId,
+    ...(typeFilter       ? { type:       { in: typeFilter } }       : {}),
+    ...(importanceFilter ? { importance: { in: importanceFilter } } : {}),
+  };
+
+  // Total matching (for "X remaining" display)
+  const total = await prisma.caseTimeline.count({ where });
+
   const entries = await prisma.caseTimeline.findMany({
-    where: { caseId },
-    orderBy: { createdAt: "desc" },
-    take: 200,
+    where,
+    orderBy: [{ createdAt: order }, { id: order }],
+    take: PAGE_SIZE,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     select: {
       id: true,
       type: true,
       title: true,
       description: true,
       metadata: true,
+      importance: true,
       createdAt: true,
       actor: { select: { id: true, firstName: true, lastName: true, email: true } },
     },
   });
 
-  return NextResponse.json({ entries });
+  const nextCursor = entries.length === PAGE_SIZE ? entries[entries.length - 1].id : null;
+
+  return NextResponse.json({ entries, nextCursor, total });
 }

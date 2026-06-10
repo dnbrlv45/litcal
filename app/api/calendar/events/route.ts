@@ -340,6 +340,7 @@ export async function POST(request: NextRequest) {
 
   // Timeline entries (fire-and-forget, caseId required)
   if (caseId) {
+    const highImportanceTypes = new Set(["TRIAL", "HEARING", "CASE_MANAGEMENT_CONFERENCE", "DEPOSITION", "MEDIATION"]);
     void addTimelineEntry({
       caseId,
       workspaceId: workspace.id,
@@ -348,6 +349,7 @@ export async function POST(request: NextRequest) {
       title: `Event added: ${event.title}`,
       description: safeEventType !== "OTHER" ? safeEventType as string : undefined,
       metadata: { eventId: event.id, eventType: safeEventType },
+      importance: highImportanceTypes.has(safeEventType as string) ? "HIGH" : "NORMAL",
     });
 
     if (hearingRule) {

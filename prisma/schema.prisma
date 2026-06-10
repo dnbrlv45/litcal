@@ -654,6 +654,7 @@ model CaseTimeline {
   title       String
   description String?
   metadata    Json?
+  importance  String   @default("NORMAL") // "HIGH" | "NORMAL" | "LOW"
   createdAt   DateTime @default(now())
 
   caseRef   Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)

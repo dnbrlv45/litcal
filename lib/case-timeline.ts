@@ -18,6 +18,59 @@ export type TimelineType =
   | "task.created"
   | "task.completed";
 
+export type TimelineImportance = "HIGH" | "NORMAL" | "LOW";
+
+const TYPE_IMPORTANCE: Record<TimelineType, TimelineImportance> = {
+  "case.created":                   "HIGH",
+  "case.status_changed":            "HIGH",
+  "case.staff_added":               "HIGH",
+  "case.staff_removed":             "HIGH",
+  "case.edited":                    "NORMAL",
+  "event.created":                  "NORMAL",  // caller may override to HIGH for trial/hearing
+  "event.deleted":                  "HIGH",
+  "event.trial_deadlines_generated":"HIGH",
+  "event.rule_backfilled":          "HIGH",
+  "task.completed":                 "HIGH",
+  "event.cmc_task_generated":       "NORMAL",
+  "event.rule_applied":             "NORMAL",
+  "event.remote_task_generated":    "NORMAL",
+  "task.created":                   "NORMAL",
+  "event.edited":                   "LOW",
+  "event.google_synced":            "LOW",
+};
+
+export function getImportance(type: TimelineType, overrideImportance?: TimelineImportance): TimelineImportance {
+  return overrideImportance ?? TYPE_IMPORTANCE[type] ?? "NORMAL";
+}
+
+// ─── Filter groups (used by UI and API) ──────────────────────────────────────
+
+export const TIMELINE_FILTERS = [
+  { key: "all",            label: "All" },
+  { key: "events",         label: "Events" },
+  { key: "tasks",          label: "Tasks" },
+  { key: "deadlines",      label: "Deadlines" },
+  { key: "assignments",    label: "Assignments" },
+  { key: "status",         label: "Status Changes" },
+  { key: "court_rules",    label: "Court Rules" },
+  { key: "google_sync",    label: "Google Sync" },
+] as const;
+
+export type TimelineFilter = typeof TIMELINE_FILTERS[number]["key"];
+
+export const FILTER_TYPES: Record<TimelineFilter, TimelineType[] | null> = {
+  all:         null,
+  events:      ["event.created", "event.edited", "event.deleted"],
+  tasks:       ["task.created", "task.completed"],
+  deadlines:   ["event.trial_deadlines_generated", "event.cmc_task_generated", "event.remote_task_generated"],
+  assignments: ["case.staff_added", "case.staff_removed"],
+  status:      ["case.status_changed", "case.created", "case.edited"],
+  court_rules: ["event.rule_applied", "event.rule_backfilled"],
+  google_sync: ["event.google_synced"],
+};
+
+// ─── Write helpers ────────────────────────────────────────────────────────────
+
 interface AddTimelineEntryInput {
   caseId: string;
   workspaceId: string;
@@ -26,6 +79,7 @@ interface AddTimelineEntryInput {
   title: string;
   description?: string | null;
   metadata?: Record<string, unknown> | null;
+  importance?: TimelineImportance;
   createdAt?: Date;
 }
 
@@ -40,6 +94,7 @@ export async function addTimelineEntry(input: AddTimelineEntryInput): Promise<vo
         type:        input.type,
         title:       input.title,
         description: input.description ?? null,
+        importance:  getImportance(input.type, input.importance),
         metadata:    input.metadata as never ?? undefined,
         ...(input.createdAt ? { createdAt: input.createdAt } : {}),
       },
@@ -61,6 +116,7 @@ export async function addTimelineEntries(inputs: AddTimelineEntryInput[]): Promi
         type:        input.type,
         title:       input.title,
         description: input.description ?? null,
+        importance:  getImportance(input.type, input.importance),
         metadata:    (input.metadata ?? null) as never,
         ...(input.createdAt ? { createdAt: input.createdAt } : {}),
       })),
