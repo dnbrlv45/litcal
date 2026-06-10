@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCurrentWorkspace } from "@/lib/workspaces";
-import { FILTER_TYPES } from "@/lib/case-timeline";
-import type { TimelineFilter } from "@/lib/case-timeline";
+import { FILTER_TYPES } from "@/lib/case-timeline-constants";
+import type { TimelineFilter } from "@/lib/case-timeline-constants";
 
 const PAGE_SIZE = 25;
 

@@ -6,8 +6,8 @@ import {
   Clock, FolderOpen, ChevronDown, ChevronUp, RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { TIMELINE_FILTERS } from "@/lib/case-timeline";
-import type { TimelineFilter } from "@/lib/case-timeline";
+import { TIMELINE_FILTERS } from "@/lib/case-timeline-constants";
+import type { TimelineFilter } from "@/lib/case-timeline-constants";
 
 interface TimelineActor {
   id: string;
