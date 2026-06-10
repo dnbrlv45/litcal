@@ -12,24 +12,39 @@ export async function POST(request: NextRequest) {
   const { workspace } = await getCurrentWorkspace(user.id);
   if (!workspace) return NextResponse.json({ error: "No workspace" }, { status: 403 });
 
-  const { county, court, department, notes } = (await request.json()) as {
+  const body = (await request.json()) as {
+    state?: string;
     county: string;
     court?: string;
     department?: string;
+    appearanceType?: string;
+    remoteLink?: string;
+    phoneNumber?: string;
+    bridge?: string;
+    password?: string;
+    requestRequired?: boolean;
+    requestContactEmail?: string;
     notes?: string;
   };
 
-  if (!county?.trim()) return NextResponse.json({ error: "County is required" }, { status: 400 });
+  if (!body.county?.trim()) return NextResponse.json({ error: "County is required" }, { status: 400 });
 
-  const state = await resolveStateForCounty(county.trim());
+  const resolvedState = body.state?.trim().toUpperCase() || await resolveStateForCounty(body.county.trim()).then(s => s.toUpperCase());
 
   const req = await prisma.courtRuleRequest.create({
     data: {
-      state,
-      county: county.trim().toLowerCase(),
-      court: court?.trim().toLowerCase() || null,
-      department: department?.trim().toLowerCase() || null,
-      notes: notes?.trim() || null,
+      state: resolvedState,
+      county: body.county.trim().toLowerCase(),
+      court: body.court?.trim().toLowerCase() || null,
+      department: body.department?.trim().toLowerCase() || null,
+      appearanceType: body.appearanceType?.trim() || null,
+      remoteLink: body.remoteLink?.trim() || null,
+      phoneNumber: body.phoneNumber?.trim() || null,
+      bridge: body.bridge?.trim() || null,
+      password: body.password?.trim() || null,
+      requestRequired: body.requestRequired ?? false,
+      requestContactEmail: body.requestContactEmail?.trim() || null,
+      notes: body.notes?.trim() || null,
       requestedById: user.id,
       workspaceId: workspace.id,
     },

@@ -606,17 +606,25 @@ model CourtCoverageAlert {
 // Super admin reviews and creates the actual CourtHearingRule.
 
 model CourtRuleRequest {
-  id           String    @id @default(cuid())
-  state        String    @default("CA")
-  county       String
-  court        String?
-  department   String?
-  notes        String?
-  requestedById String
-  workspaceId  String
-  reviewed     Boolean   @default(false)
-  reviewedAt   DateTime?
-  createdAt    DateTime  @default(now())
+  id                   String    @id @default(cuid())
+  state                String    @default("CA")
+  county               String
+  court                String?
+  department           String?
+  appearanceType       String?
+  remoteLink           String?
+  phoneNumber          String?
+  bridge               String?
+  password             String?
+  requestRequired      Boolean   @default(false)
+  requestContactEmail  String?
+  notes                String?
+  requestedById        String
+  workspaceId          String
+  reviewed             Boolean   @default(false)
+  accepted             Boolean   @default(false)
+  reviewedAt           DateTime?
+  createdAt            DateTime  @default(now())
 
   requestedBy  User      @relation(fields: [requestedById], references: [id])
   workspace    Workspace @relation(fields: [workspaceId], references: [id])

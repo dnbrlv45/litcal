@@ -24,8 +24,16 @@ interface RuleRequest {
   county: string;
   court: string | null;
   department: string | null;
+  appearanceType: string | null;
+  remoteLink: string | null;
+  phoneNumber: string | null;
+  bridge: string | null;
+  password: string | null;
+  requestRequired: boolean;
+  requestContactEmail: string | null;
   notes: string | null;
   reviewed: boolean;
+  accepted: boolean;
   reviewedAt: string | null;
   createdAt: string;
   requestedBy: { firstName: string | null; lastName: string | null; email: string };
@@ -80,6 +88,22 @@ export default function CourtCoveragePage() {
     }
   }
 
+  async function acceptRequest(requestId: string) {
+    setPendingId(requestId);
+    try {
+      const res = await fetch("/api/admin/court-rule-requests/accept", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId }),
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error ?? "Failed"); return; }
+      await load();
+    } finally {
+      setPendingId(null);
+    }
+  }
+
   async function resolve(alertId: string, updateEvents: boolean) {
     setPendingId(alertId);
     try {
@@ -125,7 +149,7 @@ export default function CourtCoveragePage() {
 
         <div className="mt-10" />
 
-        <RequestsSection requests={requests} pendingId={pendingId} onMarkReviewed={markReviewed} />
+        <RequestsSection requests={requests} pendingId={pendingId} onAccept={acceptRequest} onDismiss={markReviewed} />
       </div>
     </div>
   );
@@ -256,64 +280,90 @@ function AlertTable({
 function RequestsSection({
   requests,
   pendingId,
-  onMarkReviewed,
+  onAccept,
+  onDismiss,
 }: {
   requests: RuleRequest[];
   pendingId: string | null;
-  onMarkReviewed: (id: string) => void;
+  onAccept: (id: string) => void;
+  onDismiss: (id: string) => void;
 }) {
   const pending = requests.filter((r) => !r.reviewed);
   const reviewed = requests.filter((r) => r.reviewed);
 
   return (
     <div>
-      <h2 className="text-base font-semibold text-slate-800 mb-3">Rule Requests</h2>
-      <p className="text-xs text-slate-400 mb-4">Submitted by users for courts not yet covered. Review and add the rule in <a href="/admin/court-rules" className="underline hover:text-slate-600">Court Rules</a>.</p>
+      <h2 className="text-base font-semibold text-slate-800 mb-1">Rule Requests</h2>
+      <p className="text-xs text-slate-400 mb-4">Submitted by users. Accept to create the rule instantly, or dismiss to close without adding.</p>
 
       {pending.length === 0 && reviewed.length === 0 && (
         <p className="text-sm text-slate-400">No requests yet.</p>
       )}
 
       {pending.length > 0 && (
-        <div className="rounded-lg border border-slate-200 bg-white overflow-hidden shadow-sm">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 bg-slate-50 text-xs font-medium text-slate-500 uppercase tracking-wide">
-                <th className="px-4 py-2 text-left">County</th>
-                <th className="px-4 py-2 text-left">Court</th>
-                <th className="px-4 py-2 text-left">Dept</th>
-                <th className="px-4 py-2 text-left">Notes</th>
-                <th className="px-4 py-2 text-left">From</th>
-                <th className="px-4 py-2 text-left">Date</th>
-                <th className="px-4 py-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {pending.map((r) => {
-                const name = [r.requestedBy.firstName, r.requestedBy.lastName].filter(Boolean).join(" ") || r.requestedBy.email;
-                const busy = pendingId === r.id;
-                return (
-                  <tr key={r.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60">
-                    <td className="px-4 py-3 font-medium text-slate-900 capitalize">{r.county} <span className="text-slate-400 font-normal uppercase text-xs">{r.state}</span></td>
-                    <td className="px-4 py-3 text-slate-600 capitalize">{r.court || "—"}</td>
-                    <td className="px-4 py-3 text-slate-600 uppercase">{r.department || "—"}</td>
-                    <td className="px-4 py-3 text-slate-500 max-w-xs truncate">{r.notes || "—"}</td>
-                    <td className="px-4 py-3 text-slate-500 text-xs">{name}<br /><span className="text-slate-400">{r.workspace.name}</span></td>
-                    <td className="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">{new Date(r.createdAt).toLocaleDateString()}</td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        disabled={busy}
-                        onClick={() => onMarkReviewed(r.id)}
-                        className="rounded border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
-                      >
-                        {busy ? "…" : "Mark reviewed"}
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="flex flex-col gap-3">
+          {pending.map((r) => {
+            const name = [r.requestedBy.firstName, r.requestedBy.lastName].filter(Boolean).join(" ") || r.requestedBy.email;
+            const busy = pendingId === r.id;
+            const hasRuleInfo = !!(r.remoteLink || r.phoneNumber);
+
+            return (
+              <div key={r.id} className="rounded-lg border border-slate-200 bg-white shadow-sm p-4 flex flex-col gap-3">
+                {/* Header */}
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900 capitalize">
+                      {r.county} <span className="uppercase text-xs text-slate-400 font-normal">{r.state}</span>
+                      {r.court && <span className="text-slate-500 font-normal"> · {r.court}</span>}
+                      {r.department && <span className="text-slate-400 font-normal"> · Dept. {r.department.toUpperCase()}</span>}
+                    </p>
+                    <p className="text-xs text-slate-400 mt-0.5">{name} · {r.workspace.name} · {new Date(r.createdAt).toLocaleDateString()}</p>
+                  </div>
+                  {hasRuleInfo && (
+                    <span className="shrink-0 inline-flex items-center rounded-full bg-teal-50 border border-teal-200 px-2 py-0.5 text-xs text-teal-700 font-medium">
+                      Ready to accept
+                    </span>
+                  )}
+                </div>
+
+                {/* Rule details */}
+                <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-600">
+                  {r.appearanceType && <span className="capitalize"><span className="text-slate-400">Type:</span> {r.appearanceType}</span>}
+                  {r.remoteLink && (
+                    <span><span className="text-slate-400">Link:</span>{" "}
+                      <a href={r.remoteLink} target="_blank" rel="noopener noreferrer" className="text-teal-700 underline truncate max-w-[220px] inline-block align-bottom">{r.remoteLink}</a>
+                    </span>
+                  )}
+                  {r.phoneNumber && <span><span className="text-slate-400">Phone:</span> {r.phoneNumber}</span>}
+                  {r.bridge && <span><span className="text-slate-400">Bridge:</span> <span className="font-mono">{r.bridge}</span></span>}
+                  {r.password && <span><span className="text-slate-400">Password:</span> <span className="font-mono">{r.password}</span></span>}
+                  {r.requestRequired && <span className="text-amber-700 font-medium">Request required{r.requestContactEmail ? ` · ${r.requestContactEmail}` : ""}</span>}
+                </div>
+
+                {r.notes && (
+                  <p className="text-xs text-slate-500 italic border-t border-slate-100 pt-2">{r.notes}</p>
+                )}
+
+                {/* Actions */}
+                <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+                  <button
+                    disabled={busy}
+                    onClick={() => onAccept(r.id)}
+                    className="rounded bg-teal-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 disabled:opacity-50"
+                  >
+                    {busy ? "Accepting…" : "Accept & create rule"}
+                  </button>
+                  <button
+                    disabled={busy}
+                    onClick={() => onDismiss(r.id)}
+                    className="rounded border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -322,23 +372,22 @@ function RequestsSection({
           <summary className="cursor-pointer text-xs text-slate-400 hover:text-slate-600">
             {reviewed.length} reviewed
           </summary>
-          <div className="mt-2 rounded-lg border border-slate-100 bg-white overflow-hidden">
-            <table className="w-full text-sm">
-              <tbody>
-                {reviewed.map((r) => {
-                  const name = [r.requestedBy.firstName, r.requestedBy.lastName].filter(Boolean).join(" ") || r.requestedBy.email;
-                  return (
-                    <tr key={r.id} className="border-b border-slate-100 last:border-0 opacity-60">
-                      <td className="px-4 py-2 text-slate-500 capitalize">{r.county} <span className="uppercase text-xs text-slate-400">{r.state}</span></td>
-                      <td className="px-4 py-2 text-slate-400 capitalize">{r.court || "—"}</td>
-                      <td className="px-4 py-2 text-slate-400 uppercase">{r.department || "—"}</td>
-                      <td className="px-4 py-2 text-slate-400 text-xs">{name}</td>
-                      <td className="px-4 py-2 text-slate-400 text-xs">{new Date(r.createdAt).toLocaleDateString()}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="mt-2 flex flex-col gap-2">
+            {reviewed.map((r) => {
+              const name = [r.requestedBy.firstName, r.requestedBy.lastName].filter(Boolean).join(" ") || r.requestedBy.email;
+              return (
+                <div key={r.id} className="rounded-lg border border-slate-100 bg-white px-4 py-2.5 flex items-center gap-3 opacity-60">
+                  <span className="text-sm text-slate-500 capitalize flex-1">
+                    {r.county} <span className="uppercase text-xs text-slate-400">{r.state}</span>
+                    {r.court && ` · ${r.court}`}
+                    {r.department && ` · ${r.department.toUpperCase()}`}
+                  </span>
+                  {r.accepted && <span className="text-xs text-teal-600 font-medium">Accepted</span>}
+                  <span className="text-xs text-slate-400">{name}</span>
+                  <span className="text-xs text-slate-400">{new Date(r.createdAt).toLocaleDateString()}</span>
+                </div>
+              );
+            })}
           </div>
         </details>
       )}
