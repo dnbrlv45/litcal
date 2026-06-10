@@ -22,8 +22,8 @@ export async function POST(request: NextRequest) {
 
   try {
     const county = await prisma.county.upsert({
-      where: { name: name.trim() },
-      create: { name: name.trim() },
+      where: { state_name: { state: "CA", name: name.trim() } },
+      create: { state: "CA", name: name.trim() },
       update: {},
       select: { id: true, name: true, courts: { select: { id: true, name: true }, orderBy: { name: "asc" } } },
     });

@@ -48,6 +48,7 @@ export async function POST(request: NextRequest) {
     const countyName = norm(raw["county"]);
     if (!countyName) { skipped++; continue; }
 
+    const state = normKey(raw["state"]) || "ca";
     const courtName   = norm(raw["court_name"])   || null;
     const department  = norm(raw["department"])   || null;
     const appearanceType = norm(raw["appearance_type"]) || null;
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest) {
     let departmentId: string | null = null;
 
     const countyRecord = await prisma.county.findFirst({
-      where: { name: { equals: countyName, mode: "insensitive" } },
+      where: { state: { equals: state, mode: "insensitive" }, name: { equals: countyName, mode: "insensitive" } },
     });
     countyId = countyRecord?.id ?? null;
 
@@ -91,7 +92,8 @@ export async function POST(request: NextRequest) {
     try {
       const existing = await prisma.courtHearingRule.findUnique({
         where: {
-          countyName_courtName_department: {
+          state_countyName_courtName_department: {
+            state: state.toLowerCase(),
             countyName: countyName.toLowerCase(),
             courtName: courtName?.toLowerCase() ?? "",
             department: department?.toLowerCase() ?? "",
@@ -101,6 +103,7 @@ export async function POST(request: NextRequest) {
 
       // Normalize keys for the unique constraint (store lowercase for consistent matching)
       const data = {
+        state: state.toLowerCase(),
         countyId,
         courtId,
         departmentId,

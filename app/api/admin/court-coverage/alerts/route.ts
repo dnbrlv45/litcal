@@ -14,6 +14,7 @@ export async function GET() {
     select: {
       id: true,
       alertType: true,
+      state: true,
       county: true,
       court: true,
       department: true,

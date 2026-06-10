@@ -25,6 +25,7 @@ export async function POST(request: NextRequest) {
 
   if (updateEvents) {
     const rule = await findCourtHearingRule({
+      state: alert.state,
       countyName: alert.county,
       courtName: alert.court || null,
       department: alert.department || null,

@@ -8,6 +8,7 @@ type AlertType = "COUNTY" | "DEPARTMENT";
 interface CoverageAlert {
   id: string;
   alertType: AlertType;
+  state: string;
   county: string;
   court: string;
   department: string;
@@ -165,7 +166,7 @@ function AlertTable({
             const busy = pendingId === a.id;
             return (
               <tr key={a.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60">
-                <td className="px-4 py-3 font-medium text-slate-900 capitalize">{a.county}</td>
+                <td className="px-4 py-3 font-medium text-slate-900 capitalize">{a.county} <span className="text-slate-400 font-normal uppercase text-xs">{a.state}</span></td>
                 <td className="px-4 py-3 text-slate-600 capitalize">{a.court || "—"}</td>
                 <td className="px-4 py-3 text-slate-600 uppercase">{a.department || "—"}</td>
                 <td className="px-4 py-3 text-slate-500 whitespace-nowrap">

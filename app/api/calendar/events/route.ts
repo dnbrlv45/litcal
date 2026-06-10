@@ -126,6 +126,7 @@ export async function POST(request: NextRequest) {
   let caseCourtName: string | null = null;
   let caseStaffForTask: { userId: string; role: string }[] = [];
 
+  let caseState: string | null = null;
   if (caseId) {
     const linkedCase = await prisma.case.findUnique({
       where: { id: caseId },
@@ -133,6 +134,7 @@ export async function POST(request: NextRequest) {
         status: true,
         county: true,
         court: true,
+        countyId: true,
         staff: { where: { role: { in: ["ATTORNEY", "PARALEGAL"] } }, select: { userId: true, role: true }, orderBy: { createdAt: "asc" } },
       },
     });
@@ -143,6 +145,14 @@ export async function POST(request: NextRequest) {
     caseCountyName = linkedCase.county ?? null;
     caseCourtName = linkedCase.court ?? null;
     caseStaffForTask = linkedCase.staff;
+    // Resolve state from the case's county record
+    if (linkedCase.countyId) {
+      const countyRecord = await prisma.county.findUnique({
+        where: { id: linkedCase.countyId },
+        select: { state: true },
+      });
+      caseState = countyRecord?.state ?? null;
+    }
   }
 
   // Resolve court hearing rule (remote appearance only)
@@ -153,13 +163,17 @@ export async function POST(request: NextRequest) {
   const resolvedCourt  = courtName  || caseCourtName;
   if (!isInPerson) {
     hearingRule = await findCourtHearingRule({
+      state: caseState,  // null = auto-derived from county name lookup
       countyName: resolvedCounty,
       courtName: resolvedCourt,
       department: department,
     });
     if (!hearingRule && resolvedCounty && workspace) {
+      const { resolveStateForCounty } = await import("@/lib/court-hearing-rules");
+      const resolvedState = caseState ?? await resolveStateForCounty(resolvedCounty);
       courtRuleUnmatched = true;
       await upsertCoverageAlert({
+        state: resolvedState,
         countyName: resolvedCounty,
         courtName: resolvedCourt,
         department: department,

@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
 
   // Check if a rule now exists for this alert
   const rule = await findCourtHearingRule({
+    state: alert.state,
     countyName: alert.county,
     courtName: alert.court || null,
     department: alert.department || null,

@@ -11,9 +11,9 @@ async function main() {
 
   for (const entry of COUNTIES_AND_COURTS) {
     const county = await prisma.county.upsert({
-      where: { name: entry.name },
+      where: { state_name: { state: "CA", name: entry.name } },
       update: {},
-      create: { name: entry.name },
+      create: { state: "CA", name: entry.name },
     });
 
     for (const court of entry.courts) {

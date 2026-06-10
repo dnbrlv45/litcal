@@ -18,16 +18,36 @@ function norm(s: string | null | undefined): string {
 }
 
 /**
- * Find the best-matching CourtHearingRule for a given county/court/department.
+ * Resolve the state abbreviation for a county name by looking it up in the
+ * County table. Falls back to "CA" if not found (backward compatibility).
+ */
+export async function resolveStateForCounty(countyName: string): Promise<string> {
+  if (!countyName) return "CA";
+  const county = await prisma.county.findFirst({
+    where: { name: { equals: countyName.trim(), mode: "insensitive" } },
+    select: { state: true },
+  });
+  return county?.state ?? "CA";
+}
+
+/**
+ * Find the best-matching CourtHearingRule for a given state/county/court/department.
  * Priority: department > court-wide > county-wide.
+ * State is required for unambiguous matching; defaults to "CA" if not provided.
  */
 export async function findCourtHearingRule(opts: {
+  state?: string | null;
   countyName?: string | null;
   courtName?: string | null;
   department?: string | null;
 }): Promise<ResolvedRule | null> {
   const { countyName, courtName, department } = opts;
   if (!countyName) return null;
+
+  // Resolve state: use provided value, or look it up from the County table.
+  const state = opts.state
+    ? norm(opts.state)
+    : await resolveStateForCounty(countyName);
 
   const cn = norm(countyName);
   const ct = norm(courtName);
@@ -36,6 +56,7 @@ export async function findCourtHearingRule(opts: {
   const candidates = await prisma.courtHearingRule.findMany({
     where: {
       active: true,
+      state: { equals: state, mode: "insensitive" },
       countyName: { equals: cn, mode: "insensitive" },
     },
     select: {

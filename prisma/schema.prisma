@@ -264,9 +264,12 @@ enum SyncStatus {
 
 model County {
   id     String  @id @default(cuid())
-  name   String  @unique
+  state  String  @default("CA")
+  name   String
   courts Court[]
   cases  Case[]
+
+  @@unique([state, name])
 }
 
 model Court {
@@ -540,6 +543,7 @@ model GeneratedDeadline {
 
 model CourtHearingRule {
   id             String      @id @default(cuid())
+  state          String      @default("CA")
   countyId       String?
   courtId        String?
   departmentId   String?
@@ -561,8 +565,8 @@ model CourtHearingRule {
 
   departmentRef  Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
-  @@unique([countyName, courtName, department])
-  @@index([countyName])
+  @@unique([state, countyName, courtName, department])
+  @@index([state, countyName])
   @@index([countyId])
   @@index([courtId])
   @@index([departmentId])
@@ -580,6 +584,7 @@ enum AlertType {
 model CourtCoverageAlert {
   id                   String    @id @default(cuid())
   alertType            AlertType
+  state                String    @default("CA")
   county               String
   court                String    @default("")
   department           String    @default("")
@@ -591,7 +596,7 @@ model CourtCoverageAlert {
   workspace            Workspace @relation(fields: [createdByWorkspaceId], references: [id])
 
   @@index([resolved])
-  @@index([county, court, department, alertType, resolved])
+  @@index([state, county, court, department, alertType, resolved])
 }
 
 // ─── FUTURE ───────────────────────────────────────────────────────────────────
