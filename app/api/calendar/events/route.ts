@@ -8,6 +8,7 @@ import { getCurrentWorkspace } from "@/lib/workspaces";
 import { detectConflicts, getConflictedEventIds } from "@/lib/conflicts";
 import { applyDeadlineRules } from "@/lib/deadline-rules";
 import { findCourtHearingRule, computeRemoteAppearanceDueDate } from "@/lib/court-hearing-rules";
+import { upsertCoverageAlert } from "@/lib/court-coverage-alerts";
 
 // GET /api/calendar/events?start=ISO&end=ISO
 export async function GET(request: NextRequest) {
@@ -147,14 +148,24 @@ export async function POST(request: NextRequest) {
   // Resolve court hearing rule (remote appearance only)
   const isInPerson = inPerson === true;
   let hearingRule = null;
+  let courtRuleUnmatched = false;
+  const resolvedCounty = countyName || caseCountyName;
+  const resolvedCourt  = courtName  || caseCourtName;
   if (!isInPerson) {
-    const resolvedCounty = countyName || caseCountyName;
-    const resolvedCourt  = courtName  || caseCourtName;
     hearingRule = await findCourtHearingRule({
       countyName: resolvedCounty,
       courtName: resolvedCourt,
       department: department,
     });
+    if (!hearingRule && resolvedCounty && workspace) {
+      courtRuleUnmatched = true;
+      await upsertCoverageAlert({
+        countyName: resolvedCounty,
+        courtName: resolvedCourt,
+        department: department,
+        workspaceId: workspace.id,
+      });
+    }
   }
 
   const validTypes = ["DEADLINE","HEARING","DEPOSITION","TRIAL","CONFERENCE","MEETING","MEDIATION","COURT_CALL","CASE_MANAGEMENT_CONFERENCE","REMINDER","OTHER"];
@@ -186,6 +197,7 @@ export async function POST(request: NextRequest) {
       caseId: caseId || null,
       assignedAttorneyId: inheritedAttorneyId,
       inPerson: isInPerson,
+      courtRuleUnmatched,
       courtHearingRuleId: hearingRule?.id ?? null,
       appearanceType: hearingRule?.appearanceType ?? null,
       remoteLink: hearingRule?.remoteLink ?? null,

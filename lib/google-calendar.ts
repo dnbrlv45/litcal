@@ -166,6 +166,30 @@ export async function createGoogleEvent(
   return res.json();
 }
 
+/** Patches an existing Google Calendar event's description field. */
+export async function patchGoogleEvent(
+  accessToken: string,
+  calendarId: string,
+  googleEventId: string,
+  patch: { description?: string }
+): Promise<void> {
+  const res = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(googleEventId)}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(patch),
+    }
+  );
+  if (!res.ok && res.status !== 410) {
+    const body = await res.text();
+    throw new Error(`Failed to patch Google event: ${body}`);
+  }
+}
+
 /** Deletes a single event from a Google Calendar.
  *  Silently succeeds if the event is already gone (410 Gone). */
 export async function deleteGoogleEvent(

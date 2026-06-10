@@ -16,10 +16,11 @@ model User {
   googleSub    String?  @unique
   microsoftSub String?  @unique
   firstName    String?
-  lastName  String?
-  timeZone  String   @default("UTC")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  lastName     String?
+  timeZone     String   @default("UTC")
+  isSuperAdmin Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   events              Event[]
   calendarConnections UserCalendarConnection[]
@@ -55,13 +56,14 @@ model Workspace {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  members            WorkspaceMember[]
-  invitations        WorkspaceInvitation[]
-  cases              Case[]
-  events             Event[]
-  tasks              Task[]
-  notifications      Notification[]
-  generatedDeadlines GeneratedDeadline[]
+  members              WorkspaceMember[]
+  invitations          WorkspaceInvitation[]
+  cases                Case[]
+  events               Event[]
+  tasks                Task[]
+  notifications        Notification[]
+  generatedDeadlines   GeneratedDeadline[]
+  courtCoverageAlerts  CourtCoverageAlert[]
 
   @@index([createdBy])
 }
@@ -171,8 +173,9 @@ model Event {
   department  String?     // free-text fallback; departmentId is preferred when set
 
   // Remote appearance fields (populated from CourtHearingRule at creation)
-  inPerson            Boolean  @default(false)
-  courtHearingRuleId  String?
+  inPerson              Boolean  @default(false)
+  courtRuleUnmatched    Boolean  @default(false)
+  courtHearingRuleId    String?
   appearanceType      String?
   remoteLink          String?
   phoneNumber         String?
@@ -563,6 +566,32 @@ model CourtHearingRule {
   @@index([countyId])
   @@index([courtId])
   @@index([departmentId])
+}
+
+// ─── COURT COVERAGE ALERTS ────────────────────────────────────────────────────
+// Created when an event is created for a county/dept with no matching rule.
+// Deduped per (county, court, department, alertType) while unresolved.
+
+enum AlertType {
+  COUNTY
+  DEPARTMENT
+}
+
+model CourtCoverageAlert {
+  id                   String    @id @default(cuid())
+  alertType            AlertType
+  county               String
+  court                String    @default("")
+  department           String    @default("")
+  firstSeenAt          DateTime  @default(now())
+  createdByWorkspaceId String
+  resolved             Boolean   @default(false)
+  resolvedAt           DateTime?
+
+  workspace            Workspace @relation(fields: [createdByWorkspaceId], references: [id])
+
+  @@index([resolved])
+  @@index([county, court, department, alertType, resolved])
 }
 
 // ─── FUTURE ───────────────────────────────────────────────────────────────────
