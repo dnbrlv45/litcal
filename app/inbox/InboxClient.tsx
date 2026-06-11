@@ -70,18 +70,21 @@ export default function InboxClient() {
     await fetch("/api/notifications", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids }) });
     setNotifications((prev) => prev.filter((n) => !selected.has(n.id)));
     setSelected(new Set());
+    broadcastUpdate();
   }
 
   async function deleteOne(id: string) {
     await fetch("/api/notifications", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: [id] }) });
     setNotifications((prev) => prev.filter((n) => n.id !== id));
     setSelected((prev) => { const s = new Set(prev); s.delete(id); return s; });
+    broadcastUpdate();
   }
 
   async function deleteAll() {
     await fetch("/api/notifications", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ all: true }) });
     setNotifications([]);
     setSelected(new Set());
+    broadcastUpdate();
   }
 
   function toggleSelect(id: string) {
