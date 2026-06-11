@@ -122,6 +122,17 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       googleEventId: task.googleEventId ?? null,
       googleCalendarId: task.googleCalendarId ?? null,
     });
+  } else if (body.status !== undefined && existing.status === "DONE" && body.status !== "DONE") {
+    // Moved back from DONE — re-push to Google Calendar if it has a due date
+    if (task.dueDate) {
+      void pushTaskToGoogle(currentUser.id, {
+        id: task.id,
+        title: task.title,
+        dueDate: task.dueDate,
+        priority: task.priority,
+        caseRef: task.caseRef ?? null,
+      });
+    }
   } else if (body.dueDate !== undefined) {
     // Due date changed — re-push to Google Calendar
     const rawTask = await prisma.task.findUnique({
