@@ -19,7 +19,12 @@ export type TimelineType =
   | "event.remote_task_generated"
   | "event.google_synced"
   | "task.created"
-  | "task.completed";
+  | "task.completed"
+  | "discovery.created"
+  | "discovery.deadline_generated"
+  | "discovery.extension_granted"
+  | "discovery.responses_received"
+  | "discovery.completed";
 
 export type TimelineImportance = "HIGH" | "NORMAL" | "LOW";
 
@@ -40,6 +45,11 @@ const TYPE_IMPORTANCE: Record<TimelineType, TimelineImportance> = {
   "task.created":                   "NORMAL",
   "event.edited":                   "LOW",
   "event.google_synced":            "LOW",
+  "discovery.created":              "HIGH",
+  "discovery.deadline_generated":   "HIGH",
+  "discovery.extension_granted":    "HIGH",
+  "discovery.responses_received":   "HIGH",
+  "discovery.completed":            "HIGH",
 };
 
 export function getImportance(type: TimelineType, overrideImportance?: TimelineImportance): TimelineImportance {

@@ -25,6 +25,11 @@ export interface DeadlineItem {
   triggerEventTitle: string | null;
   triggerEventType: string | null;
   priority: string | null;
+  // Discovery-specific fields (null for non-discovery deadlines)
+  discoveryItemId: string | null;
+  discoveryType: string | null;
+  discoveryDirection: string | null;
+  extensionCount: number | null;
 }
 
 export interface TrialItem {
@@ -109,6 +114,14 @@ export async function GET(request: NextRequest) {
       generatedDeadline: {
         include: { triggerEvent: { select: { id: true, title: true, eventType: true } } },
       },
+      discoveryLinked: {
+        select: {
+          id: true,
+          discoveryType: true,
+          direction: true,
+          extensions: { select: { id: true } },
+        },
+      },
     },
     orderBy: { startTime: "asc" },
   });
@@ -153,8 +166,12 @@ export async function GET(request: NextRequest) {
   // Build deadline items from events
   const eventItems: DeadlineItem[] = deadlineEvents.map((ev) => {
     const gd = ev.generatedDeadline;
+    const dl = ev.discoveryLinked;
     const triggerType = gd?.triggerEvent?.eventType ?? null;
-    const { source, sourceLabel: sl } = sourceLabel(triggerType, false, !!gd);
+    const isDiscovery = !!dl;
+    const { source, sourceLabel: sl } = isDiscovery
+      ? { source: "generated" as const, sourceLabel: "Discovery" }
+      : sourceLabel(triggerType, false, !!gd);
 
     const attorneyName = ev.assignedAttorney
       ? [ev.assignedAttorney.firstName, ev.assignedAttorney.lastName].filter(Boolean).join(" ") || null
@@ -182,6 +199,10 @@ export async function GET(request: NextRequest) {
       triggerEventTitle: gd?.triggerEvent?.title ?? null,
       triggerEventType: triggerType,
       priority: null,
+      discoveryItemId: dl?.id ?? null,
+      discoveryType: dl?.discoveryType ?? null,
+      discoveryDirection: dl?.direction ?? null,
+      extensionCount: dl ? dl.extensions.length : null,
     };
   });
 
@@ -223,6 +244,10 @@ export async function GET(request: NextRequest) {
       triggerEventTitle: gd?.triggerEvent?.title ?? null,
       triggerEventType: triggerType,
       priority: task.priority,
+      discoveryItemId: null,
+      discoveryType: null,
+      discoveryDirection: null,
+      extensionCount: null,
     };
   });
 

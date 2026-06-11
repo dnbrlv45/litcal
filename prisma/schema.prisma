@@ -33,6 +33,7 @@ model User {
   assignedEvents       Event[]    @relation("EventAttorney")
   courtRuleRequests    CourtRuleRequest[]
   caseTimeline         CaseTimeline[]
+  createdDiscovery     DiscoveryItem[]
 }
 
 model AuthSession {
@@ -68,6 +69,7 @@ model Workspace {
   courtCoverageAlerts  CourtCoverageAlert[]
   courtRuleRequests    CourtRuleRequest[]
   caseTimeline         CaseTimeline[]
+  discoveryItems       DiscoveryItem[]
 
   @@index([createdBy])
 }
@@ -205,6 +207,7 @@ model Event {
   notifications      Notification[]
   triggeredDeadlines GeneratedDeadline[] @relation("TriggerEvent")
   generatedDeadline  GeneratedDeadline?  @relation("GeneratedEvent")
+  discoveryLinked    DiscoveryItem?      @relation("DiscoveryLinkedEvent")
 
   @@index([userId, startTime])
   @@index([userId, startTime, endTime])
@@ -342,6 +345,7 @@ model Case {
   tasks     Task[]
   notifications  Notification[]
   timeline       CaseTimeline[]
+  discoveryItems DiscoveryItem[]
 
   @@index([orgId])
   @@index([workspaceId])
@@ -441,6 +445,7 @@ model Task {
   assignees         TaskAssignee[]
   notifications     Notification[]
   generatedDeadline GeneratedDeadline?
+  discoveryLinked   DiscoveryItem?     @relation("DiscoveryLinkedTask")
 
   @@index([workspaceId])
   @@index([caseId])
@@ -639,6 +644,95 @@ model CourtRuleRequest {
 
   @@index([reviewed])
   @@index([workspaceId])
+}
+
+// ─── DISCOVERY ───────────────────────────────────────────────────────────────
+
+enum DiscoveryType {
+  FORM_INTERROGATORIES
+  SPECIAL_INTERROGATORIES
+  REQUESTS_FOR_PRODUCTION
+  REQUESTS_FOR_ADMISSION
+  SUPPLEMENTAL_FORM_INTERROGATORIES
+  SUPPLEMENTAL_SPECIAL_INTERROGATORIES
+  SUPPLEMENTAL_REQUESTS_FOR_PRODUCTION
+  SUPPLEMENTAL_REQUESTS_FOR_ADMISSION
+  DEPOSITION_NOTICE
+  OTHER
+}
+
+enum DiscoveryDirection {
+  RECEIVED
+  SERVED
+}
+
+enum DiscoveryStatus {
+  AWAITING_RESPONSE
+  RESPONSES_RECEIVED
+  EXTENSION_GRANTED
+  OVERDUE
+  COMPLETED
+}
+
+enum ExtensionAppliesTo {
+  OUR_DEADLINE
+  OPPOSING_DEADLINE
+  BOTH
+}
+
+model DiscoveryItem {
+  id                   String             @id @default(cuid())
+  caseId               String
+  workspaceId          String
+  createdBy            String
+
+  discoveryType        DiscoveryType
+  direction            DiscoveryDirection
+
+  servedOrReceivedDate DateTime
+  originalDueDate      DateTime
+  currentDueDate       DateTime
+
+  status               DiscoveryStatus    @default(AWAITING_RESPONSE)
+  notes                String?
+
+  linkedEventId        String?            @unique
+  linkedTaskId         String?            @unique
+
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  caseRef              Case               @relation(fields: [caseId],       references: [id], onDelete: Cascade)
+  workspace            Workspace          @relation(fields: [workspaceId],  references: [id], onDelete: Cascade)
+  creator              User               @relation(fields: [createdBy],    references: [id], onDelete: Cascade)
+  linkedEvent          Event?             @relation("DiscoveryLinkedEvent", fields: [linkedEventId], references: [id], onDelete: SetNull)
+  linkedTask           Task?              @relation("DiscoveryLinkedTask",  fields: [linkedTaskId],  references: [id], onDelete: SetNull)
+  extensions           DiscoveryExtension[]
+
+  @@index([caseId])
+  @@index([workspaceId])
+  @@index([status])
+}
+
+model DiscoveryExtension {
+  id                String             @id @default(cuid())
+  discoveryItemId   String
+  extensionNumber   Int
+
+  grantedDate       DateTime
+  previousDueDate   DateTime
+  newDueDate        DateTime
+
+  mutual            Boolean            @default(false)
+  appliesTo         ExtensionAppliesTo
+
+  notes             String?
+  createdBy         String
+  createdAt         DateTime           @default(now())
+
+  discoveryItem     DiscoveryItem      @relation(fields: [discoveryItemId], references: [id], onDelete: Cascade)
+
+  @@index([discoveryItemId])
 }
 
 // ─── FUTURE ───────────────────────────────────────────────────────────────────

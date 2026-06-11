@@ -113,7 +113,15 @@ function DeadlineRow({
           <span className={`text-sm font-semibold text-slate-900 truncate ${item.isCompleted ? "line-through text-slate-400" : ""}`}>
             {item.title}
           </span>
-          {item.source === "generated" && (
+          {item.discoveryItemId && (
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 shrink-0">Discovery</span>
+          )}
+          {item.extensionCount != null && item.extensionCount > 0 && (
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 shrink-0">
+              Ext. {item.extensionCount}
+            </span>
+          )}
+          {!item.discoveryItemId && item.source === "generated" && (
             <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-teal-100 text-teal-700 shrink-0">
               <Zap className="w-2.5 h-2.5" />
               Auto
