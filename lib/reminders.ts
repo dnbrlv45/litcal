@@ -7,7 +7,7 @@ export const REMINDER_MINUTES: Partial<Record<string, number[]>> = {
   DEADLINE:                   [10080, 1440],             // 7d, 1d
   COURT_CALL:                 [1440, 60],                // 1d, 1h
   CONFERENCE:                 [1440],                    // 1d
-  CASE_MANAGEMENT_CONFERENCE: [21600],                   // 15d
+  CASE_MANAGEMENT_CONFERENCE: [21600, 10080, 1440],       // 15d, 7d, 1d
 };
 
 // Google Calendar reminder overrides accept minutes ≤ 40320 (28 days).
