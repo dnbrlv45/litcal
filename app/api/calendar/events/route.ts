@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getAccessToken, createGoogleEvent, createLitCalCalendar } from "@/lib/google-calendar";
 import type { GoogleCalEvent } from "@/lib/google-calendar";
-import { buildGoogleEventPayload, getGoogleColorId } from "@/lib/google-calendar-payload";
+import { buildGoogleEventPayload, eventSupportsRemoteAppearance, getGoogleColorId } from "@/lib/google-calendar-payload";
 import { addTimelineEntry } from "@/lib/case-timeline";
 import { computeReminders, googleReminderOverrides } from "@/lib/reminders";
 import { getCurrentWorkspace } from "@/lib/workspaces";
@@ -56,7 +56,9 @@ export async function GET(request: NextRequest) {
   ]);
 
   return NextResponse.json({
-    events: events.map((e: (typeof events)[number]) => ({
+    events: events.map((e: (typeof events)[number]) => {
+      const supportsRemoteAppearance = eventSupportsRemoteAppearance(e.eventType);
+      return {
       id: e.id,
       title: e.title,
       description: e.description,
@@ -80,15 +82,16 @@ export async function GET(request: NextRequest) {
       caseCounty: e.caseRef?.county ?? null,
       caseCourt:  e.caseRef?.court  ?? null,
       inPerson: e.inPerson,
-      appearanceType: e.appearanceType,
-      remoteLink: e.remoteLink,
-      phoneNumber: e.phoneNumber,
-      bridge: e.bridge,
-      remotePassword: e.remotePassword,
-      requestRequired: e.requestRequired,
-      requestContactEmail: e.requestContactEmail,
-      requestNotes: e.requestNotes,
-    })),
+      appearanceType: supportsRemoteAppearance ? e.appearanceType : null,
+      remoteLink: supportsRemoteAppearance ? e.remoteLink : null,
+      phoneNumber: supportsRemoteAppearance ? e.phoneNumber : null,
+      bridge: supportsRemoteAppearance ? e.bridge : null,
+      remotePassword: supportsRemoteAppearance ? e.remotePassword : null,
+      requestRequired: supportsRemoteAppearance ? e.requestRequired : null,
+      requestContactEmail: supportsRemoteAppearance ? e.requestContactEmail : null,
+      requestNotes: supportsRemoteAppearance ? e.requestNotes : null,
+    };
+    }),
     connected: !!connection,
   });
 }
@@ -178,13 +181,17 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  const validTypes = ["DEADLINE","HEARING","DEPOSITION","TRIAL","CONFERENCE","MEETING","MEDIATION","COURT_CALL","CASE_MANAGEMENT_CONFERENCE","REMINDER","OTHER"];
+  const safeEventType = validTypes.includes(eventType ?? "") ? eventType as never : "OTHER";
+  const supportsRemoteAppearance = eventSupportsRemoteAppearance(safeEventType as string);
+
   // Resolve court hearing rule (remote appearance only)
   const isInPerson = inPerson === true;
   let hearingRule = null;
   let courtRuleUnmatched = false;
   const resolvedCounty = countyName || caseCountyName;
   const resolvedCourt  = courtName  || caseCourtName;
-  if (!isInPerson) {
+  if (!isInPerson && supportsRemoteAppearance) {
     hearingRule = await findCourtHearingRule({
       state: caseState,  // null = auto-derived from county name lookup
       countyName: resolvedCounty,
@@ -204,9 +211,6 @@ export async function POST(request: NextRequest) {
       });
     }
   }
-
-  const validTypes = ["DEADLINE","HEARING","DEPOSITION","TRIAL","CONFERENCE","MEETING","MEDIATION","COURT_CALL","CASE_MANAGEMENT_CONFERENCE","REMINDER","OTHER"];
-  const safeEventType = validTypes.includes(eventType ?? "") ? eventType as never : "OTHER";
 
   // Check conflicts before creating (non-blocking)
   const startDate = new Date(start);
@@ -262,7 +266,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Remote appearance task — only when requestRequired = true and not in-person
-  if (!isInPerson && hearingRule?.requestRequired) {
+  if (!isInPerson && supportsRemoteAppearance && hearingRule?.requestRequired) {
     const existingRemoteTask = await prisma.generatedDeadline.findUnique({
       where: { triggerEventId_ruleKey: { triggerEventId: event.id, ruleKey: "REMOTE_APPEARANCE_REQUEST" } },
     });

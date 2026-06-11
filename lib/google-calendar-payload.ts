@@ -26,6 +26,13 @@ export const HEARING_EVENT_TYPES = new Set([
   "COURT_CALL",
 ]);
 
+export const REMOTE_APPEARANCE_EVENT_TYPES = new Set([
+  "HEARING",
+  "CASE_MANAGEMENT_CONFERENCE",
+  "CONFERENCE",
+  "COURT_CALL",
+]);
+
 // ─── Category / color mapping ─────────────────────────────────────────────────
 
 export type EventCategory = "hearing" | "trial" | "deadline" | "deposition" | "mediation" | "task" | "other";
@@ -45,6 +52,10 @@ export function getEventCategory(eventType: string): EventCategory {
     case "REMINDER": return "task";
     default:         return "other";
   }
+}
+
+export function eventSupportsRemoteAppearance(eventType: string): boolean {
+  return REMOTE_APPEARANCE_EVENT_TYPES.has(eventType);
 }
 
 /** Maps an event type to a Google Calendar colorId. */
@@ -129,9 +140,10 @@ export function buildGoogleSummary(
 }
 
 export function buildGoogleLocation(
-  data: Pick<GooglePayloadData, "inPerson" | "remoteLink" | "phoneNumber" | "location">
+  data: Pick<GooglePayloadData, "eventType" | "inPerson" | "remoteLink" | "phoneNumber" | "location">
 ): string | undefined {
   if (data.inPerson) return data.location ?? undefined;
+  if (!eventSupportsRemoteAppearance(data.eventType)) return data.location ?? undefined;
   return data.remoteLink ?? data.phoneNumber ?? data.location ?? undefined;
 }
 
@@ -145,7 +157,7 @@ export function buildGoogleDescription(data: GooglePayloadData): string {
   }
 
   // Remote appearance join info
-  if (!data.inPerson) {
+  if (!data.inPerson && eventSupportsRemoteAppearance(data.eventType)) {
     if (data.remoteLink) sections.push(`Join: ${data.remoteLink}`);
     if (data.phoneNumber) {
       const phoneLines = [`Phone: ${data.phoneNumber}`];

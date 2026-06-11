@@ -3,6 +3,8 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { findCourtHearingRule } from "@/lib/court-hearing-rules";
 import { getAccessToken, patchGoogleEvent } from "@/lib/google-calendar";
+import { REMOTE_APPEARANCE_EVENT_TYPES } from "@/lib/google-calendar-payload";
+import type { EventType } from "@prisma/client";
 
 // POST /api/admin/court-coverage/resolve
 // Body: { alertId: string; updateEvents: boolean }
@@ -33,10 +35,12 @@ export async function POST(request: NextRequest) {
 
     if (rule) {
       const now = new Date();
+      const remoteAppearanceEventTypes = Array.from(REMOTE_APPEARANCE_EVENT_TYPES) as EventType[];
       const where =
         alert.alertType === "COUNTY"
           ? {
               courtRuleUnmatched: true,
+              eventType: { in: remoteAppearanceEventTypes },
               startTime: { gte: now },
               OR: [
                 { countyName: { equals: alert.county, mode: "insensitive" as const } },
@@ -45,6 +49,7 @@ export async function POST(request: NextRequest) {
             }
           : {
               courtRuleUnmatched: true,
+              eventType: { in: remoteAppearanceEventTypes },
               startTime: { gte: now },
               department: { equals: alert.department, mode: "insensitive" as const },
             };

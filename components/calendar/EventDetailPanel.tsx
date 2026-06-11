@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import Link from "next/link";
 import type { CalEvent, EventType, ConflictDetail } from "@/lib/google-calendar";
 import { EVENT_TYPE_COLORS } from "@/lib/google-calendar";
+import { eventSupportsRemoteAppearance } from "@/lib/google-calendar-payload";
 
 const EVENT_TYPE_LABELS: Record<EventType, string> = {
   HEARING:                    "Hearing",
@@ -129,6 +130,7 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
   useEffect(() => {
     setLiveRule(null);
     if (!event || event.inPerson) return;
+    if (!eventSupportsRemoteAppearance(event.eventType)) return;
     // Already has stored data — no need for live lookup
     if (event.appearanceType || event.remoteLink || event.phoneNumber || event.requestContactEmail) return;
 
@@ -144,7 +146,7 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
       .then((r) => r.json())
       .then((d) => setLiveRule(d.rule ?? null))
       .catch(() => {});
-  }, [event?.id, event?.inPerson, event?.appearanceType, event?.remoteLink, event?.phoneNumber, event?.requestContactEmail, event?.caseCounty, event?.caseCourt, event?.department]);
+  }, [event?.id, event?.eventType, event?.inPerson, event?.appearanceType, event?.remoteLink, event?.phoneNumber, event?.requestContactEmail, event?.caseCounty, event?.caseCourt, event?.department]);
 
   function startEdit() {
     if (!event) return;
@@ -329,6 +331,7 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
 
             {/* Remote Appearance */}
             {(() => {
+              if (!eventSupportsRemoteAppearance(event.eventType)) return null;
               const appearance = {
                 appearanceType:     event.appearanceType     ?? liveRule?.appearanceType     ?? null,
                 remoteLink:         event.remoteLink         ?? liveRule?.remoteLink         ?? null,

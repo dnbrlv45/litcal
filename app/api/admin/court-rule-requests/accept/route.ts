@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getAccessToken, patchGoogleEvent } from "@/lib/google-calendar";
-import { buildGoogleEventPayload } from "@/lib/google-calendar-payload";
+import { buildGoogleEventPayload, REMOTE_APPEARANCE_EVENT_TYPES } from "@/lib/google-calendar-payload";
 import { addTimelineEntry } from "@/lib/case-timeline";
+import type { EventType } from "@prisma/client";
 
 // POST /api/admin/court-rule-requests/accept
 // Body: { requestId: string }
@@ -106,10 +107,12 @@ export async function POST(request: NextRequest) {
 
   // Backfill matching future unmatched events with the new rule data.
   const now = new Date();
+  const remoteAppearanceEventTypes = Array.from(REMOTE_APPEARANCE_EVENT_TYPES) as EventType[];
   const where =
     !courtName && !department
       ? {
           courtRuleUnmatched: true,
+          eventType: { in: remoteAppearanceEventTypes },
           startTime: { gte: now },
           OR: [
             { countyName: { equals: countyName, mode: "insensitive" as const } },
@@ -118,6 +121,7 @@ export async function POST(request: NextRequest) {
         }
       : {
           courtRuleUnmatched: true,
+          eventType: { in: remoteAppearanceEventTypes },
           startTime: { gte: now },
           department: department ? { equals: department, mode: "insensitive" as const } : undefined,
         };
