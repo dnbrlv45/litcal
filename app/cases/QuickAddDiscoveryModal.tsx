@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { DISCOVERY_TYPE_LABELS } from "@/lib/discovery";
+import { DISCOVERY_TYPE_LABELS } from "@/lib/discovery-constants";
 import type { DiscoveryType, DiscoveryDirection } from "@prisma/client";
 
 interface CaseOption {

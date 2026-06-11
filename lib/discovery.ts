@@ -10,39 +10,19 @@ import type { DiscoveryType, DiscoveryDirection, DiscoveryStatus, ExtensionAppli
 
 export { DiscoveryType, DiscoveryDirection, DiscoveryStatus, ExtensionAppliesTo };
 
-// ─── Labels ──────────────────────────────────────────────────────────────────
+// Re-export labels from the client-safe constants file so server code can import from one place.
+export {
+  DISCOVERY_TYPE_LABELS,
+  DISCOVERY_DIRECTION_LABELS,
+  DISCOVERY_STATUS_LABELS,
+  EXTENSION_APPLIES_TO_LABELS,
+} from "@/lib/discovery-constants";
 
-export const DISCOVERY_TYPE_LABELS: Record<DiscoveryType, string> = {
-  FORM_INTERROGATORIES:                  "Form Interrogatories",
-  SPECIAL_INTERROGATORIES:               "Special Interrogatories",
-  REQUESTS_FOR_PRODUCTION:               "Requests for Production",
-  REQUESTS_FOR_ADMISSION:                "Requests for Admission",
-  SUPPLEMENTAL_FORM_INTERROGATORIES:     "Supplemental Form Interrogatories",
-  SUPPLEMENTAL_SPECIAL_INTERROGATORIES:  "Supplemental Special Interrogatories",
-  SUPPLEMENTAL_REQUESTS_FOR_PRODUCTION:  "Supplemental Requests for Production",
-  SUPPLEMENTAL_REQUESTS_FOR_ADMISSION:   "Supplemental Requests for Admission",
-  DEPOSITION_NOTICE:                     "Deposition Notice",
-  OTHER:                                 "Other",
-};
-
-export const DISCOVERY_DIRECTION_LABELS: Record<DiscoveryDirection, string> = {
-  RECEIVED: "Received from Opposing Party",
-  SERVED:   "Served on Opposing Party",
-};
-
-export const DISCOVERY_STATUS_LABELS: Record<DiscoveryStatus, string> = {
-  AWAITING_RESPONSE:  "Awaiting Response",
-  RESPONSES_RECEIVED: "Responses Received",
-  EXTENSION_GRANTED:  "Extension Granted",
-  OVERDUE:            "Overdue",
-  COMPLETED:          "Completed",
-};
-
-export const EXTENSION_APPLIES_TO_LABELS: Record<ExtensionAppliesTo, string> = {
-  OUR_DEADLINE:       "Our Deadline",
-  OPPOSING_DEADLINE:  "Opposing Deadline",
-  BOTH:               "Both Deadlines",
-};
+import {
+  DISCOVERY_TYPE_LABELS,
+  DISCOVERY_DIRECTION_LABELS,
+  DISCOVERY_STATUS_LABELS,
+} from "@/lib/discovery-constants";
 
 // ─── Date calculation ────────────────────────────────────────────────────────
 

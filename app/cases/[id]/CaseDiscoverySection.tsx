@@ -23,7 +23,7 @@ import {
   DISCOVERY_DIRECTION_LABELS,
   DISCOVERY_STATUS_LABELS,
   EXTENSION_APPLIES_TO_LABELS,
-} from "@/lib/discovery";
+} from "@/lib/discovery-constants";
 import type { DiscoveryType, DiscoveryDirection, DiscoveryStatus, ExtensionAppliesTo } from "@prisma/client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
