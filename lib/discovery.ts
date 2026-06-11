@@ -196,7 +196,7 @@ export async function createDiscoveryItem(input: CreateDiscoveryInput) {
         eventType:          "DEADLINE",
         allDay:             true,
         startTime:          dueDate,
-        endTime:            dueDate,
+        endTime:            new Date(dueDate.getTime() + 23 * 60 * 60 * 1000 + 59 * 60 * 1000 + 59 * 1000),
         status:             "SCHEDULED",
         assignedAttorneyId: attorney?.userId ?? null,
       },
@@ -365,7 +365,10 @@ export async function grantDiscoveryExtension(input: GrantExtensionInput) {
       if (target.linkedEventId) {
         await tx.event.update({
           where: { id: target.linkedEventId },
-          data: { startTime: newDueDate, endTime: newDueDate },
+          data: {
+            startTime: newDueDate,
+            endTime: new Date(newDueDate.getTime() + 23 * 60 * 60 * 1000 + 59 * 60 * 1000 + 59 * 1000),
+          },
         });
       }
     });
