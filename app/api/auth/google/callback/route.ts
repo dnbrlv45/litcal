@@ -48,26 +48,34 @@ export async function GET(request: NextRequest) {
 
   const tokens = await tokenRes.json();
 
-  if (!tokens.refresh_token) {
-    console.error("No refresh_token in Google response:", tokens);
+  // Google only returns a refresh_token on the first authorization (or after explicit revoke).
+  // On reconnect it may be absent — fall back to the existing stored token.
+  let refreshToken = tokens.refresh_token as string | undefined;
+  if (!refreshToken) {
+    const existing = await prisma.userCalendarConnection.findUnique({
+      where: { userId_provider: { userId, provider: "GOOGLE" } },
+      select: { refreshToken: true },
+    });
+    refreshToken = existing?.refreshToken ?? undefined;
+  }
+
+  if (!refreshToken) {
+    console.error("No refresh_token available for Google Calendar connection");
     return NextResponse.redirect(new URL("/settings/calendar?error=no_refresh_token", baseUrl));
   }
 
-  // Upsert the Google Calendar connection
-  // If they're reconnecting, update the existing row and clear the cached calendar ID
-  // (a new token may belong to a different Google account)
   await prisma.userCalendarConnection.upsert({
     where: { userId_provider: { userId, provider: "GOOGLE" } },
     create: {
       userId,
       provider: "GOOGLE",
-      refreshToken: tokens.refresh_token,
+      refreshToken,
       isActive: true,
       connectedAt: new Date(),
     },
     update: {
-      refreshToken: tokens.refresh_token,
-      providerCalendarId: null, // cleared so the LitCal calendar is re-resolved on next push
+      refreshToken,
+      providerCalendarId: null, // cleared so LitCal calendar is re-created on next push
       isActive: true,
       disconnectedAt: null,
       connectedAt: new Date(),

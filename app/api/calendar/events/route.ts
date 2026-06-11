@@ -413,8 +413,16 @@ export async function POST(request: NextRequest) {
     try {
       const accessToken = await getAccessToken(connection.refreshToken);
 
-      // Resolve the dedicated LitCal calendar, creating it once if needed
+      // Resolve the dedicated LitCal calendar, creating it if missing or deleted
       let litCalId = connection.providerCalendarId;
+      if (litCalId) {
+        // Verify the calendar still exists; if not, clear and recreate
+        const checkRes = await fetch(
+          `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(litCalId)}`,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+        if (!checkRes.ok) litCalId = null;
+      }
       if (!litCalId) {
         litCalId = await createLitCalCalendar(accessToken);
         await prisma.userCalendarConnection.update({
