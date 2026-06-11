@@ -44,10 +44,10 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
 
   const mutual = body.mutual ?? false;
-  // Mutual always means both deadlines move; otherwise default to the item's own deadline.
+  // Mutual → both deadlines; non-mutual → derived from the item's own direction (not from the client).
   const appliesTo = mutual
     ? "BOTH"
-    : (body.appliesTo === "OPPOSING_DEADLINE" ? "OPPOSING_DEADLINE" : "OUR_DEADLINE") as "OUR_DEADLINE" | "OPPOSING_DEADLINE" | "BOTH";
+    : (item.direction === "SERVED" ? "OPPOSING_DEADLINE" : "OUR_DEADLINE") as "OUR_DEADLINE" | "OPPOSING_DEADLINE" | "BOTH";
 
   const extensionNumber = await grantDiscoveryExtension({
     discoveryItemId: discoveryId,

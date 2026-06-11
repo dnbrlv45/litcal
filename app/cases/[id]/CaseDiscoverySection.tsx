@@ -51,9 +51,6 @@ interface DiscoveryItem {
   createdAt: string;
 }
 
-const APPLIES_TO_OPTS = (Object.keys(EXTENSION_APPLIES_TO_LABELS) as ExtensionAppliesTo[]).filter(
-  (k) => k !== "BOTH"
-);
 
 function fmt(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("en-US", {
@@ -229,7 +226,6 @@ function AddExtensionModal({ item, caseId, onClose, onGranted }: {
   const [grantedDate, setGrantedDate] = useState("");
   const [newDueDate, setNewDueDate]   = useState("");
   const [mutual, setMutual]           = useState(false);
-  const [appliesTo, setAppliesTo]     = useState<ExtensionAppliesTo>("OUR_DEADLINE");
   const [notes, setNotes]             = useState("");
   const [saving, setSaving]           = useState(false);
   const [error, setError]             = useState("");
@@ -244,7 +240,7 @@ function AddExtensionModal({ item, caseId, onClose, onGranted }: {
       const res = await fetch(`/api/cases/${caseId}/discovery/${item.id}/extensions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ grantedDate, newDueDate, mutual, appliesTo, notes: notes || null }),
+        body: JSON.stringify({ grantedDate, newDueDate, mutual, notes: notes || null }),
       });
       if (!res.ok) { const j = await res.json(); setError(j.error ?? "Failed"); return; }
       const { item: updated } = await res.json();
@@ -290,19 +286,9 @@ function AddExtensionModal({ item, caseId, onClose, onGranted }: {
             )}
           </div>
           {!mutual && (
-            <div>
-              <Label htmlFor="ext-applies">Applies To</Label>
-              <select
-                id="ext-applies"
-                value={appliesTo}
-                onChange={(e) => setAppliesTo(e.target.value as ExtensionAppliesTo)}
-                className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-              >
-                {APPLIES_TO_OPTS.map((a) => (
-                  <option key={a} value={a}>{EXTENSION_APPLIES_TO_LABELS[a]}</option>
-                ))}
-              </select>
-            </div>
+            <p className="text-xs text-slate-500">
+              Only {item.direction === "RECEIVED" ? "our deadline" : "the opposing deadline"} will be moved.
+            </p>
           )}
           <div>
             <Label htmlFor="ext-notes">Notes <span className="text-slate-400">(optional)</span></Label>
