@@ -79,6 +79,9 @@ async function syncDiscoveryEventToGoogle(params: {
   try {
     const accessToken = await getAccessToken(connection.refreshToken);
     const dateStr = params.currentDueDate.toISOString().slice(0, 10);
+    // GCal all-day events use exclusive end dates — end must be start + 1 day.
+    const nextDay = new Date(params.currentDueDate.getTime() + 24 * 60 * 60 * 1000);
+    const endDateStr = nextDay.toISOString().slice(0, 10);
 
     const existing = await prisma.googleCalendarSync.findUnique({ where: { eventId: params.eventId } });
 
@@ -95,7 +98,7 @@ async function syncDiscoveryEventToGoogle(params: {
           headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
           body: JSON.stringify({
             start: { date: dateStr },
-            end:   { date: dateStr },
+            end:   { date: endDateStr },
           }),
         }
       );
@@ -111,7 +114,7 @@ async function syncDiscoveryEventToGoogle(params: {
           description: params.description,
           colorId: 5, // Banana = deadline
           start: dateStr,
-          end: dateStr,
+          end: endDateStr,
           timeZone: "UTC",
           allDay: true,
         },

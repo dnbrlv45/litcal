@@ -32,6 +32,7 @@ export async function pushTaskToGoogle(
     }
 
     const dateStr = task.dueDate.toISOString().slice(0, 10);
+    const endDateStr = new Date(task.dueDate.getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const summary = task.caseRef?.title
       ? `${task.caseRef.title} — ${task.title}`
       : task.title;
@@ -42,7 +43,7 @@ export async function pushTaskToGoogle(
         summary,
         colorId: getGoogleColorId("DEADLINE"),
         start: dateStr,
-        end: dateStr,
+        end: endDateStr,
         allDay: true,
         timeZone: "UTC",
       },
