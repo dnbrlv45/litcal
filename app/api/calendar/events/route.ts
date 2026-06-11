@@ -37,6 +37,7 @@ export async function GET(request: NextRequest) {
           { startTime: { lte: rangeEnd } },
           { endTime:   { gte: rangeStart } },
         ],
+        status: { notIn: ["CANCELLED", "COMPLETED"] },
         OR: [
           { workspaceId: workspace.id },
           { userId, workspaceId: null },
