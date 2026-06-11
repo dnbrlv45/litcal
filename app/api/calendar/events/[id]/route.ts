@@ -7,6 +7,7 @@ import { addTimelineEntry } from "@/lib/case-timeline";
 import { getCurrentWorkspace } from "@/lib/workspaces";
 import { detectConflicts } from "@/lib/conflicts";
 import { cascadeDeadlineDateChange } from "@/lib/deadline-rules";
+import { replaceEventReminders } from "@/lib/reminders";
 
 // DELETE /api/calendar/events/[id]
 export async function DELETE(
@@ -165,6 +166,9 @@ export async function PATCH(
   const newStart = updated.startTime;
   const newEnd = updated.endTime;
   let skippedModified = 0;
+  if (isDateChanging || safeEventType !== undefined) {
+    await replaceEventReminders(prisma, id, newStart, updated.eventType);
+  }
   if (isDateChanging) {
     const cascade = await cascadeDeadlineDateChange(id, newStart);
     skippedModified = cascade.skippedModified;

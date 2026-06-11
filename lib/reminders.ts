@@ -36,6 +36,30 @@ export function computeReminders(
   });
 }
 
+export async function replaceEventReminders(
+  tx: {
+    eventReminder: {
+      deleteMany(args: { where: { eventId: string } }): Promise<unknown>;
+      createMany(args: { data: Array<{ eventId: string; minutesBefore: number; sendAt: Date }> }): Promise<unknown>;
+    };
+  },
+  eventId: string,
+  eventStart: Date,
+  eventType: string
+) {
+  const reminderRows = computeReminders(eventStart, eventType);
+  await tx.eventReminder.deleteMany({ where: { eventId } });
+  if (reminderRows.length > 0) {
+    await tx.eventReminder.createMany({
+      data: reminderRows.map((r) => ({
+        eventId,
+        minutesBefore: r.minutesBefore,
+        sendAt: r.sendAt,
+      })),
+    });
+  }
+}
+
 /** Build Google Calendar reminder overrides for a given event type. */
 export function googleReminderOverrides(
   eventType: string

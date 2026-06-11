@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { adjustToBusinessDay } from "@/lib/reminders";
+import { adjustToBusinessDay, replaceEventReminders } from "@/lib/reminders";
+import { sendTaskAssignedEmails } from "@/lib/email-notifications";
 import type { EventType } from "@/lib/google-calendar";
 
 // ─── Rule types ──────────────────────────────────────────────────────────────
@@ -220,6 +221,7 @@ export async function applyDeadlineRules(
           })),
           skipDuplicates: true,
         });
+        await sendTaskAssignedEmails(task.id);
       }
 
       await prisma.generatedDeadline.create({
@@ -288,6 +290,7 @@ export async function applyDeadlineRules(
           assignedAttorneyId: trigger.assignedAttorneyId,
         },
       });
+      await replaceEventReminders(prisma, event.id, event.startTime, event.eventType);
       await prisma.generatedDeadline.create({
         data: {
           workspaceId: trigger.workspaceId,
@@ -348,6 +351,7 @@ export async function cascadeDeadlineDateChange(
         where: { id: row.generatedEventId },
         data: { startTime: dayStart, endTime: dayEnd },
       });
+      await replaceEventReminders(prisma, row.generatedEventId, dayStart, rule.eventType ?? "DEADLINE");
     }
 
     if (row.generatedTaskId && row.generatedTask) {

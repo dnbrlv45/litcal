@@ -28,6 +28,8 @@ model User {
   workspaceMemberships WorkspaceMember[]
   sessions            AuthSession[]
   notifications       Notification[]
+  notificationPreference UserNotificationPreference?
+  emailNotificationLogs  EmailNotificationLog[]
 
   caseStaffAssignments CaseStaff[]
   assignedEvents       Event[]    @relation("EventAttorney")
@@ -524,6 +526,47 @@ enum NotificationType {
   TASK_ASSIGNED
   CASE_ASSIGNED
   EVENT_REMINDER
+}
+
+model UserNotificationPreference {
+  id                              String   @id @default(cuid())
+  userId                          String   @unique
+  taskAssignedEmails              Boolean  @default(true)
+  taskDueEmails                   Boolean  @default(true)
+  deadlineReminderEmails          Boolean  @default(true)
+  discoveryReminderEmails         Boolean  @default(true)
+  remoteAppearanceReminderEmails  Boolean  @default(true)
+  ruleApprovalEmails              Boolean  @default(true)
+  createdAt                       DateTime @default(now())
+  updatedAt                       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model EmailNotificationLog {
+  id                String    @id @default(cuid())
+  userId            String
+  workspaceId       String?
+  emailType         String
+  relatedEntityType String
+  relatedEntityId   String
+  reminderKey       String
+  recipientEmail    String
+  subject           String
+  status            String
+  sentAt            DateTime?
+  error             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, emailType, relatedEntityType, relatedEntityId, reminderKey])
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([emailType])
+  @@index([status])
+  @@index([sentAt])
 }
 
 // ─── DEADLINE AUTOMATION ─────────────────────────────────────────────────────

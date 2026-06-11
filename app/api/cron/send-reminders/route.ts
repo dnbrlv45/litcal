@@ -1,7 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { sendDueTaskEmails, sendEventReminderEmails } from "@/lib/email-notifications";
 
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
+  const configuredSecret = process.env.CRON_SECRET;
+  if (configuredSecret) {
+    const url = new URL(request.url);
+    const bearer = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+    const providedSecret = url.searchParams.get("secret") ?? bearer;
+    if (providedSecret !== configuredSecret) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+  }
+
   const now = new Date();
 
   // Find all unsent reminders whose sendAt has passed
@@ -30,7 +41,8 @@ export async function GET(_request: NextRequest) {
   });
 
   if (due.length === 0) {
-    return NextResponse.json({ sent: 0 });
+    const taskEmails = await sendDueTaskEmails(now);
+    return NextResponse.json({ sent: 0, notifications: 0, emails: { event: { sent: 0, skipped: 0, failed: 0 }, task: taskEmails } });
   }
 
   // Build notification rows — one per reminder per recipient
@@ -89,11 +101,18 @@ export async function GET(_request: NextRequest) {
     await prisma.notification.createMany({ data: rows, skipDuplicates: true });
   }
 
+  const eventEmails = await sendEventReminderEmails(due.map((r) => r.id));
+  const taskEmails = await sendDueTaskEmails(now);
+
   // Mark reminders sent
   await prisma.eventReminder.updateMany({
     where: { id: { in: due.map((r) => r.id) } },
     data: { sent: true },
   });
 
-  return NextResponse.json({ sent: due.length, notifications: rows.length });
+  return NextResponse.json({
+    sent: due.length,
+    notifications: rows.length,
+    emails: { event: eventEmails, task: taskEmails },
+  });
 }

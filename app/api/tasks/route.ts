@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentWorkspace } from "@/lib/workspaces";
 import { addTimelineEntry } from "@/lib/case-timeline";
 import { pushTaskToGoogle } from "@/lib/task-google-sync";
+import { sendTaskAssignedEmails } from "@/lib/email-notifications";
 
 export const TASK_INCLUDE = {
   assignees: {
@@ -135,6 +136,7 @@ export async function POST(request: NextRequest) {
       })),
       skipDuplicates: true,
     });
+    await sendTaskAssignedEmails(task.id, assignerName);
   }
 
   if (task.caseId) {

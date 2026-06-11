@@ -6,6 +6,7 @@
 import { prisma } from "@/lib/prisma";
 import { getAccessToken, createGoogleEvent, patchGoogleEvent, deleteGoogleEvent } from "@/lib/google-calendar";
 import { addTimelineEntry } from "@/lib/case-timeline";
+import { replaceEventReminders } from "@/lib/reminders";
 import type { DiscoveryType, DiscoveryDirection, DiscoveryStatus, ExtensionAppliesTo } from "@prisma/client";
 
 export { DiscoveryType, DiscoveryDirection, DiscoveryStatus, ExtensionAppliesTo };
@@ -236,6 +237,8 @@ export async function createDiscoveryItem(input: CreateDiscoveryInput) {
     return { discoveryItem, event };
   });
 
+  await replaceEventReminders(prisma, event.id, event.startTime, event.eventType);
+
   // Google Calendar sync (best-effort, outside transaction)
   await syncDiscoveryEventToGoogle({
     userId:         createdBy,
@@ -385,6 +388,7 @@ export async function grantDiscoveryExtension(input: GrantExtensionInput) {
             endTime:   toNoonUTC(newDueDate),
           },
         });
+        await replaceEventReminders(tx, target.linkedEventId, toNoonUTC(newDueDate), "DEADLINE");
       }
     });
 

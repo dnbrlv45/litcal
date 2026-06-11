@@ -9,6 +9,13 @@ interface InviteEmailOptions {
   inviteUrl: string;
 }
 
+interface LitCalEmailOptions {
+  recipientEmail: string;
+  subject: string;
+  text: string;
+  html: string;
+}
+
 function escapeHtml(value: string) {
   return value
     .replaceAll("&", "&amp;")
@@ -126,14 +133,40 @@ function buildInviteEmail({
   ].join("\r\n");
 }
 
-export async function sendWorkspaceInviteEmail(_userId: string, options: InviteEmailOptions) {
+function buildLitCalEmail({ recipientEmail, subject, text, html }: LitCalEmailOptions) {
+  const headerRecipientEmail = headerValue(recipientEmail);
+  const safeSubject = headerValue(subject);
+  const boundary = `litcal-${crypto.randomUUID()}`;
+
+  return [
+    `To: ${headerRecipientEmail}`,
+    "From: LitCal Notifications <litcalai@gmail.com>",
+    `Subject: ${safeSubject}`,
+    "MIME-Version: 1.0",
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    "",
+    `--${boundary}`,
+    "Content-Type: text/plain; charset=UTF-8",
+    "",
+    text,
+    "",
+    `--${boundary}`,
+    "Content-Type: text/html; charset=UTF-8",
+    "",
+    html,
+    "",
+    `--${boundary}--`,
+  ].join("\r\n");
+}
+
+async function sendRawLitCalMessage(rawMessage: string) {
   const refreshToken = process.env.GMAIL_REFRESH_TOKEN;
   if (!refreshToken) {
     return { ok: false, reason: "gmail_not_connected" as const };
   }
 
   const accessToken = await getAccessToken(refreshToken);
-  const raw = base64Url(buildInviteEmail(options));
+  const raw = base64Url(rawMessage);
   const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
     method: "POST",
     headers: {
@@ -148,4 +181,12 @@ export async function sendWorkspaceInviteEmail(_userId: string, options: InviteE
   }
 
   return { ok: true, reason: "sent" as const };
+}
+
+export async function sendWorkspaceInviteEmail(_userId: string, options: InviteEmailOptions) {
+  return sendRawLitCalMessage(buildInviteEmail(options));
+}
+
+export async function sendLitCalEmail(options: LitCalEmailOptions) {
+  return sendRawLitCalMessage(buildLitCalEmail(options));
 }

@@ -5,6 +5,7 @@ import { getCurrentWorkspace } from "@/lib/workspaces";
 import { TASK_INCLUDE } from "../route";
 import { addTimelineEntry } from "@/lib/case-timeline";
 import { pushTaskToGoogle, deleteTaskFromGoogle } from "@/lib/task-google-sync";
+import { sendTaskAssignedEmails } from "@/lib/email-notifications";
 
 async function getTaskForWorkspace(id: string, workspaceId: string) {
   return prisma.task.findFirst({ where: { id, workspaceId }, include: TASK_INCLUDE });
@@ -195,6 +196,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       })),
       skipDuplicates: true,
     });
+    await sendTaskAssignedEmails(task.id, assignerName);
   }
 
   return NextResponse.json({ task });

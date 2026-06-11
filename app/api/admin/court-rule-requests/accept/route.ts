@@ -5,6 +5,7 @@ import { getAccessToken, patchGoogleEvent } from "@/lib/google-calendar";
 import { buildGoogleEventPayload, REMOTE_APPEARANCE_EVENT_TYPES } from "@/lib/google-calendar-payload";
 import { addTimelineEntry } from "@/lib/case-timeline";
 import type { EventType } from "@prisma/client";
+import { sendRuleApprovalEmail } from "@/lib/email-notifications";
 
 // POST /api/admin/court-rule-requests/accept
 // Body: { requestId: string }
@@ -104,6 +105,7 @@ export async function POST(request: NextRequest) {
     where: { id: requestId },
     data: { reviewed: true, accepted: true, reviewedAt: new Date() },
   });
+  await sendRuleApprovalEmail(requestId);
 
   // Backfill matching future unmatched events with the new rule data.
   const now = new Date();

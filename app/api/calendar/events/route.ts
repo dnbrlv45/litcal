@@ -11,6 +11,7 @@ import { detectConflicts, getConflictedEventIds } from "@/lib/conflicts";
 import { applyDeadlineRules } from "@/lib/deadline-rules";
 import { findCourtHearingRule, computeRemoteAppearanceDueDate } from "@/lib/court-hearing-rules";
 import { upsertCoverageAlert } from "@/lib/court-coverage-alerts";
+import { sendTaskAssignedEmails } from "@/lib/email-notifications";
 
 // GET /api/calendar/events?start=ISO&end=ISO
 export async function GET(request: NextRequest) {
@@ -319,6 +320,7 @@ export async function POST(request: NextRequest) {
           })),
           skipDuplicates: true,
         });
+        await sendTaskAssignedEmails(remoteTask.id);
       }
 
       await prisma.generatedDeadline.create({
