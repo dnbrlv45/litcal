@@ -130,9 +130,6 @@ export default function DayView({ date, today, events, onCellClick, onEventClick
                     {ev.hasConflict && <span className="text-amber-600 font-bold leading-none">⚠</span>}
                   </span>
                   <span className="font-semibold block truncate">{ev.title}</span>
-                  {ev.caseNumber && (
-                    <span className="opacity-60 truncate block">#{ev.caseNumber}</span>
-                  )}
                   {eventHeight(ev) > 44 && ev.location && (
                     <span className="opacity-75 truncate block">{ev.location}</span>
                   )}
