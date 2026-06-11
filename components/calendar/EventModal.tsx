@@ -88,6 +88,7 @@ interface ResolvedRule {
 
 export default function EventModal({ open, onClose, defaultStart, googleConnected, onCreated }: Props) {
   const [title, setTitle] = useState("");
+  const [titleManuallySet, setTitleManuallySet] = useState(false);
   const [eventType, setEventType] = useState<EventType>("HEARING");
   const [date, setDate] = useState(toDateInputValue(defaultStart ?? new Date()));
   const [startTime, setStartTime] = useState(DEFAULT_START);
@@ -146,7 +147,7 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
         const endT = defaultStart
           ? minutesToTime(defaultStart.getHours() * 60 + defaultStart.getMinutes() + 60)
           : DEFAULT_END;
-        setTitle(""); setEventType("HEARING"); setDate(d); setEndDate(d);
+        setTitle(""); setTitleManuallySet(false); setEventType("HEARING"); setDate(d); setEndDate(d);
         setAutoTrialEnd(false); setStartTime(startT); setEndTime(endT);
         setAllDay(false); setLocation(""); setDescription(""); setCaseId("");
         setError(null); setConflicts([]);
@@ -188,6 +189,16 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
   const courtName  = effectiveCourt?.name ?? linkedCase?.court ?? null;
   const selectedDept = departments.find((d) => d.id === selectedDeptId);
   const deptName = selectedDept?.name ?? null;
+
+  // ── auto-generate title from case + event type ──────────────────────────────
+  const eventTypeLabel = EVENT_TYPES.find((t) => t.value === eventType)?.label ?? eventType;
+  const subtypeLabel = subtype
+    ? (HEARING_SUBTYPES.find((s) => s.value === subtype)?.label.replace(/ \([A-Z/ ]+\)$/, "") ?? subtype)
+    : null;
+  const autoTitle = linkedCase
+    ? `${linkedCase.title} — ${subtypeLabel ?? eventTypeLabel}`
+    : subtypeLabel ?? eventTypeLabel;
+  const effectiveTitle = titleManuallySet ? title : autoTitle;
 
   // ── look up rule whenever county/court/dept changes ─────────────────────────
   useEffect(() => {
@@ -265,7 +276,7 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!title.trim()) { setError("Title is required."); return; }
+    if (!effectiveTitle.trim()) { setError("Title is required."); return; }
 
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const toNoonUTC = (dateStr: string) => {
@@ -281,7 +292,7 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title, description, start: startISO, end: endISO, timeZone,
+          title: effectiveTitle, description, start: startISO, end: endISO, timeZone,
           eventType,
           subtype: subtype || undefined,
           subtypeReason: subtypeReason || undefined,
@@ -333,11 +344,17 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
             <Label htmlFor="event-title">Title</Label>
             <Input
               id="event-title"
-              placeholder="e.g. Garcia v. State Farm — Hearing"
+              placeholder={autoTitle}
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                setTitleManuallySet(e.target.value.length > 0);
+              }}
               autoFocus
             />
+            {!titleManuallySet && (
+              <p className="text-xs text-slate-400">Auto-generated from case and event type. Type to override.</p>
+            )}
           </div>
 
           {/* Event type */}
