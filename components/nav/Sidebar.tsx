@@ -21,13 +21,13 @@ import {
   Scale,
 } from "lucide-react";
 import InboxNavItem from "./InboxNavItem";
+import DeadlinesNavItem from "./DeadlinesNavItem";
 import { EVENT_TYPE_COLORS, EventType } from "@/lib/google-calendar";
 
 const NAV_ITEMS = [
   { label: "Calendar",  href: "/",         icon: CalendarDays },
   { label: "Cases",     href: "/cases",     icon: Briefcase },
   { label: "Tasks",      href: "/tasks",      icon: CheckSquare },
-  { label: "Deadlines", href: "/deadlines", icon: Scale },
   { label: "Documents", href: "/documents", icon: FileText },
   { label: "Contacts",  href: "/contacts",  icon: Users },
   { label: "Reports",   href: "/reports",      icon: BarChart2 },
@@ -140,6 +140,7 @@ export default function Sidebar({ isSuperAdmin = false }: { isSuperAdmin?: boole
                 {collapsed && <CollapsedTooltip label={label} />}
               </Link>
               {href === "/tasks" && <InboxNavItem key="inbox" collapsed={collapsed} />}
+              {href === "/tasks" && <DeadlinesNavItem key="deadlines" collapsed={collapsed} />}
             </>
           );
         })}
