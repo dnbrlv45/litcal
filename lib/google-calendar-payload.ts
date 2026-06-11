@@ -138,47 +138,31 @@ export function buildGoogleLocation(
 export function buildGoogleDescription(data: GooglePayloadData): string {
   const sections: string[] = [];
 
-  if (data.caseName) sections.push(`Case:\n${data.caseName}`);
-  if (data.caseNumber) sections.push(`Case Number:\n${data.caseNumber}`);
-
-  sections.push(`Event Type:\n${EVENT_TYPE_LABELS[data.eventType] ?? data.eventType}`);
-
-  if (data.subtype) {
-    sections.push(`Hearing Subtype:\n${subtypeDisplayLabel(data.subtype, data.subtypeReason)}`);
+  // Case
+  if (data.caseName) {
+    const caseLabel = data.caseNumber ? `${data.caseName} (#${data.caseNumber})` : data.caseName;
+    sections.push(caseLabel);
   }
 
-  const courtParts = [
-    data.countyName,
-    data.courtName,
-    data.department ? `Department ${data.department}` : null,
-  ].filter(Boolean);
-  if (courtParts.length) sections.push(`Court:\n${courtParts.join("\n")}`);
-
-  sections.push(`Appearance:\n${data.inPerson ? "In Person" : "Remote"}`);
-
+  // Remote appearance join info
   if (!data.inPerson) {
-    const remoteLines: string[] = [];
-    if (data.appearanceType) remoteLines.push(`Appearance Type: ${data.appearanceType}`);
-    if (data.remoteLink)     remoteLines.push(`Link: ${data.remoteLink}`);
-    if (data.phoneNumber)    remoteLines.push(`Phone: ${data.phoneNumber}`);
-    if (data.bridge)         remoteLines.push(`Bridge: ${data.bridge}`);
-    if (data.password)       remoteLines.push(`Password: ${data.password}`);
-    if (remoteLines.length)  sections.push(`Remote Appearance:\n${remoteLines.join("\n")}`);
-
-    if (data.requestRequired != null) {
-      const reqLines = [`Required: ${data.requestRequired ? "Yes" : "No"}`];
-      if (data.requestTaskCreated != null)
-        reqLines.push(`Task Created: ${data.requestTaskCreated ? "Yes" : "No"}`);
-      sections.push(`Remote Appearance Request:\n${reqLines.join("\n")}`);
+    if (data.remoteLink) sections.push(`Join: ${data.remoteLink}`);
+    if (data.phoneNumber) {
+      const phoneLines = [`Phone: ${data.phoneNumber}`];
+      if (data.bridge)   phoneLines.push(`Bridge: ${data.bridge}`);
+      if (data.password) phoneLines.push(`Password: ${data.password}`);
+      sections.push(phoneLines.join("\n"));
     }
   }
 
+  // Staff
   const staffLines: string[] = [];
   if (data.attorneyName)  staffLines.push(`Attorney: ${data.attorneyName}`);
   if (data.paralegalName) staffLines.push(`Paralegal: ${data.paralegalName}`);
-  if (staffLines.length)  sections.push(`Assigned:\n${staffLines.join("\n")}`);
+  if (staffLines.length)  sections.push(staffLines.join("\n"));
 
-  if (data.description?.trim()) sections.push(`Notes:\n${data.description.trim()}`);
+  // Notes
+  if (data.description?.trim()) sections.push(data.description.trim());
 
   return sections.join("\n\n");
 }
