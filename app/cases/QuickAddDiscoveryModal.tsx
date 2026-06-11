@@ -6,8 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { DISCOVERY_TYPE_LABELS } from "@/lib/discovery-constants";
-import type { DiscoveryType, DiscoveryDirection } from "@prisma/client";
+import type { DiscoveryDirection } from "@prisma/client";
 
 interface CaseOption {
   id: string;
@@ -15,8 +14,6 @@ interface CaseOption {
   caseNumber: string | null;
   status: string;
 }
-
-const DISCOVERY_TYPES = Object.keys(DISCOVERY_TYPE_LABELS) as DiscoveryType[];
 
 function fmt(d: Date) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
@@ -46,7 +43,6 @@ export default function QuickAddDiscoveryModal({ onClose, onCreated, prefillDire
   const [cases, setCases]                 = useState<CaseOption[]>([]);
   const [caseSearch, setCaseSearch]       = useState("");
   const [selectedCase, setSelectedCase]   = useState<CaseOption | null>(null);
-  const [discoveryType, setDiscoveryType] = useState<DiscoveryType>("FORM_INTERROGATORIES");
   const [date, setDate]                   = useState("");
   const [notes, setNotes]                 = useState("");
   const [saving, setSaving]               = useState(false);
@@ -83,7 +79,6 @@ export default function QuickAddDiscoveryModal({ onClose, onCreated, prefillDire
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          discoveryType,
           direction,
           servedOrReceivedDate: date,
           notes: notes || null,
@@ -235,21 +230,6 @@ export default function QuickAddDiscoveryModal({ onClose, onCreated, prefillDire
                     )}
                   </div>
                 )}
-              </div>
-
-              {/* Discovery type */}
-              <div>
-                <Label htmlFor="qd-type" className="mb-1.5 block">Discovery Type</Label>
-                <select
-                  id="qd-type"
-                  value={discoveryType}
-                  onChange={(e) => setDiscoveryType(e.target.value as DiscoveryType)}
-                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                >
-                  {DISCOVERY_TYPES.map((t) => (
-                    <option key={t} value={t}>{DISCOVERY_TYPE_LABELS[t]}</option>
-                  ))}
-                </select>
               </div>
 
               {/* Date */}

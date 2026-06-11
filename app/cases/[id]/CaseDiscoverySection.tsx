@@ -19,12 +19,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  DISCOVERY_TYPE_LABELS,
   DISCOVERY_DIRECTION_LABELS,
   DISCOVERY_STATUS_LABELS,
   EXTENSION_APPLIES_TO_LABELS,
 } from "@/lib/discovery-constants";
-import type { DiscoveryType, DiscoveryDirection, DiscoveryStatus, ExtensionAppliesTo } from "@prisma/client";
+import type { DiscoveryDirection, DiscoveryStatus, ExtensionAppliesTo } from "@prisma/client";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -42,7 +41,6 @@ interface Extension {
 
 interface DiscoveryItem {
   id: string;
-  discoveryType: DiscoveryType;
   direction: DiscoveryDirection;
   servedOrReceivedDate: string;
   originalDueDate: string;
@@ -53,8 +51,9 @@ interface DiscoveryItem {
   createdAt: string;
 }
 
-const DISCOVERY_TYPES = Object.keys(DISCOVERY_TYPE_LABELS) as DiscoveryType[];
-const APPLIES_TO_OPTS  = Object.keys(EXTENSION_APPLIES_TO_LABELS) as ExtensionAppliesTo[];
+const APPLIES_TO_OPTS = (Object.keys(EXTENSION_APPLIES_TO_LABELS) as ExtensionAppliesTo[]).filter(
+  (k) => k !== "BOTH"
+);
 
 function fmt(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("en-US", {
@@ -85,13 +84,12 @@ function AddDiscoveryModal({ caseId, onClose, onCreated, prefillDirection }: {
   onCreated: (item: DiscoveryItem) => void;
   prefillDirection?: DiscoveryDirection;
 }) {
-  const [step, setStep]                    = useState<"direction" | "form">(prefillDirection ? "form" : "direction");
-  const [direction, setDirection]          = useState<DiscoveryDirection | null>(prefillDirection ?? null);
-  const [discoveryType, setDiscoveryType]  = useState<DiscoveryType>("FORM_INTERROGATORIES");
-  const [date, setDate]                    = useState("");
-  const [notes, setNotes]                  = useState("");
-  const [saving, setSaving]                = useState(false);
-  const [error, setError]                  = useState("");
+  const [step, setStep]           = useState<"direction" | "form">(prefillDirection ? "form" : "direction");
+  const [direction, setDirection] = useState<DiscoveryDirection | null>(prefillDirection ?? null);
+  const [date, setDate]           = useState("");
+  const [notes, setNotes]         = useState("");
+  const [saving, setSaving]       = useState(false);
+  const [error, setError]         = useState("");
 
   function pickDirection(dir: DiscoveryDirection) {
     setDirection(dir);
@@ -106,7 +104,7 @@ function AddDiscoveryModal({ caseId, onClose, onCreated, prefillDirection }: {
       const res = await fetch(`/api/cases/${caseId}/discovery`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ discoveryType, direction, servedOrReceivedDate: date, notes: notes || null }),
+        body: JSON.stringify({ direction, servedOrReceivedDate: date, notes: notes || null }),
       });
       if (!res.ok) { const j = await res.json(); setError(j.error ?? "Failed"); return; }
       const { item } = await res.json();
@@ -181,19 +179,6 @@ function AddDiscoveryModal({ caseId, onClose, onCreated, prefillDirection }: {
         {step === "form" && (
           <form onSubmit={submit}>
             <div className="px-6 py-5 space-y-4">
-              <div>
-                <Label htmlFor="disc-type">Discovery Type</Label>
-                <select
-                  id="disc-type"
-                  value={discoveryType}
-                  onChange={(e) => setDiscoveryType(e.target.value as DiscoveryType)}
-                  className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                >
-                  {DISCOVERY_TYPES.map((t) => (
-                    <option key={t} value={t}>{DISCOVERY_TYPE_LABELS[t]}</option>
-                  ))}
-                </select>
-              </div>
               <div>
                 <Label htmlFor="disc-date">
                   {direction === "RECEIVED" ? "Date Received" : "Date Served"}
@@ -271,10 +256,7 @@ function AddExtensionModal({ item, caseId, onClose, onGranted }: {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 mx-4">
         <div className="flex items-center justify-between mb-5">
-          <div>
-            <h3 className="text-base font-semibold text-slate-900">Extension {extNum}</h3>
-            <p className="text-xs text-slate-500 mt-0.5">{DISCOVERY_TYPE_LABELS[item.discoveryType]}</p>
-          </div>
+          <h3 className="text-base font-semibold text-slate-900">Extension {extNum}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
         </div>
         <form onSubmit={submit} className="space-y-4">
@@ -290,7 +272,7 @@ function AddExtensionModal({ item, caseId, onClose, onGranted }: {
           <div>
             <Label className="block mb-1">Mutual Extension?</Label>
             <div className="flex gap-4">
-              {[true, false].map((v) => (
+              {([true, false] as const).map((v) => (
                 <label key={String(v)} className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="radio"
@@ -303,22 +285,27 @@ function AddExtensionModal({ item, caseId, onClose, onGranted }: {
                 </label>
               ))}
             </div>
+            {mutual && (
+              <p className="text-xs text-blue-600 mt-1.5">Both our deadline and opposing deadline will be moved.</p>
+            )}
           </div>
+          {!mutual && (
+            <div>
+              <Label htmlFor="ext-applies">Applies To</Label>
+              <select
+                id="ext-applies"
+                value={appliesTo}
+                onChange={(e) => setAppliesTo(e.target.value as ExtensionAppliesTo)}
+                className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+              >
+                {APPLIES_TO_OPTS.map((a) => (
+                  <option key={a} value={a}>{EXTENSION_APPLIES_TO_LABELS[a]}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
-            <Label htmlFor="ext-applies">Applies To</Label>
-            <select
-              id="ext-applies"
-              value={appliesTo}
-              onChange={(e) => setAppliesTo(e.target.value as ExtensionAppliesTo)}
-              className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-            >
-              {APPLIES_TO_OPTS.map((a) => (
-                <option key={a} value={a}>{EXTENSION_APPLIES_TO_LABELS[a]}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <Label htmlFor="ext-notes">Notes (optional)</Label>
+            <Label htmlFor="ext-notes">Notes <span className="text-slate-400">(optional)</span></Label>
             <Textarea id="ext-notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="mt-1 resize-none" />
           </div>
           {error && <p className="text-sm text-rose-600">{error}</p>}
@@ -384,7 +371,7 @@ function DiscoveryCard({ item, caseId, onUpdate, onDelete }: {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className={`text-sm font-semibold ${isCompleted ? "text-slate-400 line-through" : "text-slate-900"}`}>
-                {DISCOVERY_TYPE_LABELS[item.discoveryType]}
+                {item.direction === "RECEIVED" ? "Our Responses Due" : "Opposing Responses Due"}
               </span>
               <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${statusColor(overdue && !isCompleted ? "OVERDUE" : item.status)}`}>
                 {DISCOVERY_STATUS_LABELS[overdue && !isCompleted ? "OVERDUE" : item.status]}

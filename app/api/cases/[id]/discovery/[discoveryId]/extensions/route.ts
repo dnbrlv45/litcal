@@ -3,11 +3,8 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCurrentWorkspace } from "@/lib/workspaces";
 import { grantDiscoveryExtension } from "@/lib/discovery";
-import type { ExtensionAppliesTo } from "@prisma/client";
 
 type Params = { params: Promise<{ id: string; discoveryId: string }> };
-
-const VALID_APPLIES_TO: ExtensionAppliesTo[] = ["OUR_DEADLINE", "OPPOSING_DEADLINE", "BOTH"];
 
 // POST /api/cases/[id]/discovery/[discoveryId]/extensions
 export async function POST(req: NextRequest, { params }: Params) {
@@ -35,9 +32,6 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!body.grantedDate || !body.newDueDate) {
     return NextResponse.json({ error: "grantedDate and newDueDate required" }, { status: 400 });
   }
-  if (!body.appliesTo || !VALID_APPLIES_TO.includes(body.appliesTo as ExtensionAppliesTo)) {
-    return NextResponse.json({ error: "Invalid appliesTo" }, { status: 400 });
-  }
 
   const grantedDate = new Date(body.grantedDate);
   const newDueDate  = new Date(body.newDueDate);
@@ -49,12 +43,18 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "New due date must be after current due date" }, { status: 400 });
   }
 
+  const mutual = body.mutual ?? false;
+  // Mutual always means both deadlines move; otherwise default to the item's own deadline.
+  const appliesTo = mutual
+    ? "BOTH"
+    : (body.appliesTo === "OPPOSING_DEADLINE" ? "OPPOSING_DEADLINE" : "OUR_DEADLINE") as "OUR_DEADLINE" | "OPPOSING_DEADLINE" | "BOTH";
+
   const extensionNumber = await grantDiscoveryExtension({
     discoveryItemId: discoveryId,
     grantedDate,
     newDueDate,
-    mutual: body.mutual ?? false,
-    appliesTo: body.appliesTo as ExtensionAppliesTo,
+    mutual,
+    appliesTo,
     notes: body.notes ?? null,
     createdBy: user.id,
   });

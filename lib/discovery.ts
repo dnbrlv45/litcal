@@ -45,7 +45,6 @@ export function calcDiscoveryDueDate(servedOrReceivedDate: Date): Date {
 function buildGCalDescription(params: {
   caseName: string;
   caseNumber: string | null;
-  discoveryType: DiscoveryType;
   direction: DiscoveryDirection;
   servedOrReceivedDate: Date;
   originalDueDate: Date;
@@ -56,7 +55,6 @@ function buildGCalDescription(params: {
   const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
   return [
     `Case: ${params.caseName}${params.caseNumber ? ` (#${params.caseNumber})` : ""}`,
-    `Discovery Type: ${DISCOVERY_TYPE_LABELS[params.discoveryType]}`,
     `Direction: ${DISCOVERY_DIRECTION_LABELS[params.direction]}`,
     `${params.direction === "RECEIVED" ? "Received" : "Served"}: ${fmt(params.servedOrReceivedDate)}`,
     `Original Due: ${fmt(params.originalDueDate)}`,
@@ -150,20 +148,19 @@ export interface CreateDiscoveryInput {
   caseId: string;
   workspaceId: string;
   createdBy: string;
-  discoveryType: DiscoveryType;
   direction: DiscoveryDirection;
   servedOrReceivedDate: Date;
   notes?: string | null;
 }
 
 export async function createDiscoveryItem(input: CreateDiscoveryInput) {
-  const { caseId, workspaceId, createdBy, discoveryType, direction, servedOrReceivedDate, notes } = input;
+  const { caseId, workspaceId, createdBy, direction, servedOrReceivedDate, notes } = input;
+  const discoveryType: DiscoveryType = "OTHER";
 
   const dueDate = calcDiscoveryDueDate(servedOrReceivedDate);
-  const typeLabel = DISCOVERY_TYPE_LABELS[discoveryType];
   const title = direction === "RECEIVED"
-    ? `Our Discovery Responses Due — ${typeLabel}`
-    : `Opposing Discovery Responses Due — ${typeLabel}`;
+    ? "Our Discovery Responses Due"
+    : "Opposing Discovery Responses Due";
 
   // Load case to get name, number, and staff
   const caseRow = await prisma.case.findUniqueOrThrow({
@@ -179,7 +176,6 @@ export async function createDiscoveryItem(input: CreateDiscoveryInput) {
   const description = buildGCalDescription({
     caseName:            caseRow.title,
     caseNumber:          caseRow.caseNumber,
-    discoveryType,
     direction,
     servedOrReceivedDate,
     originalDueDate:     dueDate,
@@ -245,7 +241,7 @@ export async function createDiscoveryItem(input: CreateDiscoveryInput) {
         userId:      s!.userId,
         workspaceId,
         type:        "TASK_ASSIGNED" as never,
-        title:       `Discovery Deadline: ${typeLabel}`,
+        title:       `Discovery Deadline`,
         body:        `${title}\nCase: ${caseLabel}\nDue: ${dueDate.toLocaleDateString("en-US", { timeZone: "UTC" })}`,
         eventId:     event.id,
         caseId,
@@ -263,7 +259,7 @@ export async function createDiscoveryItem(input: CreateDiscoveryInput) {
     workspaceId,
     actorUserId:  createdBy,
     type:         "discovery.created" as never,
-    title:        `${typeLabel} ${dirLabel}`,
+    title:        `Discovery ${dirLabel}`,
     description:  `Served/Received: ${fmt(servedOrReceivedDate)}`,
     importance:   "HIGH",
   });
@@ -294,7 +290,10 @@ export interface GrantExtensionInput {
 }
 
 export async function grantDiscoveryExtension(input: GrantExtensionInput) {
-  const { discoveryItemId, grantedDate, newDueDate, mutual, appliesTo, notes, createdBy } = input;
+  const { discoveryItemId, grantedDate, newDueDate, notes, createdBy } = input;
+  // Mutual always means both deadlines move.
+  const mutual    = input.mutual;
+  const appliesTo: ExtensionAppliesTo = mutual ? "BOTH" : input.appliesTo;
 
   const item = await prisma.discoveryItem.findUniqueOrThrow({
     where: { id: discoveryItemId },
@@ -312,19 +311,18 @@ export async function grantDiscoveryExtension(input: GrantExtensionInput) {
 
   const shouldUpdateThis =
     appliesTo === "BOTH" ||
-    (appliesTo === "OUR_DEADLINE"       && item.direction === "RECEIVED") ||
-    (appliesTo === "OPPOSING_DEADLINE"  && item.direction === "SERVED");
+    (appliesTo === "OUR_DEADLINE"      && item.direction === "RECEIVED") ||
+    (appliesTo === "OPPOSING_DEADLINE" && item.direction === "SERVED");
 
   if (shouldUpdateThis) itemsToUpdate.push(item);
 
-  // If mutual or both, also find the companion item (same case + type, opposite direction)
-  if (mutual || appliesTo === "BOTH") {
+  // When mutual (= BOTH), also find the companion item (same case, opposite direction)
+  if (appliesTo === "BOTH") {
     const companion = await prisma.discoveryItem.findFirst({
       where: {
-        caseId:        item.caseId,
-        discoveryType: item.discoveryType,
-        direction:     item.direction === "RECEIVED" ? "SERVED" : "RECEIVED",
-        id:            { not: discoveryItemId },
+        caseId:    item.caseId,
+        direction: item.direction === "RECEIVED" ? "SERVED" : "RECEIVED",
+        id:        { not: discoveryItemId },
       },
       include: {
         caseRef: { include: { staff: { include: { user: true } } } },
@@ -380,25 +378,26 @@ export async function grantDiscoveryExtension(input: GrantExtensionInput) {
 
     const caseRow = target.caseRef;
     const description = buildGCalDescription({
-      caseName:            caseRow.title,
-      caseNumber:          caseRow.caseNumber,
-      discoveryType:       target.discoveryType,
-      direction:           target.direction,
+      caseName:             caseRow.title,
+      caseNumber:           caseRow.caseNumber,
+      direction:            target.direction,
       servedOrReceivedDate: target.servedOrReceivedDate,
-      originalDueDate:     target.originalDueDate,
-      currentDueDate:      newDueDate,
-      extensionCount:      updatedItem.extensions.length,
-      status:              "EXTENSION_GRANTED",
+      originalDueDate:      target.originalDueDate,
+      currentDueDate:       newDueDate,
+      extensionCount:       updatedItem.extensions.length,
+      status:               "EXTENSION_GRANTED",
     });
+
+    const eventTitle = target.direction === "RECEIVED"
+      ? "Our Discovery Responses Due"
+      : "Opposing Discovery Responses Due";
 
     // Google Calendar: update date + description
     if (target.linkedEventId) {
       await syncDiscoveryEventToGoogle({
         userId:         createdBy,
         eventId:        target.linkedEventId,
-        title:          target.direction === "RECEIVED"
-          ? `Our Discovery Responses Due — ${DISCOVERY_TYPE_LABELS[target.discoveryType]}`
-          : `Opposing Discovery Responses Due — ${DISCOVERY_TYPE_LABELS[target.discoveryType]}`,
+        title:          eventTitle,
         currentDueDate: newDueDate,
         description,
       });
@@ -410,7 +409,7 @@ export async function grantDiscoveryExtension(input: GrantExtensionInput) {
       workspaceId: target.workspaceId,
       actorUserId: createdBy,
       type:        "discovery.extension_granted" as never,
-      title:       `Extension ${extNum} Granted — ${DISCOVERY_TYPE_LABELS[target.discoveryType]}`,
+      title:       `Extension ${extNum} Granted — ${eventTitle}`,
       description: `Previous due: ${fmt(prevDue)} → New due: ${fmt(newDueDate)}${mutual ? " (Mutual)" : ""}`,
       importance:  "HIGH",
     });
@@ -424,7 +423,7 @@ export async function grantDiscoveryExtension(input: GrantExtensionInput) {
 export async function markDiscoveryResponsesReceived(discoveryItemId: string, actorUserId: string) {
   const item = await prisma.discoveryItem.findUniqueOrThrow({
     where: { id: discoveryItemId },
-    select: { caseId: true, workspaceId: true, discoveryType: true, direction: true, linkedEventId: true },
+    select: { caseId: true, workspaceId: true, direction: true, linkedEventId: true },
   });
 
   await prisma.$transaction(async (tx) => {
@@ -446,7 +445,7 @@ export async function markDiscoveryResponsesReceived(discoveryItemId: string, ac
     workspaceId: item.workspaceId,
     actorUserId,
     type:        "discovery.responses_received" as never,
-    title:       `${dirLabel} — ${DISCOVERY_TYPE_LABELS[item.discoveryType]}`,
+    title:       dirLabel,
     importance:  "HIGH",
   });
 }
