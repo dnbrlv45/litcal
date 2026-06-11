@@ -14,11 +14,16 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { EventType, ConflictDetail } from "@/lib/google-calendar";
 import { HEARING_SUBTYPES, HEARING_EVENT_TYPES } from "@/lib/google-calendar-payload";
+import { Inbox, Send } from "lucide-react";
+import type { DiscoveryDirection } from "@prisma/client";
 
-const EVENT_TYPES: { value: EventType; label: string }[] = [
+type ModalEventType = EventType | "DISCOVERY";
+
+const EVENT_TYPES: { value: ModalEventType; label: string }[] = [
   { value: "DEPOSITION",                 label: "Deposition" },
   { value: "TRIAL",                      label: "Trial" },
   { value: "DEADLINE",                   label: "Deadline" },
+  { value: "DISCOVERY",                  label: "Discovery Deadline" },
   { value: "CONFERENCE",                 label: "Conference" },
   { value: "MEDIATION",                  label: "Mediation" },
   { value: "MEETING",                    label: "Meeting" },
@@ -89,7 +94,8 @@ interface ResolvedRule {
 export default function EventModal({ open, onClose, defaultStart, googleConnected, onCreated }: Props) {
   const [title, setTitle] = useState("");
   const [titleManuallySet, setTitleManuallySet] = useState(false);
-  const [eventType, setEventType] = useState<EventType>("HEARING");
+  const [eventType, setEventType] = useState<ModalEventType>("HEARING");
+  const [discoveryDirection, setDiscoveryDirection] = useState<DiscoveryDirection | null>(null);
   const [date, setDate] = useState(toDateInputValue(defaultStart ?? new Date()));
   const [startTime, setStartTime] = useState(DEFAULT_START);
   const [endTime, setEndTime] = useState(DEFAULT_END);
@@ -147,7 +153,7 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
         const endT = defaultStart
           ? minutesToTime(defaultStart.getHours() * 60 + defaultStart.getMinutes() + 60)
           : DEFAULT_END;
-        setTitle(""); setTitleManuallySet(false); setEventType("HEARING"); setDate(d); setEndDate(d);
+        setTitle(""); setTitleManuallySet(false); setEventType("HEARING"); setDiscoveryDirection(null); setDate(d); setEndDate(d);
         setAutoTrialEnd(false); setStartTime(startT); setEndTime(endT);
         setAllDay(false); setLocation(""); setDescription(""); setCaseId("");
         setError(null); setConflicts([]);
@@ -222,9 +228,10 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
     return toDateInputValue(d);
   }
 
-  function handleEventTypeChange(newType: EventType) {
+  function handleEventTypeChange(newType: ModalEventType) {
     setEventType(newType);
-    if (!HEARING_EVENT_TYPES.has(newType)) { setSubtype(""); setSubtypeReason(""); }
+    if (newType !== "DISCOVERY") setDiscoveryDirection(null);
+    if (!HEARING_EVENT_TYPES.has(newType as EventType)) { setSubtype(""); setSubtypeReason(""); }
     if (newType === "TRIAL") {
       setAllDay(true); setEndDate(addDays(date, 7)); setAutoTrialEnd(true);
     } else if (eventType === "TRIAL") {
@@ -276,6 +283,34 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+
+    // Discovery flow — different validation + API
+    if (eventType === "DISCOVERY") {
+      if (!caseId)              { setError("Select a case for this discovery deadline."); return; }
+      if (!discoveryDirection)  { setError("Select Received or Sent."); return; }
+      if (!date)                { setError("Due date is required."); return; }
+      setSaving(true); setError(null);
+      try {
+        const res = await fetch(`/api/cases/${caseId}/discovery`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            direction: discoveryDirection,
+            overrideDueDate: date,
+            notes: description || null,
+          }),
+        });
+        if (!res.ok) { const j = await res.json(); setError(j.error ?? "Failed to create discovery deadline."); return; }
+        onCreated();
+        onClose();
+      } catch {
+        setError("Something went wrong. Please try again.");
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
     if (!effectiveTitle.trim()) { setError("Title is required."); return; }
 
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -372,8 +407,57 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
             </select>
           </div>
 
+          {/* Discovery flow — direction picker + due date */}
+          {eventType === "DISCOVERY" && (
+            <>
+              <div className="flex flex-col gap-1.5">
+                <Label>Direction <span className="text-muted-foreground font-normal text-xs">(required)</span></Label>
+                <div className="grid grid-cols-2 gap-3">
+                  {([
+                    { dir: "RECEIVED" as DiscoveryDirection, icon: Inbox,  label: "Received", sub: "from opposing party", color: "amber" },
+                    { dir: "SERVED"   as DiscoveryDirection, icon: Send,   label: "Sent",     sub: "on opposing party",  color: "teal"  },
+                  ] as const).map(({ dir, icon: Icon, label, sub, color }) => (
+                    <button
+                      key={dir}
+                      type="button"
+                      onClick={() => setDiscoveryDirection(dir)}
+                      className={`group flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all
+                        ${discoveryDirection === dir
+                          ? color === "amber" ? "border-amber-400 bg-amber-50" : "border-teal-400 bg-teal-50"
+                          : "border-slate-200 hover:border-slate-300"}`}
+                    >
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center
+                        ${discoveryDirection === dir
+                          ? color === "amber" ? "bg-amber-200" : "bg-teal-200"
+                          : "bg-slate-100"}`}>
+                        <Icon className={`w-4 h-4 ${discoveryDirection === dir
+                          ? color === "amber" ? "text-amber-700" : "text-teal-700"
+                          : "text-slate-500"}`} />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm font-semibold text-slate-900">{label}</p>
+                        <p className="text-xs text-slate-500">{sub}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="disc-due">Response Due Date</Label>
+                <Input id="disc-due" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                <p className="text-xs text-slate-400">Enter the deadline date directly — no need for the propounded date.</p>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="disc-notes">Notes <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <Textarea id="disc-notes" placeholder="Add notes..." value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
+              </div>
+            </>
+          )}
+
           {/* Hearing subtype — shown only for hearing-category event types */}
-          {HEARING_EVENT_TYPES.has(eventType) && (
+          {eventType !== "DISCOVERY" && HEARING_EVENT_TYPES.has(eventType as EventType) && (
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="event-subtype">Hearing Type <span className="text-muted-foreground font-normal text-xs">(optional)</span></Label>
               <select
@@ -398,17 +482,22 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
             </div>
           )}
 
-          {/* Case */}
+          {/* Case — required for Discovery, optional otherwise */}
           {cases.filter((c) => c.status !== "ARCHIVED" && c.status !== "CLOSED").length > 0 && (
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="event-case">Case <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <Label htmlFor="event-case">
+                Case{" "}
+                <span className="text-muted-foreground font-normal">
+                  {eventType === "DISCOVERY" ? "(required)" : "(optional)"}
+                </span>
+              </Label>
               <select
                 id="event-case"
                 value={caseId}
                 onChange={(e) => { setCaseId(e.target.value); setSelectedCountyId(""); setSelectedCourtId(""); setSelectedDeptId(""); }}
                 className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
-                <option value="">— No case —</option>
+                <option value="">— {eventType === "DISCOVERY" ? "Select a case" : "No case"} —</option>
                 {cases.filter((c) => c.status !== "ARCHIVED" && c.status !== "CLOSED").map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.title}{c.caseNumber ? ` (#${c.caseNumber})` : ""}
@@ -418,8 +507,8 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
             </div>
           )}
 
-          {/* In-person checkbox */}
-          <label className="flex items-center gap-2.5 cursor-pointer select-none">
+          {/* In-person checkbox — hidden for Discovery */}
+          {eventType !== "DISCOVERY" && <label className="flex items-center gap-2.5 cursor-pointer select-none">
             <input
               type="checkbox"
               checked={inPerson}
@@ -427,10 +516,10 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
               className="h-4 w-4 rounded border-slate-300 accent-slate-900"
             />
             <span className="text-sm text-slate-700">In-person appearance</span>
-          </label>
+          </label>}
 
-          {/* County / Court / Department — shown only for remote */}
-          {!inPerson && (
+          {/* County / Court / Department — shown only for remote, not for Discovery */}
+          {eventType !== "DISCOVERY" && !inPerson && (
             <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Court Location</p>
 
@@ -573,8 +662,8 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
             </div>
           )}
 
-          {/* In-person address (optional) */}
-          {inPerson && (
+          {/* In-person address (optional) — not for Discovery */}
+          {eventType !== "DISCOVERY" && inPerson && (
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="event-location">Courthouse Address <span className="text-muted-foreground font-normal">(optional)</span></Label>
               <Input
@@ -586,63 +675,64 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
             </div>
           )}
 
-          {/* Date / time */}
-          <div className={`grid gap-3 ${allDay ? "grid-cols-2" : "grid-cols-1"}`}>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="event-date">{allDay ? "Start date" : "Date"}</Label>
-              <Input id="event-date" type="date" value={date} onChange={(e) => handleDateChange(e.target.value)} />
-            </div>
-            {allDay && (
+          {/* Date / time / notes — hidden for Discovery (uses its own fields above) */}
+          {eventType !== "DISCOVERY" && <>
+            <div className={`grid gap-3 ${allDay ? "grid-cols-2" : "grid-cols-1"}`}>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="event-end-date">End date</Label>
-                <Input
-                  id="event-end-date"
-                  type="date"
-                  value={endDate}
-                  min={date}
-                  onChange={(e) => { setEndDate(e.target.value); setAutoTrialEnd(false); }}
-                />
+                <Label htmlFor="event-date">{allDay ? "Start date" : "Date"}</Label>
+                <Input id="event-date" type="date" value={date} onChange={(e) => handleDateChange(e.target.value)} />
+              </div>
+              {allDay && (
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="event-end-date">End date</Label>
+                  <Input
+                    id="event-end-date"
+                    type="date"
+                    value={endDate}
+                    min={date}
+                    onChange={(e) => { setEndDate(e.target.value); setAutoTrialEnd(false); }}
+                  />
+                </div>
+              )}
+            </div>
+
+            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={allDay}
+                onChange={(e) => {
+                  setAllDay(e.target.checked);
+                  if (!e.target.checked) { setEndDate(date); setAutoTrialEnd(false); }
+                }}
+                className="h-4 w-4 rounded border-slate-300 accent-slate-900"
+              />
+              <span className="text-sm text-slate-700">All day</span>
+            </label>
+
+            {!allDay && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="event-start">Start time</Label>
+                  <Input id="event-start" type="time" value={startTime} onChange={(e) => handleStartChange(e.target.value)} />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="event-end">End time</Label>
+                  <Input id="event-end" type="time" value={endTime} onChange={(e) => handleEndChange(e.target.value)} />
+                </div>
               </div>
             )}
-          </div>
 
-          <label className="flex items-center gap-2.5 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={allDay}
-              onChange={(e) => {
-                setAllDay(e.target.checked);
-                if (!e.target.checked) { setEndDate(date); setAutoTrialEnd(false); }
-              }}
-              className="h-4 w-4 rounded border-slate-300 accent-slate-900"
-            />
-            <span className="text-sm text-slate-700">All day</span>
-          </label>
-
-          {!allDay && (
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="event-start">Start time</Label>
-                <Input id="event-start" type="time" value={startTime} onChange={(e) => handleStartChange(e.target.value)} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="event-end">End time</Label>
-                <Input id="event-end" type="time" value={endTime} onChange={(e) => handleEndChange(e.target.value)} />
-              </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="event-desc">Notes <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <Textarea
+                id="event-desc"
+                placeholder="Add notes or details..."
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={2}
+              />
             </div>
-          )}
-
-          {/* Notes */}
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="event-desc">Notes <span className="text-muted-foreground font-normal">(optional)</span></Label>
-            <Textarea
-              id="event-desc"
-              placeholder="Add notes or details..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={2}
-            />
-          </div>
+          </>}
 
           {conflicts.length > 0 && (
             <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-3 text-xs flex flex-col gap-2">

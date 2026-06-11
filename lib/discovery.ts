@@ -152,15 +152,20 @@ export interface CreateDiscoveryInput {
   workspaceId: string;
   createdBy: string;
   direction: DiscoveryDirection;
-  servedOrReceivedDate: Date;
+  servedOrReceivedDate?: Date;
+  overrideDueDate?: Date;
   notes?: string | null;
 }
 
 export async function createDiscoveryItem(input: CreateDiscoveryInput) {
-  const { caseId, workspaceId, createdBy, direction, servedOrReceivedDate, notes } = input;
+  const { caseId, workspaceId, createdBy, direction, notes } = input;
   const discoveryType: DiscoveryType = "OTHER";
 
-  const dueDate = calcDiscoveryDueDate(servedOrReceivedDate);
+  const dueDate = input.overrideDueDate
+    ?? calcDiscoveryDueDate(input.servedOrReceivedDate!);
+  // Back-calculate servedOrReceivedDate if only due date was provided
+  const servedOrReceivedDate = input.servedOrReceivedDate
+    ?? new Date(dueDate.getTime() - 31 * 24 * 60 * 60 * 1000);
   const title = direction === "RECEIVED"
     ? "Our Discovery Responses Due"
     : "Opposing Discovery Responses Due";

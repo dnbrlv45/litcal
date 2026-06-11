@@ -51,19 +51,25 @@ export async function POST(req: NextRequest, { params }: Params) {
   const body = await req.json() as {
     direction?: string;
     servedOrReceivedDate?: string;
+    overrideDueDate?: string;
     notes?: string;
   };
 
   if (!body.direction || !VALID_DIRECTIONS.includes(body.direction as DiscoveryDirection)) {
     return NextResponse.json({ error: "Invalid direction" }, { status: 400 });
   }
-  if (!body.servedOrReceivedDate) {
-    return NextResponse.json({ error: "servedOrReceivedDate required" }, { status: 400 });
+  if (!body.servedOrReceivedDate && !body.overrideDueDate) {
+    return NextResponse.json({ error: "servedOrReceivedDate or overrideDueDate required" }, { status: 400 });
   }
 
-  const servedOrReceivedDate = new Date(body.servedOrReceivedDate);
-  if (isNaN(servedOrReceivedDate.getTime())) {
-    return NextResponse.json({ error: "Invalid date" }, { status: 400 });
+  const servedOrReceivedDate = body.servedOrReceivedDate ? new Date(body.servedOrReceivedDate) : undefined;
+  const overrideDueDate = body.overrideDueDate ? new Date(body.overrideDueDate) : undefined;
+
+  if (servedOrReceivedDate && isNaN(servedOrReceivedDate.getTime())) {
+    return NextResponse.json({ error: "Invalid servedOrReceivedDate" }, { status: 400 });
+  }
+  if (overrideDueDate && isNaN(overrideDueDate.getTime())) {
+    return NextResponse.json({ error: "Invalid overrideDueDate" }, { status: 400 });
   }
 
   const item = await createDiscoveryItem({
@@ -72,6 +78,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     createdBy: user.id,
     direction: body.direction as DiscoveryDirection,
     servedOrReceivedDate,
+    overrideDueDate,
     notes: body.notes ?? null,
   });
 
