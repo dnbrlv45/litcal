@@ -18,6 +18,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ShieldAlert,
+  Scale,
 } from "lucide-react";
 import InboxNavItem from "./InboxNavItem";
 import { EVENT_TYPE_COLORS, EventType } from "@/lib/google-calendar";
@@ -25,7 +26,8 @@ import { EVENT_TYPE_COLORS, EventType } from "@/lib/google-calendar";
 const NAV_ITEMS = [
   { label: "Calendar",  href: "/",         icon: CalendarDays },
   { label: "Cases",     href: "/cases",     icon: Briefcase },
-  { label: "Tasks",     href: "/tasks",     icon: CheckSquare },
+  { label: "Tasks",      href: "/tasks",      icon: CheckSquare },
+  { label: "Deadlines", href: "/deadlines", icon: Scale },
   { label: "Documents", href: "/documents", icon: FileText },
   { label: "Contacts",  href: "/contacts",  icon: Users },
   { label: "Reports",   href: "/reports",      icon: BarChart2 },
