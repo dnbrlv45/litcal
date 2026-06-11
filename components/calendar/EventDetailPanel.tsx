@@ -428,7 +428,10 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
                   <Briefcase className="w-4 h-4 shrink-0 text-slate-500" />
                   <span className="flex-1">
                     <span className="block text-xs text-slate-500">Case</span>
-                    <span className="font-semibold text-slate-900 group-hover:text-teal-800">{event.caseTitle}</span>
+                    <span className="font-semibold text-slate-900 group-hover:text-teal-800">
+                      {event.caseTitle}
+                      {event.caseNumber && <span className="ml-1.5 font-normal text-slate-500">#{event.caseNumber}</span>}
+                    </span>
                   </span>
                   <ChevronRight className="size-4 text-slate-400" />
                 </Link>
