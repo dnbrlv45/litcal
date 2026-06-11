@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getAccessToken, createLitCalCalendar } from "@/lib/google-calendar";
 
 export async function GET(request: NextRequest) {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin;
@@ -64,6 +65,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL("/settings/calendar?error=no_refresh_token", baseUrl));
   }
 
+  // Create (or recreate) the LitCal calendar in Google immediately on connect
+  let providerCalendarId: string | null = null;
+  try {
+    const accessToken = await getAccessToken(refreshToken);
+    providerCalendarId = await createLitCalCalendar(accessToken);
+  } catch (err) {
+    console.error("Failed to create LitCal calendar on connect:", err);
+    // Non-fatal — will be retried on first event push
+  }
+
   await prisma.userCalendarConnection.upsert({
     where: { userId_provider: { userId, provider: "GOOGLE" } },
     create: {
@@ -72,10 +83,11 @@ export async function GET(request: NextRequest) {
       refreshToken,
       isActive: true,
       connectedAt: new Date(),
+      providerCalendarId,
     },
     update: {
       refreshToken,
-      providerCalendarId: null, // cleared so LitCal calendar is re-created on next push
+      providerCalendarId,
       isActive: true,
       disconnectedAt: null,
       connectedAt: new Date(),
