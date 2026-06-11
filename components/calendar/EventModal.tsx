@@ -140,8 +140,14 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
     if (open) {
       void Promise.resolve().then(() => {
         const d = toDateInputValue(defaultStart ?? new Date());
+        const startT = defaultStart
+          ? `${String(defaultStart.getHours()).padStart(2, "0")}:${String(defaultStart.getMinutes()).padStart(2, "0")}`
+          : DEFAULT_START;
+        const endT = defaultStart
+          ? minutesToTime(defaultStart.getHours() * 60 + defaultStart.getMinutes() + 60)
+          : DEFAULT_END;
         setTitle(""); setEventType("HEARING"); setDate(d); setEndDate(d);
-        setAutoTrialEnd(false); setStartTime(DEFAULT_START); setEndTime(DEFAULT_END);
+        setAutoTrialEnd(false); setStartTime(startT); setEndTime(endT);
         setAllDay(false); setLocation(""); setDescription(""); setCaseId("");
         setError(null); setConflicts([]);
         setInPerson(false);
