@@ -58,6 +58,17 @@ function fmt(dateStr: string) {
   });
 }
 
+function localDateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function dueDateKey(dateStr: string) {
+  return dateStr.slice(0, 10);
+}
+
 function statusColor(status: DiscoveryStatus) {
   switch (status) {
     case "AWAITING_RESPONSE":  return "bg-amber-100 text-amber-700";
@@ -70,7 +81,16 @@ function statusColor(status: DiscoveryStatus) {
 
 function isOverdue(currentDueDate: string, status: DiscoveryStatus) {
   if (status === "COMPLETED" || status === "RESPONSES_RECEIVED") return false;
-  return new Date(currentDueDate) < new Date();
+  return dueDateKey(currentDueDate) < localDateKey();
+}
+
+function displayStatus(item: DiscoveryItem, overdue: boolean, isCompleted: boolean): DiscoveryStatus {
+  if (isCompleted) return item.status;
+  if (overdue) return "OVERDUE";
+  if (item.status === "OVERDUE") {
+    return item.extensions.length > 0 ? "EXTENSION_GRANTED" : "AWAITING_RESPONSE";
+  }
+  return item.status;
 }
 
 // ─── Add Discovery Modal (two-step) ──────────────────────────────────────────
@@ -320,6 +340,7 @@ function DiscoveryCard({ item, caseId, onUpdate, onDelete }: {
 
   const overdue = isOverdue(item.currentDueDate, item.status);
   const isCompleted = item.status === "COMPLETED" || item.status === "RESPONSES_RECEIVED";
+  const effectiveStatus = displayStatus(item, overdue, isCompleted);
 
   async function markResponsesReceived() {
     setMarkingDone(true);
@@ -359,8 +380,8 @@ function DiscoveryCard({ item, caseId, onUpdate, onDelete }: {
               <span className={`text-sm font-semibold ${isCompleted ? "text-slate-400 line-through" : "text-slate-900"}`}>
                 {item.direction === "RECEIVED" ? "Our Responses Due" : "Opposing Responses Due"}
               </span>
-              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${statusColor(overdue && !isCompleted ? "OVERDUE" : item.status)}`}>
-                {DISCOVERY_STATUS_LABELS[overdue && !isCompleted ? "OVERDUE" : item.status]}
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${statusColor(effectiveStatus)}`}>
+                {DISCOVERY_STATUS_LABELS[effectiveStatus]}
               </span>
               {item.extensions.length > 0 && (
                 <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
