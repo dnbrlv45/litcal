@@ -24,6 +24,13 @@ import {
   DISCOVERY_STATUS_LABELS,
 } from "@/lib/discovery-constants";
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Store all-day events at noon UTC so they render on the correct local calendar day in all US timezones. */
+function toNoonUTC(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12, 0, 0, 0));
+}
+
 // ─── Date calculation ────────────────────────────────────────────────────────
 
 /** Discovery deadlines are +31 calendar days, moving FORWARD to next Monday for weekends. */
@@ -203,8 +210,8 @@ export async function createDiscoveryItem(input: CreateDiscoveryInput) {
         description,
         eventType:          "DEADLINE",
         allDay:             true,
-        startTime:          dueDate,
-        endTime:            new Date(dueDate.getTime() + 23 * 60 * 60 * 1000 + 59 * 60 * 1000 + 59 * 1000),
+        startTime:          toNoonUTC(dueDate),
+        endTime:            toNoonUTC(dueDate),
         status:             "SCHEDULED",
         assignedAttorneyId: attorney?.userId ?? null,
       },
@@ -374,8 +381,8 @@ export async function grantDiscoveryExtension(input: GrantExtensionInput) {
         await tx.event.update({
           where: { id: target.linkedEventId },
           data: {
-            startTime: newDueDate,
-            endTime: new Date(newDueDate.getTime() + 23 * 60 * 60 * 1000 + 59 * 60 * 1000 + 59 * 1000),
+            startTime: toNoonUTC(newDueDate),
+            endTime:   toNoonUTC(newDueDate),
           },
         });
       }
