@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -8,6 +11,23 @@ interface Props {
 }
 
 export default function CalendarConnections({ googleCalendarConnected, googleGmailConnected }: Props) {
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ synced: number; failed: number } | null>(null);
+
+  async function handleSyncAll() {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const res = await fetch("/api/calendar/sync-all", { method: "POST" });
+      const data = await res.json();
+      setSyncResult({ synced: data.synced ?? 0, failed: data.failed ?? 0 });
+    } catch {
+      setSyncResult({ synced: 0, failed: -1 });
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6 max-w-3xl">
       <div>
@@ -33,6 +53,29 @@ export default function CalendarConnections({ googleCalendarConnected, googleGma
             connectAction="/api/auth/google"
             disconnectAction="/api/auth/google/disconnect"
           />
+
+          {googleCalendarConnected && (
+            <div className="border-t border-slate-100 px-5 py-4 flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-sm font-semibold text-slate-950">Sync existing events</span>
+                <span className="text-xs text-slate-500">Push all LitCal events that haven&apos;t been synced to Google Calendar yet.</span>
+              </div>
+              <div className="flex items-center gap-3 shrink-0 ml-4">
+                {syncResult && (
+                  <span className={`text-xs font-medium ${syncResult.failed === -1 ? "text-red-600" : syncResult.failed > 0 ? "text-amber-600" : "text-green-700"}`}>
+                    {syncResult.failed === -1
+                      ? "Sync failed — try again"
+                      : syncResult.synced === 0 && syncResult.failed === 0
+                      ? "All events already synced"
+                      : `${syncResult.synced} synced${syncResult.failed > 0 ? `, ${syncResult.failed} failed` : ""}`}
+                  </span>
+                )}
+                <Button variant="outline" size="sm" onClick={handleSyncAll} disabled={syncing}>
+                  {syncing ? "Syncing…" : "Sync Now"}
+                </Button>
+              </div>
+            </div>
+          )}
         </section>
 
         <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -92,7 +135,7 @@ function IntegrationRow({
             </form>
           </>
         )}
-        </div>
       </div>
+    </div>
   );
 }
