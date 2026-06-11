@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
       },
       include: {
         googleSync: true,
-        caseRef: { select: { id: true, title: true, status: true, county: true, court: true } },
+        caseRef: { select: { id: true, title: true, status: true, county: true, court: true, caseNumber: true } },
         assignedAttorney: { select: { id: true, firstName: true, lastName: true } },
       },
       orderBy: { startTime: "asc" },
@@ -70,6 +70,7 @@ export async function GET(request: NextRequest) {
       department: e.department,
       caseId: e.caseId,
       caseTitle: e.caseRef?.title ?? null,
+      caseNumber: e.caseRef?.caseNumber ?? null,
       caseStatus: e.caseRef?.status ?? null,
       assignedAttorneyId: e.assignedAttorney?.id ?? null,
       assignedAttorneyName: e.assignedAttorney

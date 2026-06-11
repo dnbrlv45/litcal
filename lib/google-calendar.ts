@@ -39,6 +39,7 @@ export interface CalEvent {
   department?: string;
   caseId?: string;
   caseTitle?: string;
+  caseNumber?: string | null;
   caseStatus?: string;
   caseCounty?: string | null;
   caseCourt?: string | null;

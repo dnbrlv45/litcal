@@ -21,7 +21,6 @@ export const HEARING_SUBTYPES: { value: string; label: string }[] = [
 
 /** Event types that support hearing subtypes. */
 export const HEARING_EVENT_TYPES = new Set([
-  "HEARING",
   "CASE_MANAGEMENT_CONFERENCE",
   "CONFERENCE",
   "COURT_CALL",

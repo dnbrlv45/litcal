@@ -154,6 +154,7 @@ export default function MonthView({ date, today, events, onCellClick, onSelectDa
                             : <span className={`inline-block w-1.5 h-1.5 rounded-full ${colors.dot} mr-1 align-middle`} />
                           }
                           {ev.title}
+                          {ev.caseNumber && <span className="ml-1 opacity-60 font-normal">#{ev.caseNumber}</span>}
                           {ev.hasConflict && <span className="ml-1 text-amber-600">⚠</span>}
                         </div>
                       );
@@ -244,6 +245,7 @@ export default function MonthView({ date, today, events, onCellClick, onSelectDa
                       : <span className={`shrink-0 inline-block w-1.5 h-1.5 rounded-full ${colors.dot}`} />
                     }
                     <span className="truncate">{ev.title}</span>
+                    {ev.caseNumber && <span className="opacity-60 font-normal shrink-0">#{ev.caseNumber}</span>}
                     {ev.hasConflict && <span className="ml-auto shrink-0 text-amber-600">⚠</span>}
                   </button>
                 );

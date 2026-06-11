@@ -610,19 +610,6 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
             </div>
           )}
 
-          {/* Location (remote only) */}
-          {!inPerson && (
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="event-location-remote">Location <span className="text-muted-foreground font-normal">(optional)</span></Label>
-              <Input
-                id="event-location-remote"
-                placeholder="e.g. Stanley Mosk Courthouse"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-              />
-            </div>
-          )}
-
           {/* Notes */}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="event-desc">Notes <span className="text-muted-foreground font-normal">(optional)</span></Label>

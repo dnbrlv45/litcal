@@ -135,6 +135,7 @@ export default function TeamView({ date, today, events, attorneys, onEventClick,
                           {ev.hasConflict && <span className="text-amber-600 font-bold">⚠</span>}
                         </span>
                         <span className="font-semibold block truncate">{ev.title}</span>
+                        {ev.caseNumber && <span className="opacity-60 truncate block">#{ev.caseNumber}</span>}
                       </button>
                     );
                   })}
