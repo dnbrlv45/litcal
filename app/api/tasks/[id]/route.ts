@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentWorkspace } from "@/lib/workspaces";
 import { TASK_INCLUDE } from "../route";
 import { addTimelineEntry } from "@/lib/case-timeline";
+import { pushTaskToGoogle, deleteTaskFromGoogle } from "@/lib/task-google-sync";
 
 async function getTaskForWorkspace(id: string, workspaceId: string) {
   return prisma.task.findFirst({ where: { id, workspaceId }, include: TASK_INCLUDE });
@@ -115,6 +116,44 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         metadata: { taskId: task.id },
       });
     }
+    // Remove from Google Calendar when marked done
+    void deleteTaskFromGoogle(currentUser.id, {
+      id: task.id,
+      googleEventId: task.googleEventId ?? null,
+      googleCalendarId: task.googleCalendarId ?? null,
+    });
+  } else if (body.dueDate !== undefined) {
+    // Due date changed — re-push to Google Calendar
+    const rawTask = await prisma.task.findUnique({
+      where: { id: task.id },
+      select: { googleEventId: true, googleCalendarId: true },
+    });
+    if (rawTask?.googleEventId) {
+      // Delete old event first, then push new one
+      void deleteTaskFromGoogle(currentUser.id, {
+        id: task.id,
+        googleEventId: rawTask.googleEventId,
+        googleCalendarId: rawTask.googleCalendarId ?? null,
+      }).then(() => {
+        if (task.dueDate) {
+          void pushTaskToGoogle(currentUser.id, {
+            id: task.id,
+            title: task.title,
+            dueDate: task.dueDate,
+            priority: task.priority,
+            caseRef: task.caseRef ?? null,
+          });
+        }
+      });
+    } else if (task.dueDate) {
+      void pushTaskToGoogle(currentUser.id, {
+        id: task.id,
+        title: task.title,
+        dueDate: task.dueDate,
+        priority: task.priority,
+        caseRef: task.caseRef ?? null,
+      });
+    }
   }
 
   // Notify newly added assignees
@@ -163,6 +202,11 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
 
   await prisma.notification.deleteMany({
     where: { workspaceId: workspace.id, taskId: id },
+  });
+  void deleteTaskFromGoogle(currentUser.id, {
+    id,
+    googleEventId: existing.googleEventId ?? null,
+    googleCalendarId: existing.googleCalendarId ?? null,
   });
   await prisma.task.delete({ where: { id } });
   return NextResponse.json({ ok: true });

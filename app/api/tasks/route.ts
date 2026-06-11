@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCurrentWorkspace } from "@/lib/workspaces";
 import { addTimelineEntry } from "@/lib/case-timeline";
+import { pushTaskToGoogle } from "@/lib/task-google-sync";
 
 export const TASK_INCLUDE = {
   assignees: {
@@ -144,6 +145,16 @@ export async function POST(request: NextRequest) {
       type: "task.created",
       title: `Task created: ${task.title}`,
       metadata: { taskId: task.id, priority: task.priority },
+    });
+  }
+
+  if (task.dueDate) {
+    void pushTaskToGoogle(currentUser.id, {
+      id: task.id,
+      title: task.title,
+      dueDate: task.dueDate,
+      priority: task.priority,
+      caseRef: task.caseRef ?? null,
     });
   }
 
