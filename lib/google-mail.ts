@@ -28,6 +28,10 @@ function headerValue(value: string) {
   return value.replace(/[\r\n]+/g, " ").trim();
 }
 
+function encodedHeaderValue(value: string) {
+  return `=?UTF-8?B?${Buffer.from(headerValue(value), "utf8").toString("base64")}?=`;
+}
+
 function base64Url(value: string) {
   return Buffer.from(value)
     .toString("base64")
@@ -51,7 +55,7 @@ function buildInviteEmail({
   const headerInviterName = headerValue(inviterName);
   const headerInviterEmail = headerValue(inviterEmail);
   const headerRecipientEmail = headerValue(recipientEmail);
-  const subject = headerValue(`You're invited to ${workspaceName} on LitCal`);
+  const subject = encodedHeaderValue(`You're invited to ${workspaceName} on LitCal`);
   const boundary = `litcal-${crypto.randomUUID()}`;
 
   const text = [
@@ -135,7 +139,7 @@ function buildInviteEmail({
 
 function buildLitCalEmail({ recipientEmail, subject, text, html }: LitCalEmailOptions) {
   const headerRecipientEmail = headerValue(recipientEmail);
-  const safeSubject = headerValue(subject);
+  const safeSubject = encodedHeaderValue(subject);
   const boundary = `litcal-${crypto.randomUUID()}`;
 
   return [
