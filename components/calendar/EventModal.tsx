@@ -16,7 +16,6 @@ import type { EventType, ConflictDetail } from "@/lib/google-calendar";
 import { HEARING_SUBTYPES, HEARING_EVENT_TYPES } from "@/lib/google-calendar-payload";
 
 const EVENT_TYPES: { value: EventType; label: string }[] = [
-  { value: "HEARING",                    label: "Hearing" },
   { value: "DEPOSITION",                 label: "Deposition" },
   { value: "TRIAL",                      label: "Trial" },
   { value: "DEADLINE",                   label: "Deadline" },
