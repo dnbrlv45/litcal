@@ -4,7 +4,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { getAccessToken, createGoogleEvent, patchGoogleEvent } from "@/lib/google-calendar";
+import { getAccessToken, createGoogleEvent, patchGoogleEvent, deleteGoogleEvent } from "@/lib/google-calendar";
 import { addTimelineEntry } from "@/lib/case-timeline";
 import type { DiscoveryType, DiscoveryDirection, DiscoveryStatus, ExtensionAppliesTo } from "@prisma/client";
 
@@ -429,7 +429,13 @@ export async function grantDiscoveryExtension(input: GrantExtensionInput) {
 export async function markDiscoveryResponsesReceived(discoveryItemId: string, actorUserId: string) {
   const item = await prisma.discoveryItem.findUniqueOrThrow({
     where: { id: discoveryItemId },
-    select: { caseId: true, workspaceId: true, direction: true, linkedEventId: true },
+    select: {
+      caseId: true,
+      workspaceId: true,
+      direction: true,
+      linkedEventId: true,
+      linkedEvent: { select: { googleSync: true } },
+    },
   });
 
   await prisma.$transaction(async (tx) => {
@@ -444,6 +450,26 @@ export async function markDiscoveryResponsesReceived(discoveryItemId: string, ac
       });
     }
   });
+
+  // Remove the deadline from Google Calendar
+  if (item.linkedEvent?.googleSync) {
+    const connection = await prisma.userCalendarConnection.findFirst({
+      where: { userId: actorUserId, provider: "GOOGLE", isActive: true },
+    });
+    if (connection) {
+      try {
+        const accessToken = await getAccessToken(connection.refreshToken);
+        await deleteGoogleEvent(
+          accessToken,
+          item.linkedEvent.googleSync.googleCalendarId,
+          item.linkedEvent.googleSync.googleEventId,
+        );
+        await prisma.googleCalendarSync.delete({
+          where: { eventId: item.linkedEventId! },
+        });
+      } catch { /* best-effort */ }
+    }
+  }
 
   const dirLabel = item.direction === "RECEIVED" ? "Responses Submitted" : "Responses Received";
   await addTimelineEntry({
