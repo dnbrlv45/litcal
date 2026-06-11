@@ -331,6 +331,7 @@ export async function POST(request: NextRequest) {
   const deadlineResult = await applyDeadlineRules({
     id: event.id,
     eventType: safeEventType as string,
+    subtype: event.subtype ?? null,
     startTime: startDate,
     caseId: caseId || null,
     userId,

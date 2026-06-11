@@ -97,6 +97,7 @@ export function computeDeadlineDate(triggerDate: Date, rule: DeadlineRule): Date
 export interface TriggerEventContext {
   id: string;
   eventType: string;
+  subtype?: string | null;
   startTime: Date;
   caseId: string | null;
   userId: string;
@@ -122,8 +123,14 @@ export async function applyDeadlineRules(
 ): Promise<ApplyResult> {
   const result: ApplyResult = { createdEventIds: [], createdTaskIds: [] };
 
+  // A CONFERENCE with subtype "CMC" is functionally a Case Management Conference
+  const effectiveEventType =
+    trigger.eventType === "CONFERENCE" && trigger.subtype === "CMC"
+      ? "CASE_MANAGEMENT_CONFERENCE"
+      : trigger.eventType;
+
   const activeRules = DEADLINE_RULES.filter(
-    (r) => r.active && r.triggerEventType === trigger.eventType,
+    (r) => r.active && r.triggerEventType === effectiveEventType,
   );
   if (activeRules.length === 0) return result;
 
