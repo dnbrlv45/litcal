@@ -6,12 +6,13 @@ import {
   ChevronRight,
   Plus,
   FileText,
-  Clock,
   CheckCircle2,
-  AlertTriangle,
   ArrowRight,
   Layers,
   X,
+  Inbox,
+  Send,
+  ArrowLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,7 +54,6 @@ interface DiscoveryItem {
 }
 
 const DISCOVERY_TYPES = Object.keys(DISCOVERY_TYPE_LABELS) as DiscoveryType[];
-const DIRECTIONS       = Object.keys(DISCOVERY_DIRECTION_LABELS) as DiscoveryDirection[];
 const APPLIES_TO_OPTS  = Object.keys(EXTENSION_APPLIES_TO_LABELS) as ExtensionAppliesTo[];
 
 function fmt(dateStr: string) {
@@ -77,19 +77,26 @@ function isOverdue(currentDueDate: string, status: DiscoveryStatus) {
   return new Date(currentDueDate) < new Date();
 }
 
-// ─── Add Discovery Modal ──────────────────────────────────────────────────────
+// ─── Add Discovery Modal (two-step) ──────────────────────────────────────────
 
-function AddDiscoveryModal({ caseId, onClose, onCreated }: {
+function AddDiscoveryModal({ caseId, onClose, onCreated, prefillDirection }: {
   caseId: string;
   onClose: () => void;
   onCreated: (item: DiscoveryItem) => void;
+  prefillDirection?: DiscoveryDirection;
 }) {
-  const [discoveryType, setDiscoveryType] = useState<DiscoveryType>("FORM_INTERROGATORIES");
-  const [direction, setDirection]          = useState<DiscoveryDirection>("RECEIVED");
+  const [step, setStep]                    = useState<"direction" | "form">(prefillDirection ? "form" : "direction");
+  const [direction, setDirection]          = useState<DiscoveryDirection | null>(prefillDirection ?? null);
+  const [discoveryType, setDiscoveryType]  = useState<DiscoveryType>("FORM_INTERROGATORIES");
   const [date, setDate]                    = useState("");
   const [notes, setNotes]                  = useState("");
   const [saving, setSaving]                = useState(false);
   const [error, setError]                  = useState("");
+
+  function pickDirection(dir: DiscoveryDirection) {
+    setDirection(dir);
+    setStep("form");
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -109,69 +116,118 @@ function AddDiscoveryModal({ caseId, onClose, onCreated }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 mx-4">
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="text-base font-semibold text-slate-900">Add Discovery</h3>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            {step === "form" && (
+              <button
+                type="button"
+                onClick={() => { setStep("direction"); setError(""); }}
+                className="text-slate-400 hover:text-slate-600 mr-1"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+            )}
+            <h3 className="text-base font-semibold text-slate-900">
+              {step === "direction" ? "Add Discovery" : direction === "RECEIVED" ? "Received Discovery" : "Sent Discovery"}
+            </h3>
+            {step === "form" && direction && (
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${direction === "RECEIVED" ? "bg-amber-100 text-amber-700" : "bg-teal-100 text-teal-700"}`}>
+                {direction === "RECEIVED" ? "Received" : "Sent"}
+              </span>
+            )}
+          </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
         </div>
-        <form onSubmit={submit} className="space-y-4">
-          <div>
-            <Label htmlFor="disc-type">Discovery Type</Label>
-            <select
-              id="disc-type"
-              value={discoveryType}
-              onChange={(e) => setDiscoveryType(e.target.value as DiscoveryType)}
-              className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-            >
-              {DISCOVERY_TYPES.map((t) => (
-                <option key={t} value={t}>{DISCOVERY_TYPE_LABELS[t]}</option>
-              ))}
-            </select>
+
+        {/* Step 1 — Direction picker */}
+        {step === "direction" && (
+          <div className="px-6 py-8">
+            <p className="text-sm text-slate-500 text-center mb-6">What are you adding?</p>
+            <div className="grid grid-cols-2 gap-4">
+              <button
+                type="button"
+                onClick={() => pickDirection("RECEIVED")}
+                className="group flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-slate-200 hover:border-amber-400 hover:bg-amber-50/40 transition-all"
+              >
+                <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center group-hover:bg-amber-200 transition-colors">
+                  <Inbox className="w-5 h-5 text-amber-700" />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-semibold text-slate-900">Received</p>
+                  <p className="text-xs text-slate-500 mt-0.5">from opposing party</p>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => pickDirection("SERVED")}
+                className="group flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-slate-200 hover:border-teal-400 hover:bg-teal-50/40 transition-all"
+              >
+                <div className="w-12 h-12 rounded-full bg-teal-100 flex items-center justify-center group-hover:bg-teal-200 transition-colors">
+                  <Send className="w-5 h-5 text-teal-700" />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-semibold text-slate-900">Sent</p>
+                  <p className="text-xs text-slate-500 mt-0.5">on opposing party</p>
+                </div>
+              </button>
+            </div>
           </div>
-          <div>
-            <Label htmlFor="disc-dir">Direction</Label>
-            <select
-              id="disc-dir"
-              value={direction}
-              onChange={(e) => setDirection(e.target.value as DiscoveryDirection)}
-              className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-            >
-              {DIRECTIONS.map((d) => (
-                <option key={d} value={d}>{DISCOVERY_DIRECTION_LABELS[d]}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <Label htmlFor="disc-date">
-              {direction === "RECEIVED" ? "Date Received" : "Date Served"}
-            </Label>
-            <Input
-              id="disc-date"
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="mt-1"
-              required
-            />
-          </div>
-          <div>
-            <Label htmlFor="disc-notes">Notes (optional)</Label>
-            <Textarea
-              id="disc-notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={2}
-              className="mt-1 resize-none"
-            />
-          </div>
-          {error && <p className="text-sm text-rose-600">{error}</p>}
-          <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={saving}>
-              {saving ? "Adding…" : "Add Discovery"}
-            </Button>
-          </div>
-        </form>
+        )}
+
+        {/* Step 2 — Form */}
+        {step === "form" && (
+          <form onSubmit={submit}>
+            <div className="px-6 py-5 space-y-4">
+              <div>
+                <Label htmlFor="disc-type">Discovery Type</Label>
+                <select
+                  id="disc-type"
+                  value={discoveryType}
+                  onChange={(e) => setDiscoveryType(e.target.value as DiscoveryType)}
+                  className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                >
+                  {DISCOVERY_TYPES.map((t) => (
+                    <option key={t} value={t}>{DISCOVERY_TYPE_LABELS[t]}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="disc-date">
+                  {direction === "RECEIVED" ? "Date Received" : "Date Served"}
+                </Label>
+                <Input
+                  id="disc-date"
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="mt-1"
+                  required
+                  autoFocus
+                />
+              </div>
+              <div>
+                <Label htmlFor="disc-notes">Notes <span className="text-slate-400">(optional)</span></Label>
+                <Textarea
+                  id="disc-notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={2}
+                  className="mt-1 resize-none"
+                />
+              </div>
+              {error && <p className="text-sm text-rose-600">{error}</p>}
+            </div>
+            <div className="flex justify-end gap-2 px-6 py-4 border-t border-slate-100 bg-slate-50/60">
+              <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+              <Button type="submit" disabled={saving}>
+                {saving ? "Adding…" : "Add Discovery"}
+              </Button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );
@@ -462,9 +518,10 @@ function DiscoveryCard({ item, caseId, onUpdate, onDelete }: {
 // ─── Main Section ─────────────────────────────────────────────────────────────
 
 export default function CaseDiscoverySection({ caseId }: { caseId: string }) {
-  const [items, setItems]             = useState<DiscoveryItem[]>([]);
-  const [loading, setLoading]         = useState(true);
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [items, setItems]                   = useState<DiscoveryItem[]>([]);
+  const [loading, setLoading]               = useState(true);
+  const [showAddModal, setShowAddModal]     = useState(false);
+  const [prefillDirection, setPrefillDirection] = useState<DiscoveryDirection | undefined>(undefined);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -505,20 +562,48 @@ export default function CaseDiscoverySection({ caseId }: { caseId: string }) {
             )}
           </span>
         </div>
-        <Button size="sm" onClick={() => setShowAddModal(true)}>
-          <Plus className="w-3.5 h-3.5 mr-1" />
-          Add Discovery
-        </Button>
+        {items.length > 0 && (
+          <Button size="sm" onClick={() => setShowAddModal(true)}>
+            <Plus className="w-3.5 h-3.5 mr-1" />
+            Add Discovery
+          </Button>
+        )}
       </div>
 
       {/* Content */}
       {loading ? (
         <div className="text-sm text-slate-400 py-4 text-center">Loading…</div>
       ) : items.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-10 text-center">
-          <FileText className="w-8 h-8 text-slate-200 mb-2" />
-          <p className="text-sm text-slate-400">No discovery items yet.</p>
-          <p className="text-xs text-slate-300 mt-1">Add discovery to automatically calculate response deadlines.</p>
+        <div className="space-y-3 pt-1">
+          <p className="text-xs text-slate-400 text-center">No discovery items yet. What are you adding?</p>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => { setPrefillDirection("RECEIVED"); setShowAddModal(true); }}
+              className="group flex flex-col items-center gap-2.5 py-5 px-3 rounded-xl border-2 border-slate-200 hover:border-amber-400 hover:bg-amber-50/30 transition-all"
+            >
+              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center group-hover:bg-amber-200 transition-colors">
+                <Inbox className="w-4 h-4 text-amber-700" />
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-semibold text-slate-800">Received</p>
+                <p className="text-xs text-slate-400 mt-0.5">from opposing party</p>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setPrefillDirection("SERVED"); setShowAddModal(true); }}
+              className="group flex flex-col items-center gap-2.5 py-5 px-3 rounded-xl border-2 border-slate-200 hover:border-teal-400 hover:bg-teal-50/30 transition-all"
+            >
+              <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center group-hover:bg-teal-200 transition-colors">
+                <Send className="w-4 h-4 text-teal-700" />
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-semibold text-slate-800">Sent</p>
+                <p className="text-xs text-slate-400 mt-0.5">on opposing party</p>
+              </div>
+            </button>
+          </div>
         </div>
       ) : (
         <div className="space-y-3">
@@ -543,7 +628,8 @@ export default function CaseDiscoverySection({ caseId }: { caseId: string }) {
       {showAddModal && (
         <AddDiscoveryModal
           caseId={caseId}
-          onClose={() => setShowAddModal(false)}
+          prefillDirection={prefillDirection}
+          onClose={() => { setShowAddModal(false); setPrefillDirection(undefined); }}
           onCreated={handleCreated}
         />
       )}

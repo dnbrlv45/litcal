@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Plus, Briefcase, Search, ChevronRight, Archive, CheckCircle2, Clock3 } from "lucide-react";
+import { Plus, Briefcase, Search, ChevronRight, Archive, CheckCircle2, Clock3, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import CreateCaseModal from "./CreateCaseModal";
+import QuickAddDiscoveryModal from "./QuickAddDiscoveryModal";
 
 const STATUS_COLORS = {
   ACTIVE:   "bg-green-100 text-green-700",
@@ -38,7 +39,8 @@ export default function CasesClient() {
   const [cases, setCases] = useState<Case[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [modalOpen, setModalOpen] = useState(false);
+  const [modalOpen, setModalOpen]             = useState(false);
+  const [discoveryModalOpen, setDiscoveryModalOpen] = useState(false);
 
   async function fetchCases() {
     setLoading(true);
@@ -93,6 +95,10 @@ export default function CasesClient() {
             </div>
           ))}
         </div>
+        <Button variant="outline" onClick={() => setDiscoveryModalOpen(true)} className="gap-2 hidden sm:inline-flex">
+          <FileText className="w-4 h-4" />
+          Add Discovery
+        </Button>
         <Button onClick={() => setModalOpen(true)} className="gap-2 bg-teal-700 hover:bg-teal-800 text-white border-0">
           <Plus className="w-4 h-4" />
           New Case
@@ -175,6 +181,12 @@ export default function CasesClient() {
       </div>
 
       <CreateCaseModal open={modalOpen} onClose={() => setModalOpen(false)} onCreated={fetchCases} />
+      {discoveryModalOpen && (
+        <QuickAddDiscoveryModal
+          onClose={() => setDiscoveryModalOpen(false)}
+          onCreated={() => setDiscoveryModalOpen(false)}
+        />
+      )}
     </div>
   );
 }
