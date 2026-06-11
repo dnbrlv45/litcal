@@ -415,7 +415,7 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
                 <div className="grid grid-cols-2 gap-3">
                   {([
                     { dir: "RECEIVED" as DiscoveryDirection, icon: Inbox,  label: "Received", sub: "from opposing party", color: "amber" },
-                    { dir: "SERVED"   as DiscoveryDirection, icon: Send,   label: "Sent",     sub: "on opposing party",  color: "teal"  },
+                    { dir: "SERVED"   as DiscoveryDirection, icon: Send,   label: "Sent",     sub: "to opposing party",  color: "teal"  },
                   ] as const).map(({ dir, icon: Icon, label, sub, color }) => (
                     <button
                       key={dir}

@@ -16,7 +16,7 @@ export const DISCOVERY_TYPE_LABELS: Record<DiscoveryType, string> = {
 
 export const DISCOVERY_DIRECTION_LABELS: Record<DiscoveryDirection, string> = {
   RECEIVED: "Received from Opposing Party",
-  SERVED:   "Served on Opposing Party",
+  SERVED:   "Sent to Opposing Party",
 };
 
 export const DISCOVERY_STATUS_LABELS: Record<DiscoveryStatus, string> = {

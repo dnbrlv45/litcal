@@ -165,7 +165,7 @@ function AddDiscoveryModal({ caseId, onClose, onCreated, prefillDirection }: {
                 </div>
                 <div className="text-center">
                   <p className="text-sm font-semibold text-slate-900">Sent</p>
-                  <p className="text-xs text-slate-500 mt-0.5">on opposing party</p>
+                  <p className="text-xs text-slate-500 mt-0.5">to opposing party</p>
                 </div>
               </button>
             </div>
@@ -573,7 +573,7 @@ export default function CaseDiscoverySection({ caseId }: { caseId: string }) {
               </div>
               <div className="text-center">
                 <p className="text-sm font-semibold text-slate-800">Sent</p>
-                <p className="text-xs text-slate-400 mt-0.5">on opposing party</p>
+                <p className="text-xs text-slate-400 mt-0.5">to opposing party</p>
               </div>
             </button>
           </div>

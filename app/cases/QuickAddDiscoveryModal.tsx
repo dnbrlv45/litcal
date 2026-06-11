@@ -148,7 +148,7 @@ export default function QuickAddDiscoveryModal({ onClose, onCreated, prefillDire
                 </div>
                 <div className="text-center">
                   <p className="text-sm font-semibold text-slate-900">Sent</p>
-                  <p className="text-xs text-slate-500 mt-0.5">on opposing party</p>
+                  <p className="text-xs text-slate-500 mt-0.5">to opposing party</p>
                 </div>
               </button>
             </div>
