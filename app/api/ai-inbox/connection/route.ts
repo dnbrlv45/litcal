@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { google } from "googleapis";
+
+const INBOX_EMAIL = "litcalai@gmail.com";
 
 function getOAuth2Client(refreshToken: string) {
   const oauth2 = new google.auth.OAuth2(
@@ -11,11 +14,29 @@ function getOAuth2Client(refreshToken: string) {
   return oauth2;
 }
 
+async function getInboxRefreshToken() {
+  // First try: litcalai@gmail.com's UserCalendarConnection (preferred)
+  const inboxUser = await prisma.user.findUnique({
+    where: { email: INBOX_EMAIL },
+    select: { id: true },
+  });
+  if (inboxUser) {
+    const conn = await prisma.userCalendarConnection.findFirst({
+      where: { userId: inboxUser.id, provider: "GOOGLE", gmailRefreshToken: { not: null } },
+      select: { gmailRefreshToken: true },
+    });
+    if (conn?.gmailRefreshToken) return conn.gmailRefreshToken;
+  }
+
+  // Fallback: env var
+  return process.env.GMAIL_REFRESH_TOKEN ?? null;
+}
+
 export async function GET() {
   const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const refreshToken = process.env.GMAIL_REFRESH_TOKEN;
+  const refreshToken = await getInboxRefreshToken();
   if (!refreshToken) {
     return NextResponse.json({ connection: null, state: "not_connected" });
   }

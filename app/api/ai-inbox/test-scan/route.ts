@@ -8,6 +8,7 @@ import { Prisma } from "@prisma/client";
 import crypto from "crypto";
 
 const MAX_EMAILS = 20;
+const INBOX_EMAIL = "litcalai@gmail.com";
 
 function getOAuth2Client(refreshToken: string) {
   const oauth2 = new google.auth.OAuth2(
@@ -16,6 +17,21 @@ function getOAuth2Client(refreshToken: string) {
   );
   oauth2.setCredentials({ refresh_token: refreshToken });
   return oauth2;
+}
+
+async function getInboxRefreshToken() {
+  const inboxUser = await prisma.user.findUnique({
+    where: { email: INBOX_EMAIL },
+    select: { id: true },
+  });
+  if (inboxUser) {
+    const conn = await prisma.userCalendarConnection.findFirst({
+      where: { userId: inboxUser.id, provider: "GOOGLE", gmailRefreshToken: { not: null } },
+      select: { gmailRefreshToken: true },
+    });
+    if (conn?.gmailRefreshToken) return conn.gmailRefreshToken;
+  }
+  return process.env.GMAIL_REFRESH_TOKEN ?? null;
 }
 
 function decodeBase64Url(data: string) {
@@ -78,10 +94,10 @@ export async function POST() {
   const { workspace } = await getCurrentWorkspace(user.id);
   if (!workspace) return NextResponse.json({ error: "No workspace found" }, { status: 400 });
 
-  const refreshToken = process.env.GMAIL_REFRESH_TOKEN;
+  const refreshToken = await getInboxRefreshToken();
   if (!refreshToken) {
     return NextResponse.json(
-      { error: "GMAIL_REFRESH_TOKEN is not configured." },
+      { error: "No Gmail token found for litcalai@gmail.com. Connect Gmail in Settings → Calendar." },
       { status: 400 }
     );
   }
@@ -98,7 +114,8 @@ export async function POST() {
     });
     messageIds = (listRes.data.messages ?? []).map((m) => m.id!).filter(Boolean);
   } catch (err: unknown) {
-    const code = typeof err === "object" && err !== null && "code" in err ? (err as { code: number }).code : 0;
+    const code = typeof err === "object" && err !== null && "code" in err
+      ? (err as { code: number }).code : 0;
     if (code === 403) {
       return NextResponse.json(
         { error: "Inbox reading is not enabled. Reconnect Gmail with inbox access in Settings → Calendar." },
@@ -138,9 +155,9 @@ export async function POST() {
       const receivedAt = dateStr ? new Date(dateStr) : new Date();
 
       const bodyText = extractBodyText((msg.payload ?? {}) as GmailPart);
-
       const pdfParts = collectPdfParts((msg.payload ?? {}) as GmailPart);
       const attachmentTexts: string[] = [];
+
       for (const part of pdfParts) {
         try {
           const attRes = await gmail.users.messages.attachments.get({
