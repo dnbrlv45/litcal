@@ -3,6 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { sendDueTaskEmails, sendEventReminderEmails } from "@/lib/email-notifications";
 import { DAY_OF_9AM } from "@/lib/reminders";
 
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
 export async function GET(request: NextRequest) {
   const configuredSecret = process.env.CRON_SECRET;
   if (configuredSecret) {
