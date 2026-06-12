@@ -78,6 +78,13 @@ export async function PATCH(
               defenseAttorney: caseData.defenseAttorney ?? undefined,
               filingDate:      caseData.dateFiled ? new Date(caseData.dateFiled) : undefined,
               status:          "ACTIVE",
+              // Create plaintiff and defendant as CaseParty records
+              parties: {
+                create: [
+                  ...(caseData.plaintiff ? [{ name: caseData.plaintiff, role: "PLAINTIFF" as const }] : []),
+                  ...(caseData.defendant ? [{ name: caseData.defendant, role: "DEFENDANT" as const }] : []),
+                ],
+              },
             },
           });
         }
@@ -156,10 +163,17 @@ export async function PATCH(
           title:           [caseData.plaintiff, "v.", caseData.defendant].filter(Boolean).join(" ") || "New Case",
           caseNumber:      caseData.caseNumber ?? undefined,
           county:          caseData.county ?? undefined,
+          court:           caseData.court ?? undefined,
           defenseFirm:     caseData.defenseFirm ?? undefined,
           defenseAttorney: caseData.defenseAttorney ?? undefined,
           filingDate:      caseData.dateFiled ? new Date(caseData.dateFiled) : undefined,
           status:          "ACTIVE",
+          parties: {
+            create: [
+              ...(caseData.plaintiff ? [{ name: caseData.plaintiff, role: "PLAINTIFF" as const }] : []),
+              ...(caseData.defendant ? [{ name: caseData.defendant, role: "DEFENDANT" as const }] : []),
+            ],
+          },
         },
       });
     }

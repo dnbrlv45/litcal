@@ -54,6 +54,15 @@ Important rules:
 * If the email contains a new lawsuit, complaint, summons, or new case information, classify it as NEW_CASE.
 * If nothing needs to be calendared or created, classify as IGNORE.
 
+Case extraction rules:
+* plaintiff: the injured party or person suing — look for "Plaintiff", the first party listed before "vs." or "v.", or the claimant named in a complaint or summons.
+* defendant: the party being sued — look for "Defendant", the party listed after "vs." or "v.", or the respondent.
+* dateFiled: the date the case or complaint was filed with the court — look for "Filed:", "Date Filed:", "Filing Date:", a stamp on the complaint, or a date near "Superior Court" or case number. Return in YYYY-MM-DD format. Do not confuse with hearing dates or service dates.
+* caseNumber: look for "Case No.", "Case Number:", or a number near the court name. California Superior Court numbers often look like 24STCV01234 or 24-CV-01234.
+* court: the full court name, e.g. "Los Angeles Superior Court".
+* county: derive from the court name if not explicitly stated.
+* All dates must be in YYYY-MM-DD format.
+
 Return this exact JSON structure:
 
 {
