@@ -41,10 +41,13 @@ export async function PATCH(
     const classification = suggestion.classification;
 
     if (classification === "CALENDAR_EVENT") {
-      const event = data.event;
+      const event    = data.event;
+      const caseData = data.case ?? {};
+
       if (!event?.date) {
         return NextResponse.json({ error: "Missing event date in extracted data" }, { status: 400 });
       }
+
       const startTime = event.startTime
         ? new Date(`${event.date}T${event.startTime}`)
         : new Date(`${event.date}T09:00:00`);
@@ -52,10 +55,41 @@ export async function PATCH(
         ? new Date(`${event.date}T${event.endTime}`)
         : new Date(startTime.getTime() + 60 * 60 * 1000);
 
+      // Find or create the case so the event can be linked to it
+      let caseId: string | undefined;
+      if (caseData.caseNumber || caseData.plaintiff || caseData.defendant) {
+        let matchingCase = await prisma.case.findFirst({
+          where: {
+            workspaceId: workspace.id,
+            ...(caseData.caseNumber ? { caseNumber: caseData.caseNumber } : {}),
+          },
+        });
+
+        if (!matchingCase) {
+          matchingCase = await prisma.case.create({
+            data: {
+              userId:          user.id,
+              workspaceId:     workspace.id,
+              title:           [caseData.plaintiff, "v.", caseData.defendant].filter(Boolean).join(" ") || "New Case",
+              caseNumber:      caseData.caseNumber ?? undefined,
+              county:          caseData.county ?? undefined,
+              court:           caseData.court ?? undefined,
+              defenseFirm:     caseData.defenseFirm ?? undefined,
+              defenseAttorney: caseData.defenseAttorney ?? undefined,
+              filingDate:      caseData.dateFiled ? new Date(caseData.dateFiled) : undefined,
+              status:          "ACTIVE",
+            },
+          });
+        }
+
+        caseId = matchingCase.id;
+      }
+
       await prisma.event.create({
         data: {
           userId:      user.id,
           workspaceId: workspace.id,
+          caseId,
           title:       event.title ?? suggestion.subject ?? "AI Inbox Event",
           description: event.description ?? undefined,
           startTime,
