@@ -6,17 +6,7 @@ import { DAY_OF_9AM } from "@/lib/reminders";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-export async function GET(request: NextRequest) {
-  const configuredSecret = process.env.CRON_SECRET;
-  if (configuredSecret) {
-    const url = new URL(request.url);
-    const bearer = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-    const providedSecret = url.searchParams.get("secret") ?? bearer;
-    if (providedSecret !== configuredSecret) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-  }
-
+export async function GET(_request: NextRequest) {
   const now = new Date();
 
   // Find all unsent reminders whose sendAt has passed
