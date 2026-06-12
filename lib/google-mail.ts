@@ -194,3 +194,62 @@ export async function sendWorkspaceInviteEmail(_userId: string, options: InviteE
 export async function sendLitCalEmail(options: LitCalEmailOptions) {
   return sendRawLitCalMessage(buildLitCalEmail(options));
 }
+
+interface LitCalEmailWithAttachmentOptions extends LitCalEmailOptions {
+  attachment: Buffer;
+  attachmentFilename: string;
+  attachmentMimeType: string;
+}
+
+function buildLitCalEmailWithAttachment({
+  recipientEmail,
+  subject,
+  text,
+  html,
+  attachment,
+  attachmentFilename,
+  attachmentMimeType,
+}: LitCalEmailWithAttachmentOptions) {
+  const headerRecipientEmail = headerValue(recipientEmail);
+  const safeSubject = encodedHeaderValue(subject);
+  const outerBoundary = `litcal-outer-${crypto.randomUUID()}`;
+  const innerBoundary = `litcal-inner-${crypto.randomUUID()}`;
+  const attachmentBase64 = attachment.toString("base64");
+  const encodedFilename = encodedHeaderValue(attachmentFilename);
+
+  return [
+    `To: ${headerRecipientEmail}`,
+    "From: LitCal Notifications <litcalai@gmail.com>",
+    `Subject: ${safeSubject}`,
+    "MIME-Version: 1.0",
+    `Content-Type: multipart/mixed; boundary="${outerBoundary}"`,
+    "",
+    `--${outerBoundary}`,
+    `Content-Type: multipart/alternative; boundary="${innerBoundary}"`,
+    "",
+    `--${innerBoundary}`,
+    "Content-Type: text/plain; charset=UTF-8",
+    "",
+    text,
+    "",
+    `--${innerBoundary}`,
+    "Content-Type: text/html; charset=UTF-8",
+    "",
+    html,
+    "",
+    `--${innerBoundary}--`,
+    "",
+    `--${outerBoundary}`,
+    `Content-Type: ${attachmentMimeType}; name="${encodedFilename}"`,
+    `Content-Disposition: attachment; filename="${encodedFilename}"`,
+    "Content-Transfer-Encoding: base64",
+    "",
+    attachmentBase64,
+    "",
+    `--${outerBoundary}--`,
+  ].join("\r\n");
+}
+
+export async function sendLitCalEmailWithAttachment(options: LitCalEmailWithAttachmentOptions) {
+  return sendRawLitCalMessage(buildLitCalEmailWithAttachment(options));
+}
