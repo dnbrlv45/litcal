@@ -57,10 +57,10 @@ export async function buildXlsx(
         cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bg } };
       }
       cell.border = {
-        top:    { style: "thin", color: { argb: BORDER_COLOR } },
-        left:   { style: "thin", color: { argb: BORDER_COLOR } },
-        bottom: { style: "thin", color: { argb: BORDER_COLOR } },
-        right:  { style: "thin", color: { argb: BORDER_COLOR } },
+        top:    { style: "thin", color: { argb: "FF000000" } },
+        left:   { style: "thin", color: { argb: "FF000000" } },
+        bottom: { style: "thin", color: { argb: "FF000000" } },
+        right:  { style: "thin", color: { argb: "FF000000" } },
       };
     });
   });
