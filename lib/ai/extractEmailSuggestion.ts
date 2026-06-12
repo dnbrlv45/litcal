@@ -114,7 +114,7 @@ export async function extractEmailSuggestion(params: {
   if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
 
   const genai = new GoogleGenerativeAI(apiKey);
-  const model = genai.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = genai.getGenerativeModel({ model: "gemini-2.5-flash" });
 
   const body = params.bodyText.slice(0, MAX_BODY_CHARS);
   const attachments = params.attachmentTexts
