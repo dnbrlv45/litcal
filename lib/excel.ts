@@ -42,7 +42,10 @@ export async function buildXlsx(
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: HEADER_BG } };
     cell.alignment = { vertical: "middle", horizontal: "left" };
     cell.border = {
+      top:    { style: "thin", color: { argb: BORDER_COLOR } },
+      left:   { style: "thin", color: { argb: BORDER_COLOR } },
       bottom: { style: "thin", color: { argb: BORDER_COLOR } },
+      right:  { style: "thin", color: { argb: BORDER_COLOR } },
     };
   });
 
@@ -60,7 +63,10 @@ export async function buildXlsx(
         cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bg } };
       }
       cell.border = {
+        top:    { style: "thin", color: { argb: BORDER_COLOR } },
+        left:   { style: "thin", color: { argb: BORDER_COLOR } },
         bottom: { style: "thin", color: { argb: BORDER_COLOR } },
+        right:  { style: "thin", color: { argb: BORDER_COLOR } },
       };
     });
   });
