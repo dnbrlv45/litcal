@@ -390,16 +390,22 @@ export async function sendEventReminderEmails(reminderIds: string[]) {
     const caseLabel = event.caseRef ? `${event.caseRef.title}${event.caseRef.caseNumber ? ` (#${event.caseRef.caseNumber})` : ""}` : null;
     const days = daysRemaining(event.startTime);
 
+    const timeUntil = reminder.minutesBefore === DAY_OF_9AM
+      ? "Today"
+      : reminder.minutesBefore >= 1440
+        ? `${reminder.minutesBefore / 1440} day${reminder.minutesBefore / 1440 === 1 ? "" : "s"}`
+        : `${reminder.minutesBefore} minutes`;
+
     const subject = emailType === "DISCOVERY_REMINDER"
       ? `Discovery Responses Due — ${event.caseRef?.title ?? event.title}`
       : emailType === "EVENT_REMINDER"
-        ? `Upcoming: ${event.title}`
+        ? `Reminder (${timeUntil}): ${event.title}`
         : `Deadline Approaching — ${event.title}`;
 
     const heading = emailType === "DISCOVERY_REMINDER"
       ? "Discovery Responses Due"
       : emailType === "EVENT_REMINDER"
-        ? "Upcoming Event"
+        ? `Upcoming Event — ${timeUntil}`
         : "Deadline Approaching";
 
     const fields = emailType === "DISCOVERY_REMINDER"
@@ -416,6 +422,7 @@ export async function sendEventReminderEmails(reminderIds: string[]) {
             { label: "Case", value: caseLabel },
             { label: "Event", value: event.title },
             { label: "Date", value: formatDate(event.startTime) },
+            { label: "Time Until Event", value: timeUntil },
             { label: "Location / Dept", value: event.department ?? event.location },
           ]
         : [
