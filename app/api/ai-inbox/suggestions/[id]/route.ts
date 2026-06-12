@@ -119,20 +119,34 @@ export async function PATCH(
         caseId = matchingCase.id;
       }
 
-      await prisma.event.create({
-        data: {
-          userId:      user.id,
-          workspaceId: workspace.id,
-          caseId,
-          title:       event.title ?? suggestion.subject ?? "AI Inbox Event",
-          description: event.description ?? undefined,
-          startTime,
-          endTime,
-          location:    event.location ?? undefined,
-          eventType:   mapEventType(event.eventType),
-          status:      "SCHEDULED",
-        },
-      });
+      // Skip if a matching event already exists (same case, date, and event type)
+      const duplicateEvent = caseId
+        ? await prisma.event.findFirst({
+            where: {
+              workspaceId: workspace.id,
+              caseId,
+              startTime,
+              eventType: mapEventType(event.eventType),
+            },
+          })
+        : null;
+
+      if (!duplicateEvent) {
+        await prisma.event.create({
+          data: {
+            userId:      user.id,
+            workspaceId: workspace.id,
+            caseId,
+            title:       event.title ?? suggestion.subject ?? "AI Inbox Event",
+            description: event.description ?? undefined,
+            startTime,
+            endTime,
+            location:    event.location ?? undefined,
+            eventType:   mapEventType(event.eventType),
+            status:      "SCHEDULED",
+          },
+        });
+      }
     }
 
     if (classification === "DISCOVERY_EXTENSION") {
