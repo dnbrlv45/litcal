@@ -18,27 +18,6 @@ function getOAuth2Client(refreshToken: string) {
   return oauth2;
 }
 
-// Find the Gmail refresh token for any workspace member, preferring the current user.
-async function resolveWorkspaceGmailToken(workspaceId: string, currentUserId: string) {
-  const members = await prisma.workspaceMember.findMany({
-    where: { workspaceId },
-    select: { userId: true },
-    orderBy: { createdAt: "asc" },
-  });
-  const userIds = [
-    currentUserId,
-    ...members.map((m) => m.userId).filter((id) => id !== currentUserId),
-  ];
-  for (const userId of userIds) {
-    const conn = await prisma.userCalendarConnection.findFirst({
-      where: { userId, provider: "GOOGLE", gmailRefreshToken: { not: null } },
-      select: { gmailRefreshToken: true },
-    });
-    if (conn?.gmailRefreshToken) return conn.gmailRefreshToken;
-  }
-  return null;
-}
-
 function decodeBase64Url(data: string) {
   return Buffer.from(data.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf-8");
 }
@@ -99,10 +78,10 @@ export async function POST() {
   const { workspace } = await getCurrentWorkspace(user.id);
   if (!workspace) return NextResponse.json({ error: "No workspace found" }, { status: 400 });
 
-  const refreshToken = await resolveWorkspaceGmailToken(workspace.id, user.id);
+  const refreshToken = process.env.GMAIL_REFRESH_TOKEN;
   if (!refreshToken) {
     return NextResponse.json(
-      { error: "No Gmail connection found. Connect Gmail in Settings → Calendar." },
+      { error: "GMAIL_REFRESH_TOKEN is not configured." },
       { status: 400 }
     );
   }
