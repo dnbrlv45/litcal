@@ -66,7 +66,7 @@ export default function Sidebar({ isSuperAdmin = false }: { isSuperAdmin?: boole
   function isNavItemActive(href: string) {
     if (href === "/") return pathname === "/";
     if (href === "/settings") {
-      return pathname === "/settings" || pathname.startsWith("/settings/calendar");
+      return pathname === "/settings" || pathname.startsWith("/settings/");
     }
     return pathname === href || pathname.startsWith(href + "/");
   }
