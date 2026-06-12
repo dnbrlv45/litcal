@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendDueTaskEmails, sendEventReminderEmails } from "@/lib/email-notifications";
+import { DAY_OF_9AM } from "@/lib/reminders";
 
 export async function GET(request: NextRequest) {
   const configuredSecret = process.env.CRON_SECRET;
@@ -64,10 +65,10 @@ export async function GET(request: NextRequest) {
 
     const minutesBefore = reminder.minutesBefore;
     const timeLabel =
-      minutesBefore >= 43200 ? `${minutesBefore / 1440}d` :
-      minutesBefore >= 1440  ? `${minutesBefore / 1440}d` :
-      minutesBefore >= 60    ? `${minutesBefore / 60}h`   :
-                               `${minutesBefore}m`;
+      minutesBefore === DAY_OF_9AM ? "Today" :
+      minutesBefore >= 1440        ? `${minutesBefore / 1440}d` :
+      minutesBefore >= 60          ? `${minutesBefore / 60}h` :
+                                     `${minutesBefore}m`;
 
     const title = `Reminder: ${ev.title} in ${timeLabel}`;
     const dateStr = ev.startTime.toLocaleDateString("en-US", {

@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { sendLitCalEmail } from "@/lib/google-mail";
-import { adjustToBusinessDay } from "@/lib/reminders";
+import { adjustToBusinessDay, DAY_OF_9AM } from "@/lib/reminders";
 
 export type EmailNotificationType =
   | "TASK_ASSIGNED"
@@ -80,6 +80,7 @@ function daysRemaining(dueDate: Date | string) {
 }
 
 function reminderKeyFromMinutes(minutesBefore: number) {
+  if (minutesBefore === DAY_OF_9AM) return "day-of";
   if (minutesBefore % 1440 === 0) return `${minutesBefore / 1440}d`;
   if (minutesBefore % 60 === 0) return `${minutesBefore / 60}h`;
   return `${minutesBefore}m`;
@@ -423,15 +424,6 @@ export async function sendEventReminderEmails(reminderIds: string[]) {
   return counts;
 }
 
-function taskReminderSchedule(task: {
-  title: string;
-  generatedDeadline: { ruleKey: string } | null;
-}) {
-  if (task.title.startsWith("Request Remote Appearance")) return [10080, 1440];
-  if (task.generatedDeadline?.ruleKey === "CMC_CMS_TASK") return [21600, 10080, 1440];
-  return [1440];
-}
-
 function isRecentDue(sendAt: Date, now: Date) {
   return sendAt <= now && sendAt.getTime() >= now.getTime() - 36 * 60 * 60 * 1000;
 }
@@ -458,8 +450,11 @@ export async function sendDueTaskEmails(now = new Date()) {
   for (const task of tasks) {
     if (!task.dueDate) continue;
     if (task.caseRef?.status === "CLOSED" || task.caseRef?.status === "ARCHIVED") continue;
-    for (const minutesBefore of taskReminderSchedule(task)) {
-      const sendAt = adjustToBusinessDay(new Date(task.dueDate.getTime() - minutesBefore * 60 * 1000));
+    // All task types: day-of at 9:00 AM UTC, no weekend adjustment
+    {
+      const sendAt = new Date(task.dueDate);
+      sendAt.setUTCHours(9, 0, 0, 0);
+      const minutesBefore = DAY_OF_9AM;
       if (!isRecentDue(sendAt, now)) continue;
 
       const isRemote = task.title.startsWith("Request Remote Appearance");
