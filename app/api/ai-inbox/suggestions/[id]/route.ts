@@ -78,7 +78,6 @@ export async function PATCH(
               defenseAttorney: caseData.defenseAttorney ?? undefined,
               filingDate:      caseData.dateFiled ? new Date(caseData.dateFiled) : undefined,
               status:          "ACTIVE",
-              // Create plaintiff and defendant as CaseParty records
               parties: {
                 create: [
                   ...(caseData.plaintiff ? [{ name: caseData.plaintiff, role: "PLAINTIFF" as const }] : []),
@@ -87,6 +86,34 @@ export async function PATCH(
               },
             },
           });
+        } else {
+          // Fill in any fields that are missing on the existing case
+          const updates: Record<string, unknown> = {};
+          if (!matchingCase.county      && caseData.county)      updates.county      = caseData.county;
+          if (!matchingCase.court       && caseData.court)       updates.court       = caseData.court;
+          if (!matchingCase.defenseFirm && caseData.defenseFirm) updates.defenseFirm = caseData.defenseFirm;
+          if (!matchingCase.defenseAttorney && caseData.defenseAttorney) updates.defenseAttorney = caseData.defenseAttorney;
+          if (!matchingCase.filingDate  && caseData.dateFiled)   updates.filingDate  = new Date(caseData.dateFiled);
+
+          if (Object.keys(updates).length > 0) {
+            await prisma.case.update({ where: { id: matchingCase.id }, data: updates });
+          }
+
+          // Add plaintiff/defendant parties if not already present
+          const existingParties = await prisma.caseParty.findMany({
+            where: { caseId: matchingCase.id },
+            select: { role: true },
+          });
+          const existingRoles = new Set(existingParties.map((p) => p.role));
+          const newParties = [
+            ...(caseData.plaintiff && !existingRoles.has("PLAINTIFF") ? [{ name: caseData.plaintiff, role: "PLAINTIFF" as const }] : []),
+            ...(caseData.defendant && !existingRoles.has("DEFENDANT") ? [{ name: caseData.defendant, role: "DEFENDANT" as const }] : []),
+          ];
+          if (newParties.length > 0) {
+            await prisma.caseParty.createMany({
+              data: newParties.map((p) => ({ ...p, caseId: matchingCase!.id })),
+            });
+          }
         }
 
         caseId = matchingCase.id;
