@@ -330,11 +330,18 @@ export default function AIInboxClient() {
     setScanResult(null);
     setScanError(null);
     const res  = await fetch("/api/ai-inbox/test-scan", { method: "POST" });
-    const json = await res.json() as { scanned?: number; newlyProcessed?: number; error?: string };
+    const json = await res.json() as { scanned?: number; created?: number; errors?: number; error?: string };
     if (!res.ok) {
       setScanError(json.error ?? "Scan failed");
     } else {
-      setScanResult(`Scanned ${json.scanned} emails · ${json.newlyProcessed} new suggestions created`);
+      const created = json.created ?? 0;
+      const errors  = json.errors ?? 0;
+      const msg = created > 0
+        ? `Scanned ${json.scanned} emails · ${created} new suggestion${created !== 1 ? "s" : ""} created`
+        : errors > 0
+          ? `Scanned ${json.scanned} emails · ${errors} failed (check Gemini API key)`
+          : `Scanned ${json.scanned} emails · nothing new`;
+      setScanResult(msg);
       await fetchSuggestions();
     }
     setScanning(false);

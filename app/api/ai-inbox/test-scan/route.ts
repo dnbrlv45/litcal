@@ -250,10 +250,15 @@ export async function POST() {
     }
   }
 
+  const created = results.filter((r) => r.status === "created").length;
+  const errors  = results.filter((r) => r.status === "error").length;
+
   return NextResponse.json({
     scanned: messageIds.length,
     alreadyProcessed: processedIds.size,
-    newlyProcessed: toProcess.length,
+    attempted: toProcess.length,
+    created,
+    errors,
     results,
   });
 }
