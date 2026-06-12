@@ -7,9 +7,14 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function GET(request: NextRequest) {
-  // Vercel injects this header on cron-triggered requests; block direct calls in production.
-  if (process.env.NODE_ENV === "production" && request.headers.get("x-vercel-cron") !== "1") {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const configuredSecret = process.env.CRON_SECRET;
+  if (configuredSecret) {
+    const url = new URL(request.url);
+    const bearer = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+    const providedSecret = url.searchParams.get("secret") ?? bearer;
+    if (providedSecret !== configuredSecret) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
   }
 
   const now = new Date();
