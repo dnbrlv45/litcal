@@ -41,12 +41,6 @@ export async function buildXlsx(
     cell.font = { bold: true, color: { argb: HEADER_FG }, size: 11, name: "Calibri" };
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: HEADER_BG } };
     cell.alignment = { vertical: "middle", horizontal: "left" };
-    cell.border = {
-      top:    { style: "thin", color: { argb: BORDER_COLOR } },
-      left:   { style: "thin", color: { argb: BORDER_COLOR } },
-      bottom: { style: "thin", color: { argb: BORDER_COLOR } },
-      right:  { style: "thin", color: { argb: BORDER_COLOR } },
-    };
   });
 
   // ── Data rows ──────────────────────────────────────────────────────────────
