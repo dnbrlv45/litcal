@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCurrentWorkspace, canManageWorkspace } from "@/lib/workspaces";
-import { getEventDisplayName, formatCsvDate, formatCsvTime, buildCsv } from "@/lib/event-display";
+import { getEventDisplayName, formatCsvDate, formatCsvTime } from "@/lib/event-display";
+import { buildXlsx } from "@/lib/excel";
 
 export const dynamic = "force-dynamic";
 
 const HEADERS = ["Event", "Date", "Time", "Case Name", "Attorney"];
+const COL_WIDTHS = [36, 14, 12, 32, 24];
 
 export async function GET(request: NextRequest) {
   const currentUser = await requireUser();
@@ -26,7 +28,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid date range" }, { status: 400 });
   }
 
-  // Permission: non-admins can only export their own data
   let requestedAttorneyId = url.searchParams.get("attorneyId") ?? null;
   const isAdmin = canManageWorkspace(membership.role);
   if (!isAdmin) requestedAttorneyId = currentUser.id;
@@ -39,59 +40,49 @@ export async function GET(request: NextRequest) {
       ...(requestedAttorneyId ? { assignedAttorneyId: requestedAttorneyId } : {}),
     },
     include: {
-      assignedAttorney: { select: { firstName: true, lastName: true } },
-      caseRef:          { select: { title: true } },
+      assignedAttorney:  { select: { firstName: true, lastName: true } },
+      caseRef:           { select: { title: true } },
       generatedDeadline: { select: { ruleKey: true } },
     },
     orderBy: { startTime: "asc" },
   });
 
-  const rows = events.map((ev) => {
-    const displayName = getEventDisplayName({
+  const rows = events.map((ev) => ({
+    Event: getEventDisplayName({
       title:                    ev.title,
       eventType:                ev.eventType,
       subtype:                  ev.subtype,
       subtypeReason:            ev.subtypeReason,
       generatedDeadlineRuleKey: ev.generatedDeadline?.ruleKey,
-    });
-
-    const attorney = ev.assignedAttorney
+    }),
+    Date:        formatCsvDate(ev.startTime),
+    Time:        formatCsvTime(ev.startTime, ev.allDay),
+    "Case Name": ev.caseRef?.title ?? "",
+    Attorney:    ev.assignedAttorney
       ? [ev.assignedAttorney.firstName, ev.assignedAttorney.lastName].filter(Boolean).join(" ")
-      : null;
+      : "",
+  }));
 
-    return {
-      Event:     displayName,
-      Date:      formatCsvDate(ev.startTime),
-      Time:      formatCsvTime(ev.startTime, ev.allDay),
-      "Case Name": ev.caseRef?.title ?? "",
-      Attorney:  attorney ?? "",
-    };
-  });
+  const buffer = await buildXlsx("Weekly Calendar", HEADERS, rows, COL_WIDTHS);
 
-  const csv = buildCsv(HEADERS, rows);
-
-  // Build filename
   const s = startDate.toISOString().slice(0, 10);
   const e = endDate.toISOString().slice(0, 10);
   let filename: string;
-  if (requestedAttorneyId && isAdmin) {
+
+  if (requestedAttorneyId) {
     const atty = events.find((ev) => ev.assignedAttorney)?.assignedAttorney;
-    const attySlug = atty
-      ? [atty.firstName, atty.lastName].filter(Boolean).join("-").toLowerCase().replace(/\s+/g, "-")
+    const slug = atty
+      ? [atty.firstName, atty.lastName].filter(Boolean).join("-").toLowerCase()
       : requestedAttorneyId;
-    filename = `litcal-weekly-calendar-${attySlug}-${s}-to-${e}.csv`;
-  } else if (!isAdmin) {
-    const me = await prisma.user.findUnique({ where: { id: currentUser.id }, select: { firstName: true, lastName: true } });
-    const slug = me ? [me.firstName, me.lastName].filter(Boolean).join("-").toLowerCase() : currentUser.id;
-    filename = `litcal-weekly-calendar-${slug}-${s}-to-${e}.csv`;
+    filename = `litcal-weekly-calendar-${slug}-${s}-to-${e}.xlsx`;
   } else {
-    filename = `litcal-weekly-calendar-${s}-to-${e}.csv`;
+    filename = `litcal-weekly-calendar-${s}-to-${e}.xlsx`;
   }
 
-  return new NextResponse(csv, {
+  return new NextResponse(buffer, {
     status: 200,
     headers: {
-      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "Content-Disposition": `attachment; filename="${filename}"`,
     },
   });

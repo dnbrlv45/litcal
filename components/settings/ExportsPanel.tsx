@@ -138,7 +138,7 @@ export default function ExportsPanel({ isAdmin, attorneys }: Props) {
             className="flex items-center justify-center gap-2 rounded-lg bg-teal-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-teal-800 disabled:opacity-50"
           >
             <Download className="size-4" />
-            {calLoading ? "Generating…" : "Download CSV"}
+            {calLoading ? "Generating…" : "Download Excel"}
           </button>
         </div>
       </div>
@@ -177,7 +177,7 @@ export default function ExportsPanel({ isAdmin, attorneys }: Props) {
             className="flex items-center justify-center gap-2 rounded-lg bg-teal-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-teal-800 disabled:opacity-50"
           >
             <Download className="size-4" />
-            {caseLoading ? "Generating…" : "Download CSV"}
+            {caseLoading ? "Generating…" : "Download Excel"}
           </button>
         </div>
       </div>

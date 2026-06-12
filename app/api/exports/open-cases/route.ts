@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCurrentWorkspace, canManageWorkspace } from "@/lib/workspaces";
-import { buildCsv } from "@/lib/event-display";
+import { buildXlsx } from "@/lib/excel";
 
 export const dynamic = "force-dynamic";
 
@@ -11,17 +11,18 @@ const HEADERS = [
   "County", "Court", "Defense Firm", "Defense Attorney",
   "Date Filed", "Assigned Attorney", "Assigned Paralegal", "Assigned Assistant",
 ];
+const COL_WIDTHS = [28, 28, 22, 16, 18, 28, 28, 24, 14, 24, 24, 24];
 
 const CASE_TYPE_LABELS: Record<string, string> = {
-  AUTO_ACCIDENT:        "Auto Accident",
-  SLIP_AND_FALL:        "Slip and Fall",
-  GOVERNMENT_CLAIM:     "Government Claim",
-  DOG_BITE:             "Dog Bite",
-  PREMISES_LIABILITY:   "Premises Liability",
-  MEDICAL_MALPRACTICE:  "Medical Malpractice",
-  WRONGFUL_DEATH:       "Wrongful Death",
-  PRODUCT_LIABILITY:    "Product Liability",
-  OTHER:                "Other",
+  AUTO_ACCIDENT:       "Auto Accident",
+  SLIP_AND_FALL:       "Slip and Fall",
+  GOVERNMENT_CLAIM:    "Government Claim",
+  DOG_BITE:            "Dog Bite",
+  PREMISES_LIABILITY:  "Premises Liability",
+  MEDICAL_MALPRACTICE: "Medical Malpractice",
+  WRONGFUL_DEATH:      "Wrongful Death",
+  PRODUCT_LIABILITY:   "Product Liability",
+  OTHER:               "Other",
 };
 
 export async function GET(request: NextRequest) {
@@ -46,9 +47,7 @@ export async function GET(request: NextRequest) {
     },
     include: {
       parties: { select: { name: true, role: true } },
-      staff: {
-        include: { user: { select: { firstName: true, lastName: true } } },
-      },
+      staff:   { include: { user: { select: { firstName: true, lastName: true } } } },
     },
     orderBy: { title: "asc" },
   });
@@ -64,46 +63,49 @@ export async function GET(request: NextRequest) {
       .map((p) => p.name)
       .join("; ") || c.defendant || "";
 
-    const staffName = (role: "ATTORNEY" | "PARALEGAL" | "ASSISTANT") =>
+    const staffNames = (role: "ATTORNEY" | "PARALEGAL" | "ASSISTANT") =>
       c.staff
         .filter((s) => s.role === role)
         .map((s) => [s.user.firstName, s.user.lastName].filter(Boolean).join(" "))
         .join("; ");
 
     return {
-      Plaintiff:           plaintiffs,
-      Defendant:           defendants,
-      "Case Type":         CASE_TYPE_LABELS[c.caseType] ?? c.caseType,
-      "Case Number":       c.caseNumber ?? "",
-      County:              c.county ?? "",
-      Court:               c.court ?? "",
-      "Defense Firm":      c.defenseFirm ?? "",
-      "Defense Attorney":  c.defenseAttorney ?? "",
-      "Date Filed":        c.filingDate ? c.filingDate.toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric", timeZone: "UTC" }) : "",
-      "Assigned Attorney":  staffName("ATTORNEY"),
-      "Assigned Paralegal": staffName("PARALEGAL"),
-      "Assigned Assistant": staffName("ASSISTANT"),
+      Plaintiff:            plaintiffs,
+      Defendant:            defendants,
+      "Case Type":          CASE_TYPE_LABELS[c.caseType] ?? c.caseType,
+      "Case Number":        c.caseNumber ?? "",
+      County:               c.county ?? "",
+      Court:                c.court ?? "",
+      "Defense Firm":       c.defenseFirm ?? "",
+      "Defense Attorney":   c.defenseAttorney ?? "",
+      "Date Filed":         c.filingDate
+        ? c.filingDate.toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric", timeZone: "UTC" })
+        : "",
+      "Assigned Attorney":  staffNames("ATTORNEY"),
+      "Assigned Paralegal": staffNames("PARALEGAL"),
+      "Assigned Assistant": staffNames("ASSISTANT"),
     };
   });
 
-  const csv = buildCsv(HEADERS, rows);
+  const buffer = await buildXlsx("Open Cases", HEADERS, rows, COL_WIDTHS);
 
   const today = new Date().toISOString().slice(0, 10);
   let filename: string;
+
   if (requestedAttorneyId) {
-    const attyStaff = cases[0]?.staff.find((s) => s.user && s.role === "ATTORNEY");
+    const attyStaff = cases[0]?.staff.find((s) => s.role === "ATTORNEY");
     const slug = attyStaff
       ? [attyStaff.user.firstName, attyStaff.user.lastName].filter(Boolean).join("-").toLowerCase()
       : requestedAttorneyId;
-    filename = `litcal-open-cases-${slug}-${today}.csv`;
+    filename = `litcal-open-cases-${slug}-${today}.xlsx`;
   } else {
-    filename = `litcal-open-cases-${today}.csv`;
+    filename = `litcal-open-cases-${today}.xlsx`;
   }
 
-  return new NextResponse(csv, {
+  return new NextResponse(buffer, {
     status: 200,
     headers: {
-      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "Content-Disposition": `attachment; filename="${filename}"`,
     },
   });
