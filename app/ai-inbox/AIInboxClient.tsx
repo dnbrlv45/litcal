@@ -11,12 +11,13 @@ import {
   ChevronUp,
   Loader2,
   Inbox,
-  Plug,
   PlugZap,
+  RefreshCw,
 } from "lucide-react";
 
 type Status = "PENDING" | "APPROVED" | "IGNORED" | "DUPLICATE";
 type FilterTab = "PENDING" | "DUPLICATE" | "APPROVED" | "IGNORED";
+type ConnectionState = "connected" | "needs_read_scope" | "not_connected" | "no_workspace" | "error" | "loading";
 
 interface AISuggestion {
   id: string;
@@ -32,10 +33,9 @@ interface AISuggestion {
   createdAt: string;
 }
 
-interface GmailConnection {
-  id: string;
-  email: string;
-  updatedAt: string;
+interface ConnectionInfo {
+  email?: string;
+  state: ConnectionState;
 }
 
 const CLASSIFICATION_COLORS: Record<string, string> = {
@@ -76,8 +76,6 @@ function SuggestionCard({
     case?: Record<string, string | null>;
     event?: Record<string, string | null>;
     discoveryExtension?: Record<string, string | null>;
-    missingFields?: string[];
-    dedupeKey?: string;
     existingEventWarning?: string;
   };
 
@@ -102,68 +100,62 @@ function SuggestionCard({
 
   return (
     <div className={`rounded-xl border bg-white shadow-sm ${isDuplicate ? "border-amber-200" : "border-slate-200"}`}>
-      {/* Header */}
       <div className="p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2 mb-1">
-              <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ${CLASSIFICATION_COLORS[s.classification] ?? "bg-slate-50 text-slate-600 ring-slate-200"}`}>
-                {CLASSIFICATION_LABELS[s.classification] ?? s.classification}
-              </span>
-              <ConfidenceBadge value={s.confidence} />
-              {isDuplicate && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700 ring-1 ring-amber-200">
-                  <AlertTriangle className="size-3" /> Possible Duplicate
-                </span>
-              )}
-              <span className={`ml-auto text-xs px-2 py-0.5 rounded-full font-medium ${
-                s.status === "APPROVED" ? "bg-green-50 text-green-700" :
-                s.status === "IGNORED" ? "bg-slate-100 text-slate-500" :
-                "bg-slate-100 text-slate-600"
-              }`}>
-                {s.status}
-              </span>
-            </div>
-            <p className="font-semibold text-slate-900 truncate">{s.subject ?? "(no subject)"}</p>
-            <p className="text-sm text-slate-500 mt-0.5">
-              {s.sender}{s.receivedAt ? ` · ${new Date(s.receivedAt).toLocaleDateString()}` : ""}
-            </p>
-          </div>
+        <div className="flex flex-wrap items-center gap-2 mb-1">
+          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ${CLASSIFICATION_COLORS[s.classification] ?? "bg-slate-50 text-slate-600 ring-slate-200"}`}>
+            {CLASSIFICATION_LABELS[s.classification] ?? s.classification}
+          </span>
+          <ConfidenceBadge value={s.confidence} />
+          {isDuplicate && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700 ring-1 ring-amber-200">
+              <AlertTriangle className="size-3" /> Possible Duplicate
+            </span>
+          )}
+          <span className={`ml-auto text-xs px-2 py-0.5 rounded-full font-medium ${
+            s.status === "APPROVED" ? "bg-green-50 text-green-700" :
+            s.status === "IGNORED"  ? "bg-slate-100 text-slate-500" :
+            "bg-slate-100 text-slate-600"
+          }`}>
+            {s.status}
+          </span>
         </div>
 
-        {/* Quick info row */}
+        <p className="font-semibold text-slate-900 truncate">{s.subject ?? "(no subject)"}</p>
+        <p className="text-sm text-slate-500 mt-0.5">
+          {s.sender}{s.receivedAt ? ` · ${new Date(s.receivedAt).toLocaleDateString()}` : ""}
+        </p>
+
         <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm text-slate-600">
-          {data.case?.plaintiff && <span><span className="font-medium">Plaintiff:</span> {data.case.plaintiff}</span>}
-          {data.case?.defendant && <span><span className="font-medium">Defendant:</span> {data.case.defendant}</span>}
+          {data.case?.plaintiff  && <span><span className="font-medium">Plaintiff:</span> {data.case.plaintiff}</span>}
+          {data.case?.defendant  && <span><span className="font-medium">Defendant:</span> {data.case.defendant}</span>}
           {data.case?.caseNumber && <span><span className="font-medium">Case #:</span> {data.case.caseNumber}</span>}
-          {data.event?.date && <span><span className="font-medium">Date:</span> {data.event.date}</span>}
+          {data.event?.date      && <span><span className="font-medium">Date:</span> {data.event.date}</span>}
           {data.event?.eventType && <span><span className="font-medium">Type:</span> {data.event.eventType}</span>}
           {data.discoveryExtension?.newDate && (
             <span><span className="font-medium">New Discovery Deadline:</span> {data.discoveryExtension.newDate}</span>
           )}
         </div>
 
-        {/* Warnings */}
         {data.existingEventWarning && (
           <p className="mt-2 text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-1.5">
             ⚠ {data.existingEventWarning}
           </p>
         )}
 
-        {/* Missing fields */}
-        {Array.isArray(data.missingFields) && data.missingFields.length > 0 && (
+        {Array.isArray(s.missingFields) && s.missingFields.length > 0 && (
           <p className="mt-2 text-xs text-slate-500">
-            <span className="font-medium text-slate-700">Missing:</span> {data.missingFields.join(", ")}
+            <span className="font-medium text-slate-700">Missing:</span> {s.missingFields.join(", ")}
           </p>
         )}
       </div>
 
-      {/* Expand */}
       <button
         onClick={() => setExpanded((v) => !v)}
         className="flex w-full items-center justify-center gap-1 border-t border-slate-100 py-2 text-xs text-slate-500 hover:bg-slate-50 transition-colors"
       >
-        {expanded ? <><ChevronUp className="size-3.5" /> Less</> : <><ChevronDown className="size-3.5" /> Details</>}
+        {expanded
+          ? <><ChevronUp className="size-3.5" /> Less</>
+          : <><ChevronDown className="size-3.5" /> Details</>}
       </button>
 
       {expanded && (
@@ -191,7 +183,6 @@ function SuggestionCard({
         </div>
       )}
 
-      {/* Action buttons */}
       {(s.status === "PENDING" || s.status === "DUPLICATE") && (
         <div className="flex gap-2 border-t border-slate-100 p-3">
           {s.status === "DUPLICATE" ? (
@@ -234,58 +225,114 @@ const TABS: { label: string; value: FilterTab }[] = [
   { label: "Ignored",    value: "IGNORED" },
 ];
 
+function ConnectionBanner({ info, onScanClick, scanning }: {
+  info: ConnectionInfo;
+  onScanClick: () => void;
+  scanning: boolean;
+}) {
+  if (info.state === "loading") {
+    return (
+      <div className="flex items-center gap-2 text-sm text-slate-500">
+        <Loader2 className="size-4 animate-spin" /> Checking Gmail connection…
+      </div>
+    );
+  }
+
+  if (info.state === "connected") {
+    return (
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 rounded-lg bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 ring-1 ring-green-200">
+          <PlugZap className="size-3.5" />
+          {info.email}
+        </div>
+        <button
+          onClick={onScanClick}
+          disabled={scanning}
+          className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60 transition-colors"
+        >
+          {scanning
+            ? <><Loader2 className="size-4 animate-spin" /> Scanning…</>
+            : <><ScanLine className="size-4" /> Scan Inbox</>}
+        </button>
+      </div>
+    );
+  }
+
+  if (info.state === "needs_read_scope") {
+    return (
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 ring-1 ring-amber-200">
+          <AlertTriangle className="size-3.5" />
+          Inbox reading is not enabled. Reconnect Gmail with inbox access.
+        </div>
+        <a
+          href="/api/auth/google/gmail"
+          className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 transition-colors"
+        >
+          <RefreshCw className="size-4" />
+          Reconnect Gmail
+        </a>
+      </div>
+    );
+  }
+
+  if (info.state === "not_connected") {
+    return (
+      <div className="flex items-center gap-3">
+        <span className="text-sm text-slate-500">No Gmail inbox connected.</span>
+        <a
+          href="/settings/calendar"
+          className="text-sm font-semibold text-teal-600 hover:underline"
+        >
+          Connect in Settings → Calendar
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <div className="text-sm text-red-600">
+      Could not reach Gmail. Check your connection in{" "}
+      <a href="/settings/calendar" className="underline">Settings → Calendar</a>.
+    </div>
+  );
+}
+
 export default function AIInboxClient() {
-  const [tab, setTab]             = useState<FilterTab>("PENDING");
+  const [tab, setTab] = useState<FilterTab>("PENDING");
   const [suggestions, setSuggestions] = useState<AISuggestion[]>([]);
-  const [connection, setConnection]   = useState<GmailConnection | null | undefined>(undefined);
-  const [loading, setLoading]     = useState(true);
-  const [scanning, setScanning]   = useState(false);
+  const [connInfo, setConnInfo] = useState<ConnectionInfo>({ state: "loading" });
+  const [loading, setLoading]   = useState(true);
+  const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState<string | null>(null);
-  const [error, setError]         = useState<string | null>(null);
+  const [scanError, setScanError]   = useState<string | null>(null);
 
   const fetchConnection = useCallback(async () => {
-    const res = await fetch("/api/ai-inbox/connection");
-    const json = await res.json() as { connection: GmailConnection | null };
-    setConnection(json.connection);
+    setConnInfo({ state: "loading" });
+    const res  = await fetch("/api/ai-inbox/connection");
+    const json = await res.json() as { connection?: { email: string } | null; state: ConnectionState };
+    setConnInfo({ state: json.state, email: json.connection?.email });
   }, []);
 
   const fetchSuggestions = useCallback(async () => {
     setLoading(true);
-    const res = await fetch(`/api/ai-inbox/suggestions?status=${tab}`);
+    const res  = await fetch(`/api/ai-inbox/suggestions?status=${tab}`);
     const json = await res.json() as { suggestions: AISuggestion[] };
     setSuggestions(json.suggestions ?? []);
     setLoading(false);
   }, [tab]);
 
-  useEffect(() => {
-    void fetchConnection();
-  }, [fetchConnection]);
-
-  useEffect(() => {
-    void fetchSuggestions();
-  }, [fetchSuggestions]);
-
-  // Handle URL params (connected=gmail, error=...)
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("connected") === "gmail") {
-      void fetchConnection();
-      window.history.replaceState({}, "", "/ai-inbox");
-    }
-    if (params.get("error")) {
-      setError(`Connection error: ${params.get("error")}`);
-      window.history.replaceState({}, "", "/ai-inbox");
-    }
-  }, [fetchConnection]);
+  useEffect(() => { void fetchConnection(); }, [fetchConnection]);
+  useEffect(() => { void fetchSuggestions(); }, [fetchSuggestions]);
 
   async function handleScan() {
     setScanning(true);
     setScanResult(null);
-    setError(null);
-    const res = await fetch("/api/ai-inbox/test-scan", { method: "POST" });
+    setScanError(null);
+    const res  = await fetch("/api/ai-inbox/test-scan", { method: "POST" });
     const json = await res.json() as { scanned?: number; newlyProcessed?: number; error?: string };
     if (!res.ok) {
-      setError(json.error ?? "Scan failed");
+      setScanError(json.error ?? "Scan failed");
     } else {
       setScanResult(`Scanned ${json.scanned} emails · ${json.newlyProcessed} new suggestions created`);
       await fetchSuggestions();
@@ -294,16 +341,13 @@ export default function AIInboxClient() {
   }
 
   async function handleAction(id: string, action: string, extractedData?: Record<string, unknown>) {
-    const res = await fetch(`/api/ai-inbox/suggestions/${id}`, {
+    const res  = await fetch(`/api/ai-inbox/suggestions/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action, extractedData }),
     });
     const json = await res.json() as { error?: string };
-    if (!res.ok) {
-      alert(json.error ?? "Action failed");
-      return;
-    }
+    if (!res.ok) { alert(json.error ?? "Action failed"); return; }
     await fetchSuggestions();
   }
 
@@ -311,7 +355,7 @@ export default function AIInboxClient() {
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
       <div className="shrink-0 border-b border-slate-200 bg-white px-6 py-4">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
             <div className="grid size-9 place-items-center rounded-lg bg-teal-50 text-teal-700">
               <Inbox className="size-5" />
@@ -321,44 +365,16 @@ export default function AIInboxClient() {
               <p className="text-xs text-slate-500">Review AI-extracted litigation suggestions before creating anything</p>
             </div>
           </div>
-
-          <div className="flex items-center gap-2">
-            {connection === undefined ? null : connection ? (
-              <>
-                <div className="flex items-center gap-1.5 rounded-lg bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 ring-1 ring-green-200">
-                  <PlugZap className="size-3.5" />
-                  {connection.email}
-                </div>
-                <button
-                  onClick={handleScan}
-                  disabled={scanning}
-                  className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60 transition-colors"
-                >
-                  {scanning
-                    ? <><Loader2 className="size-4 animate-spin" /> Scanning…</>
-                    : <><ScanLine className="size-4" /> Scan Inbox</>}
-                </button>
-              </>
-            ) : (
-              <a
-                href="/api/auth/google/inbox"
-                className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 transition-colors"
-              >
-                <Plug className="size-4" />
-                Connect Gmail Inbox
-              </a>
-            )}
-          </div>
+          <ConnectionBanner info={connInfo} onScanClick={handleScan} scanning={scanning} />
         </div>
 
         {scanResult && (
           <p className="mt-2 text-sm text-teal-700 bg-teal-50 rounded-lg px-3 py-2">{scanResult}</p>
         )}
-        {error && (
-          <p className="mt-2 text-sm text-red-700 bg-red-50 rounded-lg px-3 py-2">{error}</p>
+        {scanError && (
+          <p className="mt-2 text-sm text-red-700 bg-red-50 rounded-lg px-3 py-2">{scanError}</p>
         )}
 
-        {/* Info banner */}
         <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 px-4 py-2.5 text-xs text-amber-800">
           <Mail className="inline size-3.5 mr-1.5 -mt-0.5" />
           AI suggestions are never applied automatically. You must approve each one before any case, event, or deadline is created.

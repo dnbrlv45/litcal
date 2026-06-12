@@ -18,6 +18,27 @@ function getOAuth2Client(refreshToken: string) {
   return oauth2;
 }
 
+// Find the Gmail refresh token for any workspace member, preferring the current user.
+async function resolveWorkspaceGmailToken(workspaceId: string, currentUserId: string) {
+  const members = await prisma.workspaceMember.findMany({
+    where: { workspaceId },
+    select: { userId: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const userIds = [
+    currentUserId,
+    ...members.map((m) => m.userId).filter((id) => id !== currentUserId),
+  ];
+  for (const userId of userIds) {
+    const conn = await prisma.userCalendarConnection.findFirst({
+      where: { userId, provider: "GOOGLE", gmailRefreshToken: { not: null } },
+      select: { gmailRefreshToken: true },
+    });
+    if (conn?.gmailRefreshToken) return conn.gmailRefreshToken;
+  }
+  return null;
+}
+
 function decodeBase64Url(data: string) {
   return Buffer.from(data.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf-8");
 }
@@ -78,19 +99,15 @@ export async function POST() {
   const { workspace } = await getCurrentWorkspace(user.id);
   if (!workspace) return NextResponse.json({ error: "No workspace found" }, { status: 400 });
 
-  const connection = await prisma.gmailConnection.findFirst({
-    where: { workspaceId: workspace.id, isActive: true },
-    orderBy: { updatedAt: "desc" },
-  });
-
-  if (!connection) {
+  const refreshToken = await resolveWorkspaceGmailToken(workspace.id, user.id);
+  if (!refreshToken) {
     return NextResponse.json(
-      { error: "No Gmail inbox connected. Connect an inbox first." },
+      { error: "No Gmail connection found. Connect Gmail in Settings → Calendar." },
       { status: 400 }
     );
   }
 
-  const auth = getOAuth2Client(connection.refreshToken);
+  const auth = getOAuth2Client(refreshToken);
   const gmail = google.gmail({ version: "v1", auth });
 
   let messageIds: string[];
@@ -101,7 +118,14 @@ export async function POST() {
       q: "in:inbox",
     });
     messageIds = (listRes.data.messages ?? []).map((m) => m.id!).filter(Boolean);
-  } catch (err) {
+  } catch (err: unknown) {
+    const code = typeof err === "object" && err !== null && "code" in err ? (err as { code: number }).code : 0;
+    if (code === 403) {
+      return NextResponse.json(
+        { error: "Inbox reading is not enabled. Reconnect Gmail with inbox access in Settings → Calendar." },
+        { status: 403 }
+      );
+    }
     console.error("Gmail list failed:", err);
     return NextResponse.json({ error: "Failed to fetch Gmail messages" }, { status: 500 });
   }
@@ -170,7 +194,6 @@ export async function POST() {
         continue;
       }
 
-      // Logical duplicate check: same workspace + classification + dedupeKey + PENDING/APPROVED
       let duplicateOfId: string | null = null;
       if (extracted.dedupeKey) {
         const logicalDup = await prisma.aISuggestion.findFirst({
@@ -178,30 +201,22 @@ export async function POST() {
             workspaceId: workspace.id,
             classification: extracted.classification,
             status: { in: ["PENDING", "APPROVED"] },
-            extractedData: {
-              path: ["dedupeKey"],
-              equals: extracted.dedupeKey,
-            },
+            extractedData: { path: ["dedupeKey"], equals: extracted.dedupeKey },
           },
           orderBy: { createdAt: "asc" },
         });
         if (logicalDup) duplicateOfId = logicalDup.id;
       }
 
-      // Check for matching existing calendar event (CALENDAR_EVENT only)
       const extractedWithWarning: EmailSuggestionResult & { existingEventWarning?: string } = { ...extracted };
       if (extracted.classification === "CALENDAR_EVENT" && !duplicateOfId) {
-        const eventDate    = extracted.event.date;
-        const caseNum      = extracted.case.caseNumber;
+        const eventDate = extracted.event.date;
+        const caseNum   = extracted.case.caseNumber;
         if (eventDate && caseNum) {
           const dayStart = new Date(`${eventDate}T00:00:00`);
           const dayEnd   = new Date(`${eventDate}T23:59:59`);
           const matchingEvent = await prisma.event.findFirst({
-            where: {
-              workspaceId: workspace.id,
-              startTime:   { gte: dayStart, lte: dayEnd },
-              caseRef:     { caseNumber: caseNum },
-            },
+            where: { workspaceId: workspace.id, startTime: { gte: dayStart, lte: dayEnd }, caseRef: { caseNumber: caseNum } },
           });
           if (matchingEvent) {
             extractedWithWarning.existingEventWarning =

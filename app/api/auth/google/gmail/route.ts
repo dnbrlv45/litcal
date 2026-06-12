@@ -23,7 +23,8 @@ export async function GET(request: Request) {
     client_id: clientId,
     redirect_uri: redirectUri,
     response_type: "code",
-    scope: "https://www.googleapis.com/auth/gmail.send",
+    // Both send and readonly so the same token powers email sending and AI Inbox scanning
+    scope: "https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly",
     access_type: "offline",
     prompt: "consent",
     state,
