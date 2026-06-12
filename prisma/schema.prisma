@@ -779,10 +779,47 @@ model DiscoveryExtension {
   @@index([discoveryItemId])
 }
 
-// ─── FUTURE ───────────────────────────────────────────────────────────────────
-// model InboxItem { ... }
-// enum InboxSource { EMAIL DOCUMENT MANUAL }
-// enum InboxStatus { UNREAD PROCESSING PROCESSED ARCHIVED }
+// ─── AI INBOX ─────────────────────────────────────────────────────────────────
+
+model GmailConnection {
+  id              String   @id @default(cuid())
+  workspaceId     String
+  userId          String
+  email           String
+  accessToken     String
+  refreshToken    String
+  lastHistoryId   String?
+  watchExpiration DateTime?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([workspaceId])
+  @@index([userId])
+}
+
+model AISuggestion {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  gmailMessageId String?
+  gmailThreadId  String?
+  sourceHash     String?
+  subject        String?
+  sender         String?
+  receivedAt     DateTime?
+  classification String
+  confidence     Float?
+  extractedData  Json
+  missingFields  Json?
+  duplicateOfId  String?
+  status         String   @default("PENDING")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([workspaceId, gmailMessageId])
+  @@index([workspaceId, status])
+  @@index([workspaceId, classification])
+}
 
 // ─── CASE TIMELINE ────────────────────────────────────────────────────────────
 
