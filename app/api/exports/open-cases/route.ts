@@ -6,12 +6,19 @@ import { buildXlsx } from "@/lib/excel";
 
 export const dynamic = "force-dynamic";
 
-const HEADERS = [
+const HEADERS_ALL = [
   "Plaintiff", "Defendant", "Case Type", "Case Number",
   "County", "Court", "Defense Firm", "Defense Attorney",
   "Date Filed", "Status", "Assigned Attorney", "Assigned Paralegal", "Assigned Assistant",
 ];
-const COL_WIDTHS = [28, 28, 22, 16, 18, 28, 28, 24, 14, 14, 24, 24, 24];
+const COL_WIDTHS_ALL = [28, 28, 22, 16, 18, 28, 28, 24, 14, 14, 24, 24, 24];
+
+const HEADERS_FILTERED = [
+  "Plaintiff", "Defendant", "Case Type", "Case Number",
+  "County", "Court", "Defense Firm", "Defense Attorney",
+  "Date Filed", "Status",
+];
+const COL_WIDTHS_FILTERED = [28, 28, 22, 16, 18, 28, 28, 24, 14, 14];
 
 const CASE_TYPE_LABELS: Record<string, string> = {
   AUTO_ACCIDENT:       "Auto Accident",
@@ -104,11 +111,14 @@ export async function GET(request: NextRequest) {
     };
   });
 
+  const headers = requestedAttorneyId ? HEADERS_FILTERED : HEADERS_ALL;
+  const colWidths = requestedAttorneyId ? COL_WIDTHS_FILTERED : COL_WIDTHS_ALL;
+
   const buffer = await buildXlsx(
     "Open Cases",
-    HEADERS,
+    headers,
     rows,
-    COL_WIDTHS,
+    colWidths,
     (row) => STATUS_ROW_COLORS[row["_status"] ?? ""] ?? null
   );
 
