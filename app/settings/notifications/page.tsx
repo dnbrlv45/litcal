@@ -26,6 +26,7 @@ export default async function NotificationSettingsPage() {
             initialPreferences={{
               taskAssignedEmails: preferences.taskAssignedEmails,
               taskDueEmails: preferences.taskDueEmails,
+              eventReminderEmails: preferences.eventReminderEmails,
               deadlineReminderEmails: preferences.deadlineReminderEmails,
               discoveryReminderEmails: preferences.discoveryReminderEmails,
               remoteAppearanceReminderEmails: preferences.remoteAppearanceReminderEmails,

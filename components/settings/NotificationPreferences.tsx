@@ -5,6 +5,7 @@ import { useState } from "react";
 interface Preferences {
   taskAssignedEmails: boolean;
   taskDueEmails: boolean;
+  eventReminderEmails: boolean;
   deadlineReminderEmails: boolean;
   discoveryReminderEmails: boolean;
   remoteAppearanceReminderEmails: boolean;
@@ -18,6 +19,7 @@ interface Props {
 const PREFS: Array<{ key: keyof Preferences; label: string }> = [
   { key: "taskAssignedEmails", label: "Task Assigned Emails" },
   { key: "taskDueEmails", label: "Task Due Emails" },
+  { key: "eventReminderEmails", label: "Event Reminder Emails" },
   { key: "deadlineReminderEmails", label: "Deadline Reminder Emails" },
   { key: "discoveryReminderEmails", label: "Discovery Reminder Emails" },
   { key: "remoteAppearanceReminderEmails", label: "Remote Appearance Reminder Emails" },

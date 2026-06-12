@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 const PREF_FIELDS = [
   "taskAssignedEmails",
   "taskDueEmails",
+  "eventReminderEmails",
   "deadlineReminderEmails",
   "discoveryReminderEmails",
   "remoteAppearanceReminderEmails",

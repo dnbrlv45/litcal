@@ -5,6 +5,7 @@ import { adjustToBusinessDay, DAY_OF_9AM } from "@/lib/reminders";
 export type EmailNotificationType =
   | "TASK_ASSIGNED"
   | "TASK_DUE"
+  | "EVENT_REMINDER"
   | "DEADLINE_REMINDER"
   | "DISCOVERY_REMINDER"
   | "REMOTE_APPEARANCE_REMINDER"
@@ -13,6 +14,7 @@ export type EmailNotificationType =
 type PreferenceFlag =
   | "taskAssignedEmails"
   | "taskDueEmails"
+  | "eventReminderEmails"
   | "deadlineReminderEmails"
   | "discoveryReminderEmails"
   | "remoteAppearanceReminderEmails"
@@ -21,6 +23,7 @@ type PreferenceFlag =
 const EMAIL_PREF_BY_TYPE: Record<EmailNotificationType, PreferenceFlag> = {
   TASK_ASSIGNED: "taskAssignedEmails",
   TASK_DUE: "taskDueEmails",
+  EVENT_REMINDER: "eventReminderEmails",
   DEADLINE_REMINDER: "deadlineReminderEmails",
   DISCOVERY_REMINDER: "discoveryReminderEmails",
   REMOTE_APPEARANCE_REMINDER: "remoteAppearanceReminderEmails",
@@ -337,8 +340,11 @@ function eventEmailType(event: {
 }): EmailNotificationType | null {
   if (event.discoveryLinked) return "DISCOVERY_REMINDER";
   if (event.eventType === "DEADLINE") return "DEADLINE_REMINDER";
-  if (event.eventType === "TRIAL") return "DEADLINE_REMINDER";
-  if (event.eventType === "CASE_MANAGEMENT_CONFERENCE") return "DEADLINE_REMINDER";
+  // All other scheduled event types get a generic event reminder email
+  if (["HEARING","CONFERENCE","COURT_CALL","CASE_MANAGEMENT_CONFERENCE",
+       "DEPOSITION","TRIAL","MEDIATION","MEETING"].includes(event.eventType)) {
+    return "EVENT_REMINDER";
+  }
   return null;
 }
 
@@ -383,9 +389,42 @@ export async function sendEventReminderEmails(reminderIds: string[]) {
     const reminderKey = reminderKeyFromMinutes(reminder.minutesBefore);
     const caseLabel = event.caseRef ? `${event.caseRef.title}${event.caseRef.caseNumber ? ` (#${event.caseRef.caseNumber})` : ""}` : null;
     const days = daysRemaining(event.startTime);
+
     const subject = emailType === "DISCOVERY_REMINDER"
       ? `Discovery Responses Due — ${event.caseRef?.title ?? event.title}`
-      : `Deadline Approaching — ${event.title}`;
+      : emailType === "EVENT_REMINDER"
+        ? `Upcoming: ${event.title}`
+        : `Deadline Approaching — ${event.title}`;
+
+    const heading = emailType === "DISCOVERY_REMINDER"
+      ? "Discovery Responses Due"
+      : emailType === "EVENT_REMINDER"
+        ? "Upcoming Event"
+        : "Deadline Approaching";
+
+    const fields = emailType === "DISCOVERY_REMINDER"
+      ? [
+          { label: "Case", value: caseLabel },
+          { label: "Discovery Type", value: event.discoveryLinked?.discoveryType?.replaceAll("_", " ") },
+          { label: event.discoveryLinked?.direction === "RECEIVED" ? "Received Date" : "Served Date", value: formatDate(event.discoveryLinked?.servedOrReceivedDate) },
+          { label: "Current Due Date", value: formatDate(event.discoveryLinked?.currentDueDate) },
+          { label: "Extension Count", value: String(event.discoveryLinked?.extensions.length ?? 0) },
+          { label: "Days Remaining", value: `${days}` },
+        ]
+      : emailType === "EVENT_REMINDER"
+        ? [
+            { label: "Case", value: caseLabel },
+            { label: "Event", value: event.title },
+            { label: "Date", value: formatDate(event.startTime) },
+            { label: "Location / Dept", value: event.department ?? event.location },
+          ]
+        : [
+            { label: "Case", value: caseLabel },
+            { label: "Deadline", value: event.title },
+            { label: "Due Date", value: formatDate(event.startTime) },
+            { label: "Days Remaining", value: `${days}` },
+            { label: "Generated Source", value: event.generatedDeadline?.triggerEvent.title },
+          ];
 
     for (const recipient of recipients) {
       const result = await sendLoggedLitCalEmail({
@@ -398,23 +437,8 @@ export async function sendEventReminderEmails(reminderIds: string[]) {
         reminderKey,
         subject,
         preview: subject,
-        heading: emailType === "DISCOVERY_REMINDER" ? "Discovery Responses Due" : "Deadline Approaching",
-        fields: emailType === "DISCOVERY_REMINDER"
-          ? [
-              { label: "Case", value: caseLabel },
-              { label: "Discovery Type", value: event.discoveryLinked?.discoveryType?.replaceAll("_", " ") },
-              { label: event.discoveryLinked?.direction === "RECEIVED" ? "Received Date" : "Served Date", value: formatDate(event.discoveryLinked?.servedOrReceivedDate) },
-              { label: "Current Due Date", value: formatDate(event.discoveryLinked?.currentDueDate) },
-              { label: "Extension Count", value: String(event.discoveryLinked?.extensions.length ?? 0) },
-              { label: "Days Remaining", value: `${days}` },
-            ]
-          : [
-              { label: "Case", value: caseLabel },
-              { label: "Deadline", value: event.title },
-              { label: "Due Date", value: formatDate(event.startTime) },
-              { label: "Days Remaining", value: `${days}` },
-              { label: "Generated Source", value: event.generatedDeadline?.triggerEvent.title },
-            ],
+        heading,
+        fields,
         actionLabel: "Open in LitCal",
         actionPath: event.caseId ? `/cases/${event.caseId}` : "/",
       });

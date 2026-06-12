@@ -533,6 +533,7 @@ model UserNotificationPreference {
   userId                          String   @unique
   taskAssignedEmails              Boolean  @default(true)
   taskDueEmails                   Boolean  @default(true)
+  eventReminderEmails             Boolean  @default(true)
   deadlineReminderEmails          Boolean  @default(true)
   discoveryReminderEmails         Boolean  @default(true)
   remoteAppearanceReminderEmails  Boolean  @default(true)
