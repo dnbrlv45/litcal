@@ -306,6 +306,8 @@ export default function AIInboxClient() {
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [scanError, setScanError]   = useState<string | null>(null);
+  const [watchStatus, setWatchStatus] = useState<{ healthy: boolean; watchExpiration: string | null } | null>(null);
+  const [registeringWatch, setRegisteringWatch] = useState(false);
 
   const fetchConnection = useCallback(async () => {
     setConnInfo({ state: "loading" });
@@ -324,6 +326,30 @@ export default function AIInboxClient() {
 
   useEffect(() => { void fetchConnection(); }, [fetchConnection]);
   useEffect(() => { void fetchSuggestions(); }, [fetchSuggestions]);
+
+  useEffect(() => {
+    fetch("/api/ai-inbox/watch-status")
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setWatchStatus(d as { healthy: boolean; watchExpiration: string | null } | null))
+      .catch(() => null);
+  }, []);
+
+  async function handleRegisterWatch() {
+    setRegisteringWatch(true);
+    try {
+      const res = await fetch("/api/ai-inbox/setup-watch", { method: "POST" });
+      const json = await res.json() as { ok?: boolean; watchExpiration?: string; error?: string };
+      if (json.ok) {
+        setWatchStatus({ healthy: true, watchExpiration: json.watchExpiration ?? null });
+        alert(`Gmail watch registered! Expires: ${json.watchExpiration ?? "unknown"}`);
+      } else {
+        alert(`Failed: ${json.error ?? "unknown error"}`);
+      }
+    } catch {
+      alert("Request failed — check console");
+    }
+    setRegisteringWatch(false);
+  }
 
   async function handleScan() {
     setScanning(true);
@@ -380,6 +406,30 @@ export default function AIInboxClient() {
         )}
         {scanError && (
           <p className="mt-2 text-sm text-red-700 bg-red-50 rounded-lg px-3 py-2">{scanError}</p>
+        )}
+
+        {watchStatus && !watchStatus.healthy && (
+          <div className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-orange-50 border border-orange-200 px-4 py-2.5 text-xs text-orange-800">
+            <span>
+              <PlugZap className="inline size-3.5 mr-1.5 -mt-0.5" />
+              Gmail push notifications are not active. Register the watch so new emails are processed automatically.
+            </span>
+            <button
+              onClick={() => void handleRegisterWatch()}
+              disabled={registeringWatch}
+              className="shrink-0 flex items-center gap-1.5 rounded-md bg-orange-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-700 disabled:opacity-50"
+            >
+              {registeringWatch ? <Loader2 className="size-3 animate-spin" /> : <RefreshCw className="size-3" />}
+              {registeringWatch ? "Registering…" : "Register Watch"}
+            </button>
+          </div>
+        )}
+
+        {watchStatus?.healthy && watchStatus.watchExpiration && (
+          <div className="mt-2 rounded-lg bg-teal-50 border border-teal-200 px-4 py-2 text-xs text-teal-700">
+            <CheckCircle2 className="inline size-3.5 mr-1.5 -mt-0.5" />
+            Gmail push active · expires {new Date(watchStatus.watchExpiration).toLocaleDateString()}
+          </div>
         )}
 
         <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 px-4 py-2.5 text-xs text-amber-800">
