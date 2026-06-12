@@ -45,7 +45,7 @@ export default function ExportsPanel({ isAdmin, attorneys }: Props) {
     setCalLoading(true);
     setCalError(null);
     try {
-      const params = new URLSearchParams({ start: calStart, end: calEnd });
+      const params = new URLSearchParams({ start: calStart, end: calEnd, tz: Intl.DateTimeFormat().resolvedOptions().timeZone });
       if (calAttorney) params.set("attorneyId", calAttorney);
       const res = await fetch(`/api/exports/weekly-calendar?${params}`);
       if (!res.ok) throw new Error(await res.text());

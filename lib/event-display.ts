@@ -37,22 +37,22 @@ export function getEventDisplayName(event: {
 }
 
 /** Format a Date as "M/D/YYYY" for CSV output. */
-export function formatCsvDate(date: Date): string {
+export function formatCsvDate(date: Date, timeZone = "UTC"): string {
   return date.toLocaleDateString("en-US", {
     month: "numeric",
     day: "numeric",
     year: "numeric",
-    timeZone: "UTC",
+    timeZone,
   });
 }
 
 /** Format a Date as "h:mm AM/PM" for CSV output, or "All Day". */
-export function formatCsvTime(date: Date, allDay: boolean): string {
+export function formatCsvTime(date: Date, allDay: boolean, timeZone = "UTC"): string {
   if (allDay) return "All Day";
   return date.toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
-    timeZone: "UTC",
+    timeZone,
   });
 }
 

@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid date range" }, { status: 400 });
   }
 
+  const tz = url.searchParams.get("tz") ?? "UTC";
   let requestedAttorneyId = url.searchParams.get("attorneyId") ?? null;
   const isAdmin = canManageWorkspace(membership.role);
   if (!isAdmin) requestedAttorneyId = currentUser.id;
@@ -55,8 +56,8 @@ export async function GET(request: NextRequest) {
       subtypeReason:            ev.subtypeReason,
       generatedDeadlineRuleKey: ev.generatedDeadline?.ruleKey,
     }),
-    Date:        formatCsvDate(ev.startTime),
-    Time:        formatCsvTime(ev.startTime, ev.allDay),
+    Date:        formatCsvDate(ev.startTime, tz),
+    Time:        formatCsvTime(ev.startTime, ev.allDay, tz),
     "Case Name": ev.caseRef?.title ?? "",
     Attorney:    ev.assignedAttorney
       ? [ev.assignedAttorney.firstName, ev.assignedAttorney.lastName].filter(Boolean).join(" ")
