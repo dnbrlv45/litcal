@@ -16,7 +16,8 @@ export async function buildXlsx(
   sheetName: string,
   headers: string[],
   rows: Record<string, string | null | undefined>[],
-  colWidths?: number[]
+  colWidths?: number[],
+  rowBgColor?: (row: Record<string, string | null | undefined>, index: number) => string | null
 ): Promise<Blob> {
   const wb = new ExcelJS.Workbook();
   wb.creator = "LitCal";
@@ -49,12 +50,14 @@ export async function buildXlsx(
   rows.forEach((rowData, index) => {
     const row = ws.addRow(headers.map((h) => rowData[h] ?? ""));
     row.height = 18;
+    const customBg = rowBgColor?.(rowData, index);
     const isAlt = index % 2 === 1;
     row.eachCell((cell) => {
       cell.font = { size: 11, name: "Calibri" };
       cell.alignment = { vertical: "middle", horizontal: "left" };
-      if (isAlt) {
-        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: ALT_ROW_BG } };
+      const bg = customBg ?? (isAlt ? ALT_ROW_BG : null);
+      if (bg) {
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bg } };
       }
       cell.border = {
         bottom: { style: "thin", color: { argb: BORDER_COLOR } },

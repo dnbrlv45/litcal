@@ -73,6 +73,7 @@ interface CaseData {
   countyRef: { id: string; name: string } | null;
   courtRef: { id: string; name: string } | null;
   description: string | null; filingDate: string | null;
+  parties: { name: string; role: string }[];
   defendant: string | null; defenseFirm: string | null; defenseAttorney: string | null;
   staff: CaseStaffRow[];
   events: CaseEvent[];
@@ -109,6 +110,8 @@ export default function CaseDetailClient({ id }: { id: string }) {
   const [editCourtName, setEditCourtName] = useState("");
   const [editJudge, setEditJudge] = useState("");
   const [editDescription, setEditDescription] = useState("");
+  const [editPlaintiff, setEditPlaintiff] = useState("");
+  const [editFilingDate, setEditFilingDate] = useState("");
   const [editDefendant, setEditDefendant] = useState("");
   const [editDefenseFirm, setEditDefenseFirm] = useState("");
   const [editDefenseAttorney, setEditDefenseAttorney] = useState("");
@@ -192,6 +195,8 @@ export default function CaseDetailClient({ id }: { id: string }) {
     setEditCourtName(caseData.courtRef?.name ?? caseData.court ?? "");
     setEditJudge(caseData.judge ?? "");
     setEditDescription(caseData.description ?? "");
+    setEditPlaintiff(caseData.parties.filter((p) => p.role === "PLAINTIFF").map((p) => p.name).join("; "));
+    setEditFilingDate(caseData.filingDate ? caseData.filingDate.slice(0, 10) : "");
     setEditDefendant(caseData.defendant ?? "");
     setEditDefenseFirm(caseData.defenseFirm ?? "");
     setEditDefenseAttorney(caseData.defenseAttorney ?? "");
@@ -210,6 +215,8 @@ export default function CaseDetailClient({ id }: { id: string }) {
           title: editTitle, caseNumber: editCaseNumber, status: editStatus,
           countyName: editCountyName || null, courtName: editCourtName || null, judge: editJudge,
           description: editDescription,
+          plaintiff: editPlaintiff || null,
+          filingDate: editFilingDate || null,
           defendant: editDefendant, defenseFirm: editDefenseFirm, defenseAttorney: editDefenseAttorney,
         }),
       });
@@ -444,12 +451,14 @@ export default function CaseDetailClient({ id }: { id: string }) {
                 <Input value={editCaseNumber} onChange={(e) => setEditCaseNumber(e.target.value)} placeholder="e.g. 24-CV-01234" />
               </div>
             )}
-            {caseData.filingDate && (
-              <Field label="Filed" editing={false}
-                display={new Date(caseData.filingDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
-                input={null}
-              />
-            )}
+            <Field label="Plaintiff" editing={editing}
+              display={caseData.parties.filter((p) => p.role === "PLAINTIFF").map((p) => p.name).join("; ") || null}
+              input={<Input value={editPlaintiff} onChange={(e) => setEditPlaintiff(e.target.value)} placeholder="e.g. Jane Garcia; John Garcia" />}
+            />
+            <Field label="Filed" editing={editing}
+              display={caseData.filingDate ? new Date(caseData.filingDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : null}
+              input={<input type="date" value={editFilingDate} onChange={(e) => setEditFilingDate(e.target.value)} className={select} />}
+            />
           </div>
 
           {/* Defense */}

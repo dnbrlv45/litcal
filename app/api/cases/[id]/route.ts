@@ -64,6 +64,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     description?: string;
     filingDate?: string | null;
     closedDate?: string | null;
+    plaintiff?: string | null;
     defendant?: string;
     defenseFirm?: string;
     defenseAttorney?: string;
@@ -196,6 +197,17 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       await prisma.event.updateMany({
         where: { caseId: id },
         data: { assignedAttorneyId: addedAttorneys[0].userId },
+      });
+    }
+  }
+
+  // Replace plaintiff parties if provided
+  if (body.plaintiff !== undefined) {
+    await prisma.caseParty.deleteMany({ where: { caseId: id, role: "PLAINTIFF" } });
+    const names = (body.plaintiff ?? "").split(";").map((n) => n.trim()).filter(Boolean);
+    if (names.length > 0) {
+      await prisma.caseParty.createMany({
+        data: names.map((name) => ({ caseId: id, name, role: "PLAINTIFF" as never })),
       });
     }
   }

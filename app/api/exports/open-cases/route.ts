@@ -9,9 +9,9 @@ export const dynamic = "force-dynamic";
 const HEADERS = [
   "Plaintiff", "Defendant", "Case Type", "Case Number",
   "County", "Court", "Defense Firm", "Defense Attorney",
-  "Date Filed", "Assigned Attorney", "Assigned Paralegal", "Assigned Assistant",
+  "Date Filed", "Status", "Assigned Attorney", "Assigned Paralegal", "Assigned Assistant",
 ];
-const COL_WIDTHS = [28, 28, 22, 16, 18, 28, 28, 24, 14, 24, 24, 24];
+const COL_WIDTHS = [28, 28, 22, 16, 18, 28, 28, 24, 14, 14, 24, 24, 24];
 
 const CASE_TYPE_LABELS: Record<string, string> = {
   AUTO_ACCIDENT:       "Auto Accident",
@@ -23,6 +23,21 @@ const CASE_TYPE_LABELS: Record<string, string> = {
   WRONGFUL_DEATH:      "Wrongful Death",
   PRODUCT_LIABILITY:   "Product Liability",
   OTHER:               "Other",
+};
+
+// ARGB background colors for each status (no leading #)
+const STATUS_ROW_COLORS: Record<string, string> = {
+  ACTIVE:   "E2EFDA", // light green
+  PENDING:  "FFF2CC", // light yellow
+  CLOSED:   "F2F2F2", // light gray
+  ARCHIVED: "DCDCDC", // medium gray
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  ACTIVE:   "Active",
+  PENDING:  "Pending",
+  CLOSED:   "Closed",
+  ARCHIVED: "Archived",
 };
 
 export async function GET(request: NextRequest) {
@@ -81,13 +96,21 @@ export async function GET(request: NextRequest) {
       "Date Filed":         c.filingDate
         ? c.filingDate.toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric", timeZone: "UTC" })
         : "",
+      Status:               STATUS_LABELS[c.status] ?? c.status,
       "Assigned Attorney":  staffNames("ATTORNEY"),
       "Assigned Paralegal": staffNames("PARALEGAL"),
       "Assigned Assistant": staffNames("ASSISTANT"),
+      _status:              c.status, // internal — used for row coloring, not written to sheet
     };
   });
 
-  const buffer = await buildXlsx("Open Cases", HEADERS, rows, COL_WIDTHS);
+  const buffer = await buildXlsx(
+    "Open Cases",
+    HEADERS,
+    rows,
+    COL_WIDTHS,
+    (row) => STATUS_ROW_COLORS[row["_status"] ?? ""] ?? null
+  );
 
   const today = new Date().toISOString().slice(0, 10);
   let filename: string;

@@ -80,6 +80,7 @@ export async function POST(request: NextRequest) {
     judge?: string;
     description?: string;
     filingDate?: string;
+    plaintiff?: string;
     defendant?: string;
     defenseFirm?: string;
     defenseAttorney?: string;
@@ -125,6 +126,14 @@ export async function POST(request: NextRequest) {
       defenseFirm: body.defenseFirm?.trim() || null,
       defenseAttorney: body.defenseAttorney?.trim() || null,
       staff: staffRows.length > 0 ? { create: staffRows.map(({ id: _id, ...r }) => r) } : undefined,
+      parties: body.plaintiff?.trim()
+        ? {
+            create: body.plaintiff.split(";").map((n) => n.trim()).filter(Boolean).map((name) => ({
+              name,
+              role: "PLAINTIFF" as const,
+            })),
+          }
+        : undefined,
     },
     include: {
       parties: true,
