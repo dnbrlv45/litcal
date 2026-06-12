@@ -233,6 +233,7 @@ export async function PATCH(
               ? [updated.assignedAttorney.firstName, updated.assignedAttorney.lastName].filter(Boolean).join(" ") || null
               : null,
           });
+          const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
           await patchGoogleEvent(
             accessToken,
             updated.googleSync.googleCalendarId,
@@ -242,6 +243,14 @@ export async function PATCH(
               description: googlePayload.description,
               location: googlePayload.location,
               colorId: googlePayload.colorId,
+              ...(isDateChanging && {
+                start: updated.allDay
+                  ? { date: newStart.toISOString().slice(0, 10) }
+                  : { dateTime: newStart.toISOString(), timeZone },
+                end: updated.allDay
+                  ? { date: newEnd.toISOString().slice(0, 10) }
+                  : { dateTime: newEnd.toISOString(), timeZone },
+              }),
             }
           );
           if (updated.caseId && workspace) {

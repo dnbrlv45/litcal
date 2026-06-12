@@ -184,7 +184,14 @@ export async function patchGoogleEvent(
   accessToken: string,
   calendarId: string,
   googleEventId: string,
-  patch: { summary?: string; description?: string; location?: string; colorId?: number }
+  patch: {
+    summary?: string;
+    description?: string;
+    location?: string;
+    colorId?: number;
+    start?: { dateTime?: string; date?: string; timeZone?: string };
+    end?: { dateTime?: string; date?: string; timeZone?: string };
+  }
 ): Promise<void> {
   const res = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(googleEventId)}`,
@@ -199,6 +206,8 @@ export async function patchGoogleEvent(
         ...(patch.description !== undefined && { description: patch.description }),
         ...(patch.location    !== undefined && { location: patch.location }),
         ...(patch.colorId     !== undefined && { colorId: String(patch.colorId) }),
+        ...(patch.start       !== undefined && { start: patch.start }),
+        ...(patch.end         !== undefined && { end: patch.end }),
       }),
     }
   );
