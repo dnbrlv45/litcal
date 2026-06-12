@@ -113,8 +113,13 @@ export async function extractEmailSuggestion(params: {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
 
+  const MODELS = [
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-2.0-flash",
+  ];
+
   const genai = new GoogleGenerativeAI(apiKey);
-  const model = genai.getGenerativeModel({ model: "gemini-2.5-flash" });
 
   const body = params.bodyText.slice(0, MAX_BODY_CHARS);
   const attachments = params.attachmentTexts
@@ -129,22 +134,44 @@ ${body}
 
 ${attachments ? `Attachments:\n${attachments}` : ""}`;
 
-  const result = await model.generateContent([PROMPT_TEMPLATE, userContent]);
-  const raw = result.response.text().trim();
+  let lastError: Error = new Error("All Gemini models failed");
 
-  const jsonMatch = raw.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error("Gemini returned no JSON");
+  for (const modelName of MODELS) {
+    try {
+      const model = genai.getGenerativeModel({ model: modelName });
+      const result = await model.generateContent([PROMPT_TEMPLATE, userContent]);
+      const raw = result.response.text().trim();
 
-  let parsed: EmailSuggestionResult;
-  try {
-    parsed = JSON.parse(jsonMatch[0]);
-  } catch {
-    throw new Error(`Gemini returned invalid JSON: ${raw.slice(0, 200)}`);
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error("Gemini returned no JSON");
+
+      let parsed: EmailSuggestionResult;
+      try {
+        parsed = JSON.parse(jsonMatch[0]);
+      } catch {
+        throw new Error(`Gemini returned invalid JSON: ${raw.slice(0, 200)}`);
+      }
+
+      if (!VALID_CLASSIFICATIONS.includes(parsed.classification as AIClassification)) {
+        throw new Error(`Gemini returned invalid classification: ${parsed.classification}`);
+      }
+
+      return parsed;
+    } catch (err: unknown) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      const isRateLimit =
+        lastError.message.includes("429") ||
+        lastError.message.toLowerCase().includes("quota") ||
+        lastError.message.toLowerCase().includes("rate");
+
+      if (isRateLimit) {
+        console.warn(`Gemini model ${modelName} rate limited, trying next fallback`);
+        continue;
+      }
+      // Non-rate-limit error — don't try fallbacks
+      throw lastError;
+    }
   }
 
-  if (!VALID_CLASSIFICATIONS.includes(parsed.classification as AIClassification)) {
-    throw new Error(`Gemini returned invalid classification: ${parsed.classification}`);
-  }
-
-  return parsed;
+  throw lastError;
 }
