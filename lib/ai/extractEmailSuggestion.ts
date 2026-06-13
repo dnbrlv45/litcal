@@ -42,7 +42,11 @@ const PROMPT_TEMPLATE = `You are reviewing litigation emails for a California pe
 
 Analyze the email subject, sender, body, and ALL attachment text carefully.
 
-Return a JSON ARRAY — one object per distinct finding. Most emails produce one item, but if an email contains BOTH a calendar event AND discovery documents, return two items.
+Return a JSON ARRAY — one object per distinct finding. Rules for how many items:
+- If an email contains a deposition notice (scheduled date/time), return a CALENDAR_EVENT item for the deposition date.
+- If the same email ALSO contains discovery documents (interrogatories, requests for production, requests for admission), return a SEPARATE DISCOVERY item for EACH distinct discovery document type served.
+- Do NOT collapse a deposition notice + discovery documents into one item. They must be separate.
+- A single email with a deposition notice + form interrogatories + special interrogatories + RFP should produce 4 items: 1 CALENDAR_EVENT + 3 DISCOVERY.
 
 Each item must have this exact structure:
 {
