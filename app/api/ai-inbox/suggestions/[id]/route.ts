@@ -238,7 +238,12 @@ export async function PATCH(
             error: "No active discovery item found for this case. No changes made.",
           }, { status: 422 });
         }
-        const newDue = new Date(ext.newDate);
+        const rawNewDue = new Date(ext.newDate);
+        const newDueDow = rawNewDue.getUTCDay();
+        const newDueDaysToMonday = newDueDow === 6 ? 2 : newDueDow === 0 ? 1 : 0;
+        const newDue = newDueDaysToMonday > 0
+          ? new Date(rawNewDue.getTime() + newDueDaysToMonday * 24 * 60 * 60 * 1000)
+          : rawNewDue;
         const extCount = await prisma.discoveryExtension.count({
           where: { discoveryItemId: discoveryItem.id },
         });
