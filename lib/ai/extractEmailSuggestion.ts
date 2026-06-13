@@ -33,8 +33,8 @@ export interface EmailSuggestionResult {
   };
   discoveryExtension: {
     newDate: string | null;
-    mutual: boolean;
-    appliesTo: "OUR_DEADLINE" | "THEIR_DEADLINE" | "BOTH" | null;
+    mutual: boolean | null;
+    appliesTo: "OUR_DEADLINE" | "OPPOSING_DEADLINE" | "BOTH" | null;
   };
   missingFields: string[];
   dedupeKey: string;
@@ -119,7 +119,7 @@ If it matches one of the above, return this JSON object:
   "discoveryExtension": {
     "newDate": null,    // YYYY-MM-DD, only for DISCOVERY_EXTENSION
     "mutual": false,    // true if both sides get the extension, false if only one side
-    "appliesTo": null   // "OUR_DEADLINE", "THEIR_DEADLINE", or "BOTH" — if mutual set "BOTH"
+    "appliesTo": null   // "OUR_DEADLINE", "OPPOSING_DEADLINE", or "BOTH" — if mutual set "BOTH"
   },
   "missingFields": [],
   "dedupeKey": ""
@@ -133,7 +133,7 @@ const EMPTY_RESULT: Omit<EmailSuggestionResult, "classification" | "confidence" 
   case: { plaintiff: null, defendant: null, caseNumber: null, county: null, court: null, caseType: null, defenseFirm: null, defenseAttorney: null, dateFiled: null },
   event: { eventType: null, title: null, date: null, startTime: null, endTime: null, description: null, location: null },
   discovery: { discoveryType: null, direction: null, servedOrReceivedDate: null, responseDueDate: null },
-  discoveryExtension: { newDate: null },
+  discoveryExtension: { newDate: null, mutual: null, appliesTo: null },
   missingFields: [],
 };
 

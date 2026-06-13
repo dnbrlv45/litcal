@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCurrentWorkspace } from "@/lib/workspaces";
 import { Prisma } from "@prisma/client";
+import { createDiscoveryItem, grantDiscoveryExtension } from "@/lib/discovery";
 
 export async function PATCH(
   request: NextRequest,
@@ -38,7 +39,7 @@ export async function PATCH(
       case?: Record<string, string | null>;
       event?: Record<string, string | null>;
       discovery?: Record<string, string | null>;
-      discoveryExtension?: Record<string, string | null>;
+      discoveryExtension?: Record<string, string | boolean | null>;
     };
     const classification = suggestion.classification;
 
@@ -186,31 +187,14 @@ export async function PATCH(
       }
 
       const servedDate = disc.servedOrReceivedDate ? new Date(disc.servedOrReceivedDate) : new Date();
-      const rawDueDate = disc.responseDueDate
-        ? new Date(disc.responseDueDate)
-        : new Date(servedDate.getTime() + 30 * 24 * 60 * 60 * 1000);
-      // Advance to Monday if due date falls on a weekend
-      const dow = rawDueDate.getUTCDay();
-      const daysToMonday = dow === 6 ? 2 : dow === 0 ? 1 : 0;
-      const dueDate = daysToMonday > 0
-        ? new Date(rawDueDate.getTime() + daysToMonday * 24 * 60 * 60 * 1000)
-        : rawDueDate;
-
       const direction = disc.direction === "SERVED" ? "SERVED" : "RECEIVED";
-      const discoveryType = mapDiscoveryType(disc.discoveryType);
 
-      await prisma.discoveryItem.create({
-        data: {
-          caseId:              matchingCase.id,
-          workspaceId:         workspace.id,
-          createdBy:           user.id,
-          discoveryType,
-          direction,
-          servedOrReceivedDate: servedDate,
-          originalDueDate:      dueDate,
-          currentDueDate:       dueDate,
-          status:               "AWAITING_RESPONSE",
-        },
+      await createDiscoveryItem({
+        caseId:              matchingCase.id,
+        workspaceId:         workspace.id,
+        createdBy:           user.id,
+        direction,
+        servedOrReceivedDate: servedDate,
       });
     }
 
@@ -230,60 +214,37 @@ export async function PATCH(
           }, { status: 422 });
         }
 
-        const rawNewDue = new Date(ext.newDate);
+        const rawNewDue = new Date(ext.newDate as string);
         const newDueDow = rawNewDue.getUTCDay();
         const newDueDaysToMonday = newDueDow === 6 ? 2 : newDueDow === 0 ? 1 : 0;
         const newDue = newDueDaysToMonday > 0
           ? new Date(rawNewDue.getTime() + newDueDaysToMonday * 24 * 60 * 60 * 1000)
           : rawNewDue;
 
-        const mutual = ext.mutual === true;
+        const mutual = ext.mutual === true || ext.mutual === "true";
         const appliesTo = (ext.appliesTo as string) === "BOTH" ? "BOTH"
-          : (ext.appliesTo as string) === "THEIR_DEADLINE" ? "THEIR_DEADLINE"
+          : (ext.appliesTo as string) === "OPPOSING_DEADLINE" ? "OPPOSING_DEADLINE"
           : "OUR_DEADLINE";
 
-        // Determine which directions to update
-        const directions: ("RECEIVED" | "SERVED")[] = appliesTo === "BOTH"
-          ? ["RECEIVED", "SERVED"]
-          : appliesTo === "THEIR_DEADLINE"
-            ? ["SERVED"]
-            : ["RECEIVED"];
-
-        const discoveryItems = await prisma.discoveryItem.findMany({
-          where: {
-            caseId: matchingCase.id,
-            status: { notIn: ["COMPLETED"] },
-            direction: { in: directions },
-          },
+        const primaryItem = await prisma.discoveryItem.findFirst({
+          where: { caseId: matchingCase.id, status: { notIn: ["COMPLETED"] } },
+          orderBy: { updatedAt: "desc" },
         });
 
-        if (discoveryItems.length === 0) {
+        if (!primaryItem) {
           return NextResponse.json({
             error: "No active discovery item found for this case. No changes made.",
           }, { status: 422 });
         }
 
-        for (const item of discoveryItems) {
-          const extCount = await prisma.discoveryExtension.count({
-            where: { discoveryItemId: item.id },
-          });
-          await prisma.discoveryExtension.create({
-            data: {
-              discoveryItemId: item.id,
-              extensionNumber: extCount + 1,
-              grantedDate:     new Date(),
-              previousDueDate: item.currentDueDate,
-              newDueDate:      newDue,
-              mutual,
-              appliesTo,
-              createdBy:       user.id,
-            },
-          });
-          await prisma.discoveryItem.update({
-            where: { id: item.id },
-            data: { currentDueDate: newDue, status: "EXTENSION_GRANTED" },
-          });
-        }
+        await grantDiscoveryExtension({
+          discoveryItemId: primaryItem.id,
+          grantedDate:     new Date(),
+          newDueDate:      newDue,
+          mutual,
+          appliesTo,
+          createdBy:       user.id,
+        });
       }
     }
 
