@@ -38,104 +38,126 @@ export interface EmailSuggestionResult {
   dedupeKey: string;
 }
 
-const PROMPT_TEMPLATE = `You are reviewing litigation emails for a California personal injury law firm.
+const CASE_SCHEMA = `"case": {
+  "plaintiff": null,      // injured party, before "v." or labeled Plaintiff
+  "defendant": null,      // after "v." or labeled Defendant
+  "caseNumber": null,     // e.g. 25NVVCV03295
+  "county": null,
+  "court": null,          // full name e.g. "Los Angeles Superior Court"
+  "caseType": null,
+  "defenseFirm": null,
+  "defenseAttorney": null,
+  "dateFiled": null       // date complaint filed — NOT a hearing date, YYYY-MM-DD
+}`;
 
-Analyze the email subject, sender, body, and ALL attachment text carefully.
+const CALENDAR_PROMPT = `You are a California litigation assistant. Extract calendar events from this email.
 
-Return a JSON ARRAY — one object per distinct finding. Follow these rules exactly:
+Look for: depositions, hearings, trials, CMC, MSC, IME, mediations, or any scheduled court date in the email body or attachments.
 
-STEP 1 — Check for a scheduled event: If any attachment is a deposition notice, hearing notice, or trial notice with a DATE and TIME, add one CALENDAR_EVENT item.
-
-STEP 2 — Check for discovery documents SEPARATELY: Scan every attachment. If ANY attachment is form interrogatories, special interrogatories, requests for production, or requests for admission (even if the same email also has a deposition notice), add ONE DISCOVERY item covering all of them combined. Use the date from the proof of service as servedOrReceivedDate. Calculate responseDueDate as 30 days later.
-
-STEP 3 — If BOTH steps produced an item, return an array of 2. Do not merge them into one.
-
-Example: An email with [deposition notice, form interrogatories, special interrogatories, RFP] → return exactly [{CALENDAR_EVENT for deposition date}, {DISCOVERY for the interrogatories/RFP}].
-
-Each item must have this exact structure:
+If a scheduled event is found, return this JSON object (not an array):
 {
-  "classification": "",
-  "confidence": 0,
-  "case": {
-    "plaintiff": null,
-    "defendant": null,
-    "caseNumber": null,
-    "county": null,
-    "court": null,
-    "caseType": null,
-    "defenseFirm": null,
-    "defenseAttorney": null,
-    "dateFiled": null
-  },
+  "found": true,
+  "classification": "CALENDAR_EVENT",
+  "confidence": 0.95,
+  ${CASE_SCHEMA},
   "event": {
-    "eventType": null,
+    "eventType": null,   // DEPOSITION, HEARING, TRIAL, CONFERENCE, MEDIATION, DEADLINE, OTHER
     "title": null,
-    "date": null,
-    "startTime": null,
+    "date": null,        // YYYY-MM-DD
+    "startTime": null,   // HH:MM 24-hour (convert "10:00 a.m." → "10:00", "2:30 p.m." → "14:30")
     "endTime": null,
     "description": null,
     "location": null
   },
+  "missingFields": [],
+  "dedupeKey": ""        // caseNumber|eventType|date|startTime
+}
+
+If NO scheduled event is found, return: {"found": false}
+
+Return JSON only. No explanation.`;
+
+const DISCOVERY_PROMPT = `You are a California litigation assistant. Extract discovery documents from this email.
+
+Look for: form interrogatories, special interrogatories, requests for production of documents, requests for admission. These are discovery documents served between parties — NOT a deposition notice (that is a calendar event, not discovery).
+
+If discovery documents are found, return this JSON object (not an array):
+{
+  "found": true,
+  "classification": "DISCOVERY",
+  "confidence": 0.95,
+  ${CASE_SCHEMA},
   "discovery": {
-    "discoveryType": null,
-    "direction": null,
-    "servedOrReceivedDate": null,
-    "responseDueDate": null
+    "discoveryType": null,         // FORM_INTERROGATORIES, SPECIAL_INTERROGATORIES, REQUESTS_FOR_PRODUCTION, REQUESTS_FOR_ADMISSION, OTHER — use the primary type if multiple
+    "direction": null,             // RECEIVED (opposing counsel sent to us) or SERVED (we sent to them)
+    "servedOrReceivedDate": null,  // from proof of service, YYYY-MM-DD
+    "responseDueDate": null        // 30 days after servedOrReceivedDate per CCP §2030.260, YYYY-MM-DD
   },
+  "missingFields": [],
+  "dedupeKey": ""   // caseNumber|DISCOVERY|direction|servedOrReceivedDate
+}
+
+If NO discovery documents are found, return: {"found": false}
+
+Return JSON only. No explanation.`;
+
+const GENERAL_PROMPT = `You are a California litigation assistant. Classify this email.
+
+Determine if it contains:
+- DISCOVERY_EXTENSION: an email granting an extension for a discovery response deadline
+- NEW_CASE: a new lawsuit, complaint, summons, or new case filing
+- IGNORE: nothing that needs to be calendared or tracked
+
+If it matches one of the above, return this JSON object:
+{
+  "found": true,
+  "classification": "DISCOVERY_EXTENSION" | "NEW_CASE" | "IGNORE",
+  "confidence": 0.9,
+  ${CASE_SCHEMA},
   "discoveryExtension": {
-    "newDate": null
+    "newDate": null   // YYYY-MM-DD, only for DISCOVERY_EXTENSION
   },
   "missingFields": [],
   "dedupeKey": ""
 }
 
-Classification rules — pick ONE per item:
-- CALENDAR_EVENT: email or attachment contains a hearing, deposition, trial, CMC, MSC, IME, mediation, conference, or any scheduled court date
-- DISCOVERY: email or attachment contains discovery documents served or received (interrogatories, requests for production, requests for admission, deposition notice as a served document)
-- DISCOVERY_EXTENSION: email grants an extension for discovery response deadline
-- NEW_CASE: email contains a new lawsuit, complaint, summons, or new case filing
-- IGNORE: nothing needs to be calendared or tracked
+If none of the above apply (e.g. it's a calendar event or discovery — those are handled separately), return: {"found": false}
 
-IMPORTANT — Date and time extraction from attachments:
-* Deposition notices contain the deposition date and time — look in attachment text for phrases like "the deposition of", "will be taken on", "scheduled for", followed by a date and time. Extract these exactly.
-* Times are often written as "10:00 a.m.", "2:30 p.m." — convert to 24-hour HH:MM format (10:00, 14:30).
-* All dates must be in YYYY-MM-DD format.
-* If the date or time is in an attachment, it is still there — search thoroughly before returning null.
-* Only return null for date/startTime if you truly cannot find it anywhere in the email or attachments.
+Return JSON only. No explanation.`;
 
-Case extraction rules:
-* plaintiff: the injured party — look before "v." or "vs." or labeled "Plaintiff"
-* defendant: look after "v." or "vs." or labeled "Defendant"
-* caseNumber: look for "Case No.", numbers like 24STCV01234 near a court name
-* court: full name e.g. "Los Angeles Superior Court"
-* county: derive from court name if not stated
-* dateFiled: date complaint was filed — NOT a hearing date
+const EMPTY_RESULT: Omit<EmailSuggestionResult, "classification" | "confidence" | "dedupeKey"> = {
+  case: { plaintiff: null, defendant: null, caseNumber: null, county: null, court: null, caseType: null, defenseFirm: null, defenseAttorney: null, dateFiled: null },
+  event: { eventType: null, title: null, date: null, startTime: null, endTime: null, description: null, location: null },
+  discovery: { discoveryType: null, direction: null, servedOrReceivedDate: null, responseDueDate: null },
+  discoveryExtension: { newDate: null },
+  missingFields: [],
+};
 
-Discovery extraction rules (for DISCOVERY items):
-* discoveryType: one of FORM_INTERROGATORIES, SPECIAL_INTERROGATORIES, REQUESTS_FOR_PRODUCTION, REQUESTS_FOR_ADMISSION, DEPOSITION_NOTICE, OTHER
-* direction: RECEIVED (opposing counsel sent it to us) or SERVED (we sent it to them)
-* servedOrReceivedDate: date the discovery was served or received — YYYY-MM-DD
-* responseDueDate: calculate 30 days from servedOrReceivedDate for standard discovery (California CCP §2030.260). Return YYYY-MM-DD.
-
-Dedupe key rules:
-* CALENDAR_EVENT: caseNumber|eventType|date|startTime
-* DISCOVERY: caseNumber|discoveryType|direction|servedOrReceivedDate
-* DISCOVERY_EXTENSION: caseNumber|DISCOVERY_EXTENSION|newDate
-* NEW_CASE: caseNumber|NEW_CASE
-* Use plaintiff+defendant if caseNumber is missing.
-
-Do not guess. If a value is truly missing return null. Return the JSON array only — no explanation.`;
-
-const VALID_CLASSIFICATIONS: AIClassification[] = [
-  "CALENDAR_EVENT",
-  "DISCOVERY",
-  "DISCOVERY_EXTENSION",
-  "NEW_CASE",
-  "IGNORE",
-];
+const VALID_CLASSIFICATIONS: AIClassification[] = ["CALENDAR_EVENT", "DISCOVERY", "DISCOVERY_EXTENSION", "NEW_CASE", "IGNORE"];
 
 const MAX_BODY_CHARS = 12_000;
 const MAX_PDF_CHARS = 10_000;
+
+async function callGemini(genai: GoogleGenerativeAI, prompt: string, userContent: string): Promise<Record<string, unknown> | null> {
+  const MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"];
+
+  for (const modelName of MODELS) {
+    try {
+      const model = genai.getGenerativeModel({ model: modelName });
+      const result = await model.generateContent([prompt, userContent]);
+      const raw = result.response.text().trim();
+      const objectMatch = raw.match(/\{[\s\S]*\}/);
+      if (!objectMatch) continue;
+      return JSON.parse(objectMatch[0]) as Record<string, unknown>;
+    } catch (err) {
+      const msg = String(err);
+      const isRateLimit = msg.includes("429") || msg.toLowerCase().includes("quota") || msg.toLowerCase().includes("rate");
+      if (isRateLimit) continue;
+      throw err;
+    }
+  }
+  return null;
+}
 
 export async function extractEmailSuggestion(params: {
   subject: string;
@@ -145,12 +167,6 @@ export async function extractEmailSuggestion(params: {
 }): Promise<EmailSuggestionResult[]> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
-
-  const MODELS = [
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
-    "gemini-2.0-flash",
-  ];
 
   const genai = new GoogleGenerativeAI(apiKey);
 
@@ -167,55 +183,60 @@ ${body}
 
 ${attachments ? `Attachments:\n${attachments}` : ""}`;
 
-  let lastError: Error = new Error("All Gemini models failed");
+  // Run all three focused calls in parallel
+  const [calendarRaw, discoveryRaw, generalRaw] = await Promise.all([
+    callGemini(genai, CALENDAR_PROMPT, userContent),
+    callGemini(genai, DISCOVERY_PROMPT, userContent),
+    callGemini(genai, GENERAL_PROMPT, userContent),
+  ]);
 
-  for (const modelName of MODELS) {
-    try {
-      const model = genai.getGenerativeModel({ model: modelName });
-      const result = await model.generateContent([PROMPT_TEMPLATE, userContent]);
-      const raw = result.response.text().trim();
+  const results: EmailSuggestionResult[] = [];
 
-      // Match a JSON array or single object
-      const arrayMatch = raw.match(/\[[\s\S]*\]/);
-      const objectMatch = raw.match(/\{[\s\S]*\}/);
-      const jsonStr = arrayMatch?.[0] ?? (objectMatch ? `[${objectMatch[0]}]` : null);
-      if (!jsonStr) throw new Error("Gemini returned no JSON");
+  if (calendarRaw?.found) {
+    results.push({
+      ...EMPTY_RESULT,
+      ...(calendarRaw as Partial<EmailSuggestionResult>),
+      classification: "CALENDAR_EVENT",
+      confidence: (calendarRaw.confidence as number) ?? 0.9,
+      dedupeKey: (calendarRaw.dedupeKey as string) ?? "",
+      case: (calendarRaw.case as EmailSuggestionResult["case"]) ?? EMPTY_RESULT.case,
+      event: (calendarRaw.event as EmailSuggestionResult["event"]) ?? EMPTY_RESULT.event,
+      missingFields: (calendarRaw.missingFields as string[]) ?? [],
+    });
+  }
 
-      let parsed: EmailSuggestionResult[];
-      try {
-        const raw2 = JSON.parse(jsonStr);
-        parsed = Array.isArray(raw2) ? raw2 : [raw2];
-      } catch {
-        throw new Error(`Gemini returned invalid JSON: ${raw.slice(0, 200)}`);
-      }
+  if (discoveryRaw?.found) {
+    results.push({
+      ...EMPTY_RESULT,
+      ...(discoveryRaw as Partial<EmailSuggestionResult>),
+      classification: "DISCOVERY",
+      confidence: (discoveryRaw.confidence as number) ?? 0.9,
+      dedupeKey: (discoveryRaw.dedupeKey as string) ?? "",
+      case: (discoveryRaw.case as EmailSuggestionResult["case"]) ?? EMPTY_RESULT.case,
+      discovery: (discoveryRaw.discovery as EmailSuggestionResult["discovery"]) ?? EMPTY_RESULT.discovery,
+      missingFields: (discoveryRaw.missingFields as string[]) ?? [],
+    });
+  }
 
-      // Filter out IGNORE items and validate classifications
-      const valid = parsed.filter((item) => {
-        if (!VALID_CLASSIFICATIONS.includes(item.classification as AIClassification)) return false;
-        if (item.classification === "IGNORE") return false;
-        return true;
+  if (generalRaw?.found) {
+    const cls = generalRaw.classification as AIClassification;
+    if (VALID_CLASSIFICATIONS.includes(cls) && cls !== "IGNORE") {
+      results.push({
+        ...EMPTY_RESULT,
+        ...(generalRaw as Partial<EmailSuggestionResult>),
+        classification: cls,
+        confidence: (generalRaw.confidence as number) ?? 0.9,
+        dedupeKey: (generalRaw.dedupeKey as string) ?? "",
+        case: (generalRaw.case as EmailSuggestionResult["case"]) ?? EMPTY_RESULT.case,
+        discoveryExtension: (generalRaw.discoveryExtension as EmailSuggestionResult["discoveryExtension"]) ?? EMPTY_RESULT.discoveryExtension,
+        missingFields: (generalRaw.missingFields as string[]) ?? [],
       });
-
-      // Always return at least one item (even if everything was IGNORE)
-      if (valid.length === 0) {
-        return [{ ...parsed[0], classification: "IGNORE" }];
-      }
-
-      return valid;
-    } catch (err: unknown) {
-      lastError = err instanceof Error ? err : new Error(String(err));
-      const isRateLimit =
-        lastError.message.includes("429") ||
-        lastError.message.toLowerCase().includes("quota") ||
-        lastError.message.toLowerCase().includes("rate");
-
-      if (isRateLimit) {
-        console.warn(`Gemini model ${modelName} rate limited, trying next fallback`);
-        continue;
-      }
-      throw lastError;
     }
   }
 
-  throw lastError;
+  if (results.length === 0) {
+    return [{ ...EMPTY_RESULT, classification: "IGNORE", confidence: 1, dedupeKey: "" }];
+  }
+
+  return results;
 }
