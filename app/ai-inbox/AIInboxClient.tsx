@@ -13,6 +13,7 @@ import {
   Inbox,
   PlugZap,
   RefreshCw,
+  RotateCcw,
 } from "lucide-react";
 
 type Status = "PENDING" | "APPROVED" | "IGNORED" | "DUPLICATE";
@@ -21,6 +22,7 @@ type ConnectionState = "connected" | "needs_read_scope" | "not_connected" | "no_
 
 interface AISuggestion {
   id: string;
+  gmailMessageId: string | null;
   classification: string;
   confidence: number | null;
   subject: string | null;
@@ -62,12 +64,15 @@ function ConfidenceBadge({ value }: { value: number | null }) {
 function SuggestionCard({
   s,
   onAction,
+  onRescan,
 }: {
   s: AISuggestion;
   onAction: (id: string, action: string, extractedData?: Record<string, unknown>) => Promise<void>;
+  onRescan: (messageId: string) => Promise<void>;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [acting, setActing] = useState(false);
+  const [rescanning, setRescanning] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editJson, setEditJson] = useState(() => JSON.stringify(s.extractedData, null, 2));
   const [jsonError, setJsonError] = useState("");
@@ -183,37 +188,53 @@ function SuggestionCard({
         </div>
       )}
 
-      {(s.status === "PENDING" || s.status === "DUPLICATE") && (
-        <div className="flex gap-2 border-t border-slate-100 p-3">
-          {s.status === "DUPLICATE" ? (
+      <div className="flex gap-2 border-t border-slate-100 p-3">
+        {(s.status === "PENDING" || s.status === "DUPLICATE") && (
+          <>
+            {s.status === "DUPLICATE" ? (
+              <button
+                onClick={() => act("create_anyway")}
+                disabled={acting}
+                className="flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50 transition-colors"
+              >
+                {acting ? <Loader2 className="size-3.5 animate-spin" /> : <AlertTriangle className="size-3.5" />}
+                Create Anyway
+              </button>
+            ) : (
+              <button
+                onClick={() => act("approve")}
+                disabled={acting}
+                className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50 transition-colors"
+              >
+                {acting ? <Loader2 className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />}
+                Approve
+              </button>
+            )}
             <button
-              onClick={() => act("create_anyway")}
+              onClick={() => act("ignore")}
               disabled={acting}
-              className="flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors"
             >
-              {acting ? <Loader2 className="size-3.5 animate-spin" /> : <AlertTriangle className="size-3.5" />}
-              Create Anyway
+              <XCircle className="size-3.5" />
+              Ignore
             </button>
-          ) : (
-            <button
-              onClick={() => act("approve")}
-              disabled={acting}
-              className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50 transition-colors"
-            >
-              {acting ? <Loader2 className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />}
-              Approve
-            </button>
-          )}
+          </>
+        )}
+        {s.gmailMessageId && (
           <button
-            onClick={() => act("ignore")}
-            disabled={acting}
-            className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors"
+            onClick={async () => {
+              setRescanning(true);
+              await onRescan(s.gmailMessageId!);
+              setRescanning(false);
+            }}
+            disabled={rescanning || acting}
+            className="ml-auto flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors"
           >
-            <XCircle className="size-3.5" />
-            Ignore
+            {rescanning ? <Loader2 className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5" />}
+            {rescanning ? "Rescanning…" : "Rescan"}
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
@@ -373,6 +394,17 @@ export default function AIInboxClient() {
     setScanning(false);
   }
 
+  async function handleRescan(messageId: string) {
+    const res = await fetch("/api/ai-inbox/rescan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messageId }),
+    });
+    const json = await res.json() as { error?: string };
+    if (!res.ok) { alert(json.error ?? "Rescan failed"); return; }
+    await fetchSuggestions();
+  }
+
   async function handleAction(id: string, action: string, extractedData?: Record<string, unknown>) {
     const res  = await fetch(`/api/ai-inbox/suggestions/${id}`, {
       method: "PATCH",
@@ -469,7 +501,7 @@ export default function AIInboxClient() {
         ) : (
           <div className="flex flex-col gap-3 max-w-3xl mx-auto">
             {suggestions.map((s) => (
-              <SuggestionCard key={s.id} s={s} onAction={handleAction} />
+              <SuggestionCard key={s.id} s={s} onAction={handleAction} onRescan={handleRescan} />
             ))}
           </div>
         )}
