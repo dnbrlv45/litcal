@@ -6,28 +6,32 @@ import { makeOAuth2Client, getInboxRefreshToken, processGmailMessages } from "@/
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-async function verifyPubSubJwt(authHeader: string | null): Promise<boolean> {
-  if (!authHeader?.startsWith("Bearer ")) return false;
-  const token = authHeader.slice(7);
-  try {
-    // Decode without verifying audience — Google signs the token, we just confirm it's valid
-    const [, payloadB64] = token.split(".");
-    const payload = JSON.parse(Buffer.from(payloadB64, "base64").toString("utf-8"));
-    // Must be issued by Google and targeted at our service account email domain
-    if (payload.iss !== "https://accounts.google.com") return false;
-    // Must not be expired
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return false;
-    return true;
-  } catch (err) {
-    console.error("Pub/Sub JWT decode failed:", err);
-    return false;
+function verifyRequest(req: NextRequest): boolean {
+  const secret = process.env.GMAIL_WEBHOOK_SECRET;
+
+  // Check secret token in query param (simple, no service account needed)
+  if (secret) {
+    const { searchParams } = new URL(req.url);
+    if (searchParams.get("secret") === secret) return true;
   }
+
+  // Fallback: accept Google-signed JWT (for authenticated push subscriptions)
+  const authHeader = req.headers.get("authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    try {
+      const [, payloadB64] = authHeader.slice(7).split(".");
+      const payload = JSON.parse(Buffer.from(payloadB64, "base64").toString("utf-8"));
+      if (payload.iss !== "https://accounts.google.com") return false;
+      if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return false;
+      return true;
+    } catch { return false; }
+  }
+
+  return false;
 }
 
 export async function POST(req: NextRequest) {
-  // Verify the request is from Google Pub/Sub
-  const valid = await verifyPubSubJwt(req.headers.get("authorization"));
-  if (!valid) {
+  if (!verifyRequest(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
