@@ -42,11 +42,15 @@ const PROMPT_TEMPLATE = `You are reviewing litigation emails for a California pe
 
 Analyze the email subject, sender, body, and ALL attachment text carefully.
 
-Return a JSON ARRAY — one object per distinct finding. Rules for how many items:
-- If an email contains a deposition notice (scheduled date/time), return a CALENDAR_EVENT item for the deposition date.
-- If the same email ALSO contains discovery documents (interrogatories, requests for production, requests for admission), return ONE DISCOVERY item covering all of them. Use the earliest served date and the latest response due date across all documents. For discoveryType, use whichever type appears most prominently or list the primary one.
-- Do NOT create a separate DISCOVERY item per document type — one item per email is enough.
-- A single email with a deposition notice + form interrogatories + special interrogatories + RFP should produce exactly 2 items: 1 CALENDAR_EVENT + 1 DISCOVERY.
+Return a JSON ARRAY — one object per distinct finding. Follow these rules exactly:
+
+STEP 1 — Check for a scheduled event: If any attachment is a deposition notice, hearing notice, or trial notice with a DATE and TIME, add one CALENDAR_EVENT item.
+
+STEP 2 — Check for discovery documents SEPARATELY: Scan every attachment. If ANY attachment is form interrogatories, special interrogatories, requests for production, or requests for admission (even if the same email also has a deposition notice), add ONE DISCOVERY item covering all of them combined. Use the date from the proof of service as servedOrReceivedDate. Calculate responseDueDate as 30 days later.
+
+STEP 3 — If BOTH steps produced an item, return an array of 2. Do not merge them into one.
+
+Example: An email with [deposition notice, form interrogatories, special interrogatories, RFP] → return exactly [{CALENDAR_EVENT for deposition date}, {DISCOVERY for the interrogatories/RFP}].
 
 Each item must have this exact structure:
 {
