@@ -27,5 +27,11 @@ export async function POST(request: NextRequest) {
   const auth = makeOAuth2Client(refreshToken);
   const results = await processGmailMessages(auth, [messageId], workspace.id);
 
-  return NextResponse.json({ ok: true, results });
+  // Fetch what was actually created so we can see it in the response
+  const created = await prisma.aISuggestion.findMany({
+    where: { workspaceId: workspace.id, gmailMessageId: messageId },
+    select: { id: true, classification: true, status: true, extractedData: true },
+  });
+
+  return NextResponse.json({ ok: true, results, created });
 }
