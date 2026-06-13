@@ -8,15 +8,7 @@ export const maxDuration = 30;
 
 const TOPIC_NAME = process.env.GMAIL_PUBSUB_TOPIC ?? "projects/litcal-ai/topics/gmail-inbox";
 
-export async function GET(req: NextRequest) {
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret) {
-    const auth = req.headers.get("authorization");
-    if (auth !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-  }
-
+export async function GET(_req: NextRequest) {
   const refreshToken = await getInboxRefreshToken();
   if (!refreshToken) {
     return NextResponse.json({ error: "No Gmail refresh token" }, { status: 400 });
