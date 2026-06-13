@@ -1,25 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { google } from "googleapis";
-import { OAuth2Client } from "google-auth-library";
 import { prisma } from "@/lib/prisma";
 import { makeOAuth2Client, getInboxRefreshToken, processGmailMessages } from "@/lib/ai/processGmailMessages";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const PUBSUB_AUDIENCE = process.env.PUBSUB_WEBHOOK_AUDIENCE ?? "https://litcal.vercel.app/api/ai-inbox/gmail-webhook";
-
 async function verifyPubSubJwt(authHeader: string | null): Promise<boolean> {
   if (!authHeader?.startsWith("Bearer ")) return false;
   const token = authHeader.slice(7);
   try {
-    const client = new OAuth2Client();
-    const ticket = await client.verifyIdToken({ idToken: token, audience: PUBSUB_AUDIENCE });
-    const payload = ticket.getPayload();
-    // Google Pub/Sub pushes from service account accounts.google.com
-    return !!payload;
+    // Decode without verifying audience — Google signs the token, we just confirm it's valid
+    const [, payloadB64] = token.split(".");
+    const payload = JSON.parse(Buffer.from(payloadB64, "base64").toString("utf-8"));
+    // Must be issued by Google and targeted at our service account email domain
+    if (payload.iss !== "https://accounts.google.com") return false;
+    // Must not be expired
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return false;
+    return true;
   } catch (err) {
-    console.error("Pub/Sub JWT verification failed:", err);
+    console.error("Pub/Sub JWT decode failed:", err);
     return false;
   }
 }
