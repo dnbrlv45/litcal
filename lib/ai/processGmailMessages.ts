@@ -206,6 +206,7 @@ export function makeOAuth2Client(refreshToken: string) {
 }
 
 export async function getInboxRefreshToken(): Promise<string | null> {
+  // 1. Prefer the token connected to the dedicated inbox account
   const INBOX_EMAIL = "litcalai@gmail.com";
   const inboxUser = await prisma.user.findUnique({
     where: { email: INBOX_EMAIL },
@@ -218,5 +219,15 @@ export async function getInboxRefreshToken(): Promise<string | null> {
     });
     if (conn?.gmailRefreshToken) return conn.gmailRefreshToken;
   }
+
+  // 2. Fall back to any Gmail token in the DB (e.g. connected via Settings by any admin)
+  const anyConn = await prisma.userCalendarConnection.findFirst({
+    where: { provider: "GOOGLE", gmailRefreshToken: { not: null }, isActive: true },
+    select: { gmailRefreshToken: true },
+    orderBy: { gmailConnectedAt: "desc" },
+  });
+  if (anyConn?.gmailRefreshToken) return anyConn.gmailRefreshToken;
+
+  // 3. Fall back to env var
   return process.env.GMAIL_REFRESH_TOKEN ?? null;
 }
