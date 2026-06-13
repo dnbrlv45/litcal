@@ -186,9 +186,15 @@ export async function PATCH(
       }
 
       const servedDate = disc.servedOrReceivedDate ? new Date(disc.servedOrReceivedDate) : new Date();
-      const dueDate = disc.responseDueDate
+      const rawDueDate = disc.responseDueDate
         ? new Date(disc.responseDueDate)
         : new Date(servedDate.getTime() + 30 * 24 * 60 * 60 * 1000);
+      // Advance to Monday if due date falls on a weekend
+      const dow = rawDueDate.getUTCDay();
+      const daysToMonday = dow === 6 ? 2 : dow === 0 ? 1 : 0;
+      const dueDate = daysToMonday > 0
+        ? new Date(rawDueDate.getTime() + daysToMonday * 24 * 60 * 60 * 1000)
+        : rawDueDate;
 
       const direction = disc.direction === "SERVED" ? "SERVED" : "RECEIVED";
       const discoveryType = mapDiscoveryType(disc.discoveryType);
