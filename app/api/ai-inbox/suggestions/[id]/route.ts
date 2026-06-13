@@ -155,16 +155,34 @@ export async function PATCH(
       const disc = data.discovery ?? {};
       const caseData = data.case ?? {};
 
-      const matchingCase = await prisma.case.findFirst({
+      let matchingCase = await prisma.case.findFirst({
         where: {
           workspaceId: workspace.id,
           ...(caseData.caseNumber ? { caseNumber: caseData.caseNumber } : {}),
         },
       });
+
       if (!matchingCase) {
-        return NextResponse.json({
-          error: "No matching case found in LitCal. Create the case first.",
-        }, { status: 422 });
+        matchingCase = await prisma.case.create({
+          data: {
+            userId:          user.id,
+            workspaceId:     workspace.id,
+            title:           [caseData.plaintiff, "v.", caseData.defendant].filter(Boolean).join(" ") || "New Case",
+            caseNumber:      caseData.caseNumber ?? undefined,
+            county:          caseData.county ?? undefined,
+            court:           caseData.court ?? undefined,
+            defenseFirm:     caseData.defenseFirm ?? undefined,
+            defenseAttorney: caseData.defenseAttorney ?? undefined,
+            filingDate:      caseData.dateFiled ? new Date(caseData.dateFiled) : undefined,
+            status:          "ACTIVE",
+            parties: {
+              create: [
+                ...(caseData.plaintiff ? [{ name: caseData.plaintiff, role: "PLAINTIFF" as const }] : []),
+                ...(caseData.defendant ? [{ name: caseData.defendant, role: "DEFENDANT" as const }] : []),
+              ],
+            },
+          },
+        });
       }
 
       const servedDate = disc.servedOrReceivedDate ? new Date(disc.servedOrReceivedDate) : new Date();
