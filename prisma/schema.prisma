@@ -790,6 +790,8 @@ model GmailConnection {
   refreshToken    String
   lastHistoryId   String?
   watchExpiration DateTime?
+  lastWebhookAt   DateTime?
+  lastWebhookLog  String?
   isActive        Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

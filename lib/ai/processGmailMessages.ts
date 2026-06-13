@@ -195,6 +195,15 @@ export async function processGmailMessages(
         }
       }
 
+      // Mark message as read
+      try {
+        await gmail.users.messages.modify({
+          userId: "me",
+          id: messageId,
+          requestBody: { removeLabelIds: ["UNREAD"] },
+        });
+      } catch { /* best-effort */ }
+
       results.push({ messageId, status: "created" });
     } catch (err) {
       console.error(`Failed to process message ${messageId}:`, err);

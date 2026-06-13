@@ -344,7 +344,7 @@ export default function AIInboxClient() {
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [scanError, setScanError]   = useState<string | null>(null);
-  const [watchStatus, setWatchStatus] = useState<{ healthy: boolean; watchExpiration: string | null } | null>(null);
+  const [watchStatus, setWatchStatus] = useState<{ healthy: boolean; watchExpiration: string | null; lastWebhookAt: string | null; lastWebhookLog: string | null } | null>(null);
   const [registeringWatch, setRegisteringWatch] = useState(false);
 
   const fetchConnection = useCallback(async () => {
@@ -368,7 +368,7 @@ export default function AIInboxClient() {
   useEffect(() => {
     fetch("/api/ai-inbox/watch-status")
       .then(r => r.ok ? r.json() : null)
-      .then(d => setWatchStatus(d as { healthy: boolean; watchExpiration: string | null } | null))
+      .then(d => setWatchStatus(d as { healthy: boolean; watchExpiration: string | null; lastWebhookAt: string | null; lastWebhookLog: string | null } | null))
       .catch(() => null);
   }, []);
 
@@ -378,7 +378,7 @@ export default function AIInboxClient() {
       const res = await fetch("/api/ai-inbox/setup-watch", { method: "POST" });
       const json = await res.json() as { ok?: boolean; watchExpiration?: string; error?: string };
       if (json.ok) {
-        setWatchStatus({ healthy: true, watchExpiration: json.watchExpiration ?? null });
+        setWatchStatus({ healthy: true, watchExpiration: json.watchExpiration ?? null, lastWebhookAt: null, lastWebhookLog: null });
         alert(`Gmail watch registered! Expires: ${json.watchExpiration ?? "unknown"}`);
       } else {
         alert(`Failed: ${json.error ?? "unknown error"}`);
@@ -476,9 +476,20 @@ export default function AIInboxClient() {
         )}
 
         {watchStatus?.healthy && watchStatus.watchExpiration && (
-          <div className="mt-2 rounded-lg bg-teal-50 border border-teal-200 px-4 py-2 text-xs text-teal-700">
-            <CheckCircle2 className="inline size-3.5 mr-1.5 -mt-0.5" />
-            Gmail push active · expires {new Date(watchStatus.watchExpiration).toLocaleDateString()}
+          <div className="mt-2 rounded-lg bg-teal-50 border border-teal-200 px-4 py-2 text-xs text-teal-700 space-y-0.5">
+            <div>
+              <CheckCircle2 className="inline size-3.5 mr-1.5 -mt-0.5" />
+              Gmail push active · expires {new Date(watchStatus.watchExpiration).toLocaleDateString()}
+            </div>
+            {watchStatus.lastWebhookAt && (
+              <div className="text-teal-600 pl-5">
+                Last webhook: {new Date(watchStatus.lastWebhookAt).toLocaleString()}
+                {watchStatus.lastWebhookLog && <span className="ml-2 opacity-70">· {watchStatus.lastWebhookLog}</span>}
+              </div>
+            )}
+            {!watchStatus.lastWebhookAt && (
+              <div className="text-amber-600 pl-5">No webhook received yet — send a test email to litcalai@gmail.com</div>
+            )}
           </div>
         )}
 

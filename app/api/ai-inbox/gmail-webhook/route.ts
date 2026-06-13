@@ -68,10 +68,23 @@ export async function POST(req: NextRequest) {
     orderBy: { createdAt: "desc" },
   });
 
+  // Log that we received a webhook — even if we can't find the connection
+  const webhookLog = `${new Date().toISOString()} email=${emailAddress} historyId=${newHistoryId} connectionFound=${!!connection}`;
+
   if (!connection) {
     console.warn(`Gmail webhook: no active GmailConnection for ${emailAddress}`);
+    // Try to log on any connection so we can debug
+    await prisma.gmailConnection.updateMany({
+      where: { isActive: true },
+      data: { lastWebhookAt: new Date(), lastWebhookLog: webhookLog },
+    });
     return new NextResponse(null, { status: 204 });
   }
+
+  await prisma.gmailConnection.update({
+    where: { id: connection.id },
+    data: { lastWebhookAt: new Date(), lastWebhookLog: webhookLog },
+  });
 
   const auth = makeOAuth2Client(refreshToken);
   const gmail = google.gmail({ version: "v1", auth });

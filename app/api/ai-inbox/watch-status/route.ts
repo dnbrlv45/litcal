@@ -124,5 +124,7 @@ export async function GET() {
     gmailProfile,
     watchExpiration: connection?.watchExpiration?.toISOString() ?? null,
     lastHistoryId: connection?.lastHistoryId ?? null,
+    lastWebhookAt: connection?.lastWebhookAt?.toISOString() ?? null,
+    lastWebhookLog: connection?.lastWebhookLog ?? null,
   });
 }
