@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-export type AIClassification = "CALENDAR_EVENT" | "DISCOVERY_EXTENSION" | "NEW_CASE" | "IGNORE";
+export type AIClassification = "CALENDAR_EVENT" | "DISCOVERY" | "DISCOVERY_EXTENSION" | "NEW_CASE" | "IGNORE";
 
 export interface EmailSuggestionResult {
   classification: AIClassification;
@@ -25,6 +25,12 @@ export interface EmailSuggestionResult {
     description: string | null;
     location: string | null;
   };
+  discovery: {
+    discoveryType: string | null;
+    direction: string | null;
+    servedOrReceivedDate: string | null;
+    responseDueDate: string | null;
+  };
   discoveryExtension: {
     newDate: string | null;
   };
@@ -34,37 +40,11 @@ export interface EmailSuggestionResult {
 
 const PROMPT_TEMPLATE = `You are reviewing litigation emails for a California personal injury law firm.
 
-Analyze the email subject, email body, and attachment text.
+Analyze the email subject, sender, body, and ALL attachment text carefully.
 
-Return JSON only.
+Return a JSON ARRAY — one object per distinct finding. Most emails produce one item, but if an email contains BOTH a calendar event AND discovery documents, return two items.
 
-Classify the email as one of:
-CALENDAR_EVENT
-DISCOVERY_EXTENSION
-NEW_CASE
-IGNORE
-
-Do not guess. If a value is missing, return null.
-
-Important rules:
-* Discovery is tracked as one case-level deadline.
-* Do not identify separate discovery types like Form Interrogatories, RFAs, or RFPs.
-* If an email grants an extension for discovery responses, classify it as DISCOVERY_EXTENSION.
-* If the email or attachment contains a hearing, deposition, mediation, trial, CMC, MSC, IME, conference, or deadline, classify it as CALENDAR_EVENT.
-* If the email contains a new lawsuit, complaint, summons, or new case information, classify it as NEW_CASE.
-* If nothing needs to be calendared or created, classify as IGNORE.
-
-Case extraction rules:
-* plaintiff: the injured party or person suing — look for "Plaintiff", the first party listed before "vs." or "v.", or the claimant named in a complaint or summons.
-* defendant: the party being sued — look for "Defendant", the party listed after "vs." or "v.", or the respondent.
-* dateFiled: the date the case or complaint was filed with the court — look for "Filed:", "Date Filed:", "Filing Date:", a stamp on the complaint, or a date near "Superior Court" or case number. Return in YYYY-MM-DD format. Do not confuse with hearing dates or service dates.
-* caseNumber: look for "Case No.", "Case Number:", or a number near the court name. California Superior Court numbers often look like 24STCV01234 or 24-CV-01234.
-* court: the full court name, e.g. "Los Angeles Superior Court".
-* county: derive from the court name if not explicitly stated.
-* All dates must be in YYYY-MM-DD format.
-
-Return this exact JSON structure:
-
+Each item must have this exact structure:
 {
   "classification": "",
   "confidence": 0,
@@ -88,6 +68,12 @@ Return this exact JSON structure:
     "description": null,
     "location": null
   },
+  "discovery": {
+    "discoveryType": null,
+    "direction": null,
+    "servedOrReceivedDate": null,
+    "responseDueDate": null
+  },
   "discoveryExtension": {
     "newDate": null
   },
@@ -95,30 +81,60 @@ Return this exact JSON structure:
   "dedupeKey": ""
 }
 
+Classification rules — pick ONE per item:
+- CALENDAR_EVENT: email or attachment contains a hearing, deposition, trial, CMC, MSC, IME, mediation, conference, or any scheduled court date
+- DISCOVERY: email or attachment contains discovery documents served or received (interrogatories, requests for production, requests for admission, deposition notice as a served document)
+- DISCOVERY_EXTENSION: email grants an extension for discovery response deadline
+- NEW_CASE: email contains a new lawsuit, complaint, summons, or new case filing
+- IGNORE: nothing needs to be calendared or tracked
+
+IMPORTANT — Date and time extraction from attachments:
+* Deposition notices contain the deposition date and time — look in attachment text for phrases like "the deposition of", "will be taken on", "scheduled for", followed by a date and time. Extract these exactly.
+* Times are often written as "10:00 a.m.", "2:30 p.m." — convert to 24-hour HH:MM format (10:00, 14:30).
+* All dates must be in YYYY-MM-DD format.
+* If the date or time is in an attachment, it is still there — search thoroughly before returning null.
+* Only return null for date/startTime if you truly cannot find it anywhere in the email or attachments.
+
+Case extraction rules:
+* plaintiff: the injured party — look before "v." or "vs." or labeled "Plaintiff"
+* defendant: look after "v." or "vs." or labeled "Defendant"
+* caseNumber: look for "Case No.", numbers like 24STCV01234 near a court name
+* court: full name e.g. "Los Angeles Superior Court"
+* county: derive from court name if not stated
+* dateFiled: date complaint was filed — NOT a hearing date
+
+Discovery extraction rules (for DISCOVERY items):
+* discoveryType: one of FORM_INTERROGATORIES, SPECIAL_INTERROGATORIES, REQUESTS_FOR_PRODUCTION, REQUESTS_FOR_ADMISSION, DEPOSITION_NOTICE, OTHER
+* direction: RECEIVED (opposing counsel sent it to us) or SERVED (we sent it to them)
+* servedOrReceivedDate: date the discovery was served or received — YYYY-MM-DD
+* responseDueDate: calculate 30 days from servedOrReceivedDate for standard discovery (California CCP §2030.260). Return YYYY-MM-DD.
+
 Dedupe key rules:
-* For calendar events: caseNumber|eventType|date|startTime
-* For discovery extensions: caseNumber|DISCOVERY_EXTENSION|newDate
-* For new cases: caseNumber|NEW_CASE
-* If caseNumber is missing, use plaintiff + defendant when available.
-* If there is not enough information, still return a best-effort dedupeKey using available stable fields.
-* Never include random or guessed information.`;
+* CALENDAR_EVENT: caseNumber|eventType|date|startTime
+* DISCOVERY: caseNumber|discoveryType|direction|servedOrReceivedDate
+* DISCOVERY_EXTENSION: caseNumber|DISCOVERY_EXTENSION|newDate
+* NEW_CASE: caseNumber|NEW_CASE
+* Use plaintiff+defendant if caseNumber is missing.
+
+Do not guess. If a value is truly missing return null. Return the JSON array only — no explanation.`;
 
 const VALID_CLASSIFICATIONS: AIClassification[] = [
   "CALENDAR_EVENT",
+  "DISCOVERY",
   "DISCOVERY_EXTENSION",
   "NEW_CASE",
   "IGNORE",
 ];
 
 const MAX_BODY_CHARS = 12_000;
-const MAX_PDF_CHARS = 8_000;
+const MAX_PDF_CHARS = 10_000;
 
 export async function extractEmailSuggestion(params: {
   subject: string;
   sender: string;
   bodyText: string;
   attachmentTexts: string[];
-}): Promise<EmailSuggestionResult> {
+}): Promise<EmailSuggestionResult[]> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
 
@@ -151,21 +167,33 @@ ${attachments ? `Attachments:\n${attachments}` : ""}`;
       const result = await model.generateContent([PROMPT_TEMPLATE, userContent]);
       const raw = result.response.text().trim();
 
-      const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error("Gemini returned no JSON");
+      // Match a JSON array or single object
+      const arrayMatch = raw.match(/\[[\s\S]*\]/);
+      const objectMatch = raw.match(/\{[\s\S]*\}/);
+      const jsonStr = arrayMatch?.[0] ?? (objectMatch ? `[${objectMatch[0]}]` : null);
+      if (!jsonStr) throw new Error("Gemini returned no JSON");
 
-      let parsed: EmailSuggestionResult;
+      let parsed: EmailSuggestionResult[];
       try {
-        parsed = JSON.parse(jsonMatch[0]);
+        const raw2 = JSON.parse(jsonStr);
+        parsed = Array.isArray(raw2) ? raw2 : [raw2];
       } catch {
         throw new Error(`Gemini returned invalid JSON: ${raw.slice(0, 200)}`);
       }
 
-      if (!VALID_CLASSIFICATIONS.includes(parsed.classification as AIClassification)) {
-        throw new Error(`Gemini returned invalid classification: ${parsed.classification}`);
+      // Filter out IGNORE items and validate classifications
+      const valid = parsed.filter((item) => {
+        if (!VALID_CLASSIFICATIONS.includes(item.classification as AIClassification)) return false;
+        if (item.classification === "IGNORE") return false;
+        return true;
+      });
+
+      // Always return at least one item (even if everything was IGNORE)
+      if (valid.length === 0) {
+        return [{ ...parsed[0], classification: "IGNORE" }];
       }
 
-      return parsed;
+      return valid;
     } catch (err: unknown) {
       lastError = err instanceof Error ? err : new Error(String(err));
       const isRateLimit =
@@ -177,7 +205,6 @@ ${attachments ? `Attachments:\n${attachments}` : ""}`;
         console.warn(`Gemini model ${modelName} rate limited, trying next fallback`);
         continue;
       }
-      // Non-rate-limit error — don't try fallbacks
       throw lastError;
     }
   }

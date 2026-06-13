@@ -24,6 +24,7 @@ export async function PATCH(
   const body = await request.json() as { action: string; extractedData?: Record<string, unknown> };
   const { action, extractedData } = body;
 
+
   if (action === "ignore") {
     const updated = await prisma.aISuggestion.update({
       where: { id },
@@ -36,6 +37,7 @@ export async function PATCH(
     const data = (extractedData ?? suggestion.extractedData) as {
       case?: Record<string, string | null>;
       event?: Record<string, string | null>;
+      discovery?: Record<string, string | null>;
       discoveryExtension?: Record<string, string | null>;
     };
     const classification = suggestion.classification;
@@ -149,6 +151,45 @@ export async function PATCH(
       }
     }
 
+    if (classification === "DISCOVERY") {
+      const disc = data.discovery ?? {};
+      const caseData = data.case ?? {};
+
+      const matchingCase = await prisma.case.findFirst({
+        where: {
+          workspaceId: workspace.id,
+          ...(caseData.caseNumber ? { caseNumber: caseData.caseNumber } : {}),
+        },
+      });
+      if (!matchingCase) {
+        return NextResponse.json({
+          error: "No matching case found in LitCal. Create the case first.",
+        }, { status: 422 });
+      }
+
+      const servedDate = disc.servedOrReceivedDate ? new Date(disc.servedOrReceivedDate) : new Date();
+      const dueDate = disc.responseDueDate
+        ? new Date(disc.responseDueDate)
+        : new Date(servedDate.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+      const direction = disc.direction === "SERVED" ? "SERVED" : "RECEIVED";
+      const discoveryType = mapDiscoveryType(disc.discoveryType);
+
+      await prisma.discoveryItem.create({
+        data: {
+          caseId:              matchingCase.id,
+          workspaceId:         workspace.id,
+          createdBy:           user.id,
+          discoveryType,
+          direction,
+          servedOrReceivedDate: servedDate,
+          originalDueDate:      dueDate,
+          currentDueDate:       dueDate,
+          status:               "AWAITING_RESPONSE",
+        },
+      });
+    }
+
     if (classification === "DISCOVERY_EXTENSION") {
       const ext = data.discoveryExtension ?? {};
       const caseData = data.case ?? {};
@@ -230,6 +271,17 @@ export async function PATCH(
   }
 
   return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+}
+
+function mapDiscoveryType(raw: string | null | undefined): "FORM_INTERROGATORIES" | "SPECIAL_INTERROGATORIES" | "REQUESTS_FOR_PRODUCTION" | "REQUESTS_FOR_ADMISSION" | "DEPOSITION_NOTICE" | "OTHER" {
+  if (!raw) return "OTHER";
+  const t = raw.toUpperCase();
+  if (t.includes("FORM_INTERROG") || (t.includes("FORM") && t.includes("INTERROG"))) return "FORM_INTERROGATORIES";
+  if (t.includes("SPECIAL_INTERROG") || (t.includes("SPECIAL") && t.includes("INTERROG"))) return "SPECIAL_INTERROGATORIES";
+  if (t.includes("PRODUCTION") || t.includes("RFP")) return "REQUESTS_FOR_PRODUCTION";
+  if (t.includes("ADMISSION") || t.includes("RFA")) return "REQUESTS_FOR_ADMISSION";
+  if (t.includes("DEPOSITION_NOTICE") || t.includes("DEPO")) return "DEPOSITION_NOTICE";
+  return "OTHER";
 }
 
 function mapEventType(raw: string | null | undefined): "HEARING" | "DEPOSITION" | "TRIAL" | "CONFERENCE" | "MEDIATION" | "DEADLINE" | "OTHER" {

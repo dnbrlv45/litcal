@@ -181,67 +181,75 @@ export async function POST() {
         .update(subject + sender + bodyText.slice(0, 2000))
         .digest("hex");
 
-      let extracted: EmailSuggestionResult;
+      let extractedItems: EmailSuggestionResult[];
       try {
-        extracted = await extractEmailSuggestion({ subject, sender, bodyText, attachmentTexts });
+        extractedItems = await extractEmailSuggestion({ subject, sender, bodyText, attachmentTexts });
       } catch (err) {
         console.error(`Gemini extraction failed for ${messageId}:`, err);
         results.push({ messageId, status: "error", error: String(err) });
         continue;
       }
 
-      let duplicateOfId: string | null = null;
-      if (extracted.dedupeKey) {
-        const logicalDup = await prisma.aISuggestion.findFirst({
-          where: {
-            workspaceId: workspace.id,
-            classification: extracted.classification,
-            status: { in: ["PENDING", "APPROVED"] },
-            extractedData: { path: ["dedupeKey"], equals: extracted.dedupeKey },
-          },
-          orderBy: { createdAt: "asc" },
-        });
-        if (logicalDup) duplicateOfId = logicalDup.id;
-      }
+      for (const extracted of extractedItems) {
+        if (extracted.classification === "IGNORE") continue;
 
-      const extractedWithWarning: EmailSuggestionResult & { existingEventWarning?: string } = { ...extracted };
-      if (extracted.classification === "CALENDAR_EVENT" && !duplicateOfId) {
-        const eventDate = extracted.event.date;
-        const caseNum   = extracted.case.caseNumber;
-        if (eventDate && caseNum) {
-          const dayStart = new Date(`${eventDate}T00:00:00`);
-          const dayEnd   = new Date(`${eventDate}T23:59:59`);
-          const matchingEvent = await prisma.event.findFirst({
-            where: { workspaceId: workspace.id, startTime: { gte: dayStart, lte: dayEnd }, caseRef: { caseNumber: caseNum } },
+        let duplicateOfId: string | null = null;
+        if (extracted.dedupeKey) {
+          const logicalDup = await prisma.aISuggestion.findFirst({
+            where: {
+              workspaceId: workspace.id,
+              classification: extracted.classification,
+              status: { in: ["PENDING", "APPROVED"] },
+              extractedData: { path: ["dedupeKey"], equals: extracted.dedupeKey },
+            },
+            orderBy: { createdAt: "asc" },
           });
-          if (matchingEvent) {
-            extractedWithWarning.existingEventWarning =
-              `Matches existing event: "${matchingEvent.title}" on ${eventDate}`;
+          if (logicalDup) duplicateOfId = logicalDup.id;
+        }
+
+        const extractedWithWarning: EmailSuggestionResult & { existingEventWarning?: string } = { ...extracted };
+        if (extracted.classification === "CALENDAR_EVENT" && !duplicateOfId) {
+          const eventDate = extracted.event.date;
+          const caseNum   = extracted.case.caseNumber;
+          if (eventDate && caseNum) {
+            const dayStart = new Date(`${eventDate}T00:00:00`);
+            const dayEnd   = new Date(`${eventDate}T23:59:59`);
+            const matchingEvent = await prisma.event.findFirst({
+              where: { workspaceId: workspace.id, startTime: { gte: dayStart, lte: dayEnd }, caseRef: { caseNumber: caseNum } },
+            });
+            if (matchingEvent) {
+              extractedWithWarning.existingEventWarning =
+                `Matches existing event: "${matchingEvent.title}" on ${eventDate}`;
+            }
           }
         }
+
+        const status = duplicateOfId ? "DUPLICATE" : "PENDING";
+
+        const existing = await prisma.aISuggestion.findFirst({
+          where: { workspaceId: workspace.id, gmailMessageId: messageId, classification: extracted.classification },
+        });
+
+        if (!existing) {
+          await prisma.aISuggestion.create({
+            data: {
+              workspaceId:    workspace.id,
+              gmailMessageId: messageId,
+              gmailThreadId:  threadId,
+              sourceHash,
+              subject,
+              sender,
+              receivedAt,
+              classification: extracted.classification,
+              confidence:     extracted.confidence,
+              extractedData:  extractedWithWarning as unknown as Prisma.InputJsonValue,
+              missingFields:  extracted.missingFields as unknown as Prisma.InputJsonValue,
+              duplicateOfId,
+              status,
+            },
+          });
+        }
       }
-
-      const status = duplicateOfId ? "DUPLICATE" : "PENDING";
-
-      await prisma.aISuggestion.upsert({
-        where: { workspaceId_gmailMessageId: { workspaceId: workspace.id, gmailMessageId: messageId } },
-        create: {
-          workspaceId:    workspace.id,
-          gmailMessageId: messageId,
-          gmailThreadId:  threadId,
-          sourceHash,
-          subject,
-          sender,
-          receivedAt,
-          classification: extracted.classification,
-          confidence:     extracted.confidence,
-          extractedData:  extractedWithWarning as unknown as Prisma.InputJsonValue,
-          missingFields:  extracted.missingFields as unknown as Prisma.InputJsonValue,
-          duplicateOfId,
-          status,
-        },
-        update: {},
-      });
 
       results.push({ messageId, status: "created" });
     } catch (err) {
