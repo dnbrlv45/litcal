@@ -33,6 +33,8 @@ export interface EmailSuggestionResult {
   };
   discoveryExtension: {
     newDate: string | null;
+    mutual: boolean;
+    appliesTo: "OUR_DEADLINE" | "THEIR_DEADLINE" | "BOTH" | null;
   };
   missingFields: string[];
   dedupeKey: string;
@@ -115,7 +117,9 @@ If it matches one of the above, return this JSON object:
   "confidence": 0.9,
   ${CASE_SCHEMA},
   "discoveryExtension": {
-    "newDate": null   // YYYY-MM-DD, only for DISCOVERY_EXTENSION
+    "newDate": null,    // YYYY-MM-DD, only for DISCOVERY_EXTENSION
+    "mutual": false,    // true if both sides get the extension, false if only one side
+    "appliesTo": null   // "OUR_DEADLINE", "THEIR_DEADLINE", or "BOTH" — if mutual set "BOTH"
   },
   "missingFields": [],
   "dedupeKey": ""

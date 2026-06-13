@@ -229,39 +229,61 @@ export async function PATCH(
             error: "No matching case found in LitCal. Create the case first.",
           }, { status: 422 });
         }
-        const discoveryItem = await prisma.discoveryItem.findFirst({
-          where: { caseId: matchingCase.id, status: { notIn: ["COMPLETED"] } },
-          orderBy: { updatedAt: "desc" },
-        });
-        if (!discoveryItem) {
-          return NextResponse.json({
-            error: "No active discovery item found for this case. No changes made.",
-          }, { status: 422 });
-        }
+
         const rawNewDue = new Date(ext.newDate);
         const newDueDow = rawNewDue.getUTCDay();
         const newDueDaysToMonday = newDueDow === 6 ? 2 : newDueDow === 0 ? 1 : 0;
         const newDue = newDueDaysToMonday > 0
           ? new Date(rawNewDue.getTime() + newDueDaysToMonday * 24 * 60 * 60 * 1000)
           : rawNewDue;
-        const extCount = await prisma.discoveryExtension.count({
-          where: { discoveryItemId: discoveryItem.id },
-        });
-        await prisma.discoveryExtension.create({
-          data: {
-            discoveryItemId: discoveryItem.id,
-            extensionNumber: extCount + 1,
-            grantedDate:     new Date(),
-            previousDueDate: discoveryItem.currentDueDate,
-            newDueDate:      newDue,
-            appliesTo:       "OUR_DEADLINE",
-            createdBy:       user.id,
+
+        const mutual = ext.mutual === true;
+        const appliesTo = (ext.appliesTo as string) === "BOTH" ? "BOTH"
+          : (ext.appliesTo as string) === "THEIR_DEADLINE" ? "THEIR_DEADLINE"
+          : "OUR_DEADLINE";
+
+        // Determine which directions to update
+        const directions: ("RECEIVED" | "SERVED")[] = appliesTo === "BOTH"
+          ? ["RECEIVED", "SERVED"]
+          : appliesTo === "THEIR_DEADLINE"
+            ? ["SERVED"]
+            : ["RECEIVED"];
+
+        const discoveryItems = await prisma.discoveryItem.findMany({
+          where: {
+            caseId: matchingCase.id,
+            status: { notIn: ["COMPLETED"] },
+            direction: { in: directions },
           },
         });
-        await prisma.discoveryItem.update({
-          where: { id: discoveryItem.id },
-          data: { currentDueDate: newDue, status: "EXTENSION_GRANTED" },
-        });
+
+        if (discoveryItems.length === 0) {
+          return NextResponse.json({
+            error: "No active discovery item found for this case. No changes made.",
+          }, { status: 422 });
+        }
+
+        for (const item of discoveryItems) {
+          const extCount = await prisma.discoveryExtension.count({
+            where: { discoveryItemId: item.id },
+          });
+          await prisma.discoveryExtension.create({
+            data: {
+              discoveryItemId: item.id,
+              extensionNumber: extCount + 1,
+              grantedDate:     new Date(),
+              previousDueDate: item.currentDueDate,
+              newDueDate:      newDue,
+              mutual,
+              appliesTo,
+              createdBy:       user.id,
+            },
+          });
+          await prisma.discoveryItem.update({
+            where: { id: item.id },
+            data: { currentDueDate: newDue, status: "EXTENSION_GRANTED" },
+          });
+        }
       }
     }
 
