@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { getAccessToken } from "@/lib/google-calendar";
+import { getInboxRefreshToken } from "@/lib/ai/processGmailMessages";
 
 interface InviteEmailOptions {
   inviterName: string;
@@ -164,7 +165,7 @@ function buildLitCalEmail({ recipientEmail, subject, text, html }: LitCalEmailOp
 }
 
 async function sendRawLitCalMessage(rawMessage: string) {
-  const refreshToken = process.env.GMAIL_REFRESH_TOKEN;
+  const refreshToken = await getInboxRefreshToken() ?? process.env.GMAIL_REFRESH_TOKEN;
   if (!refreshToken) {
     return { ok: false, reason: "gmail_not_connected" as const };
   }
