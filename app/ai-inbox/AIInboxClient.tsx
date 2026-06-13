@@ -68,11 +68,12 @@ function SuggestionCard({
 }: {
   s: AISuggestion;
   onAction: (id: string, action: string, extractedData?: Record<string, unknown>) => Promise<void>;
-  onRescan: (messageId: string) => Promise<void>;
+  onRescan: (messageId: string) => Promise<{ created: { classification: string; status: string }[]; error?: string } | null>;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [acting, setActing] = useState(false);
   const [rescanning, setRescanning] = useState(false);
+  const [rescanResult, setRescanResult] = useState<{ created: { classification: string; status: string }[]; error?: string } | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [editJson, setEditJson] = useState(() => JSON.stringify(s.extractedData, null, 2));
   const [jsonError, setJsonError] = useState("");
@@ -224,7 +225,9 @@ function SuggestionCard({
           <button
             onClick={async () => {
               setRescanning(true);
-              await onRescan(s.gmailMessageId!);
+              setRescanResult(null);
+              const result = await onRescan(s.gmailMessageId!);
+              setRescanResult(result);
               setRescanning(false);
             }}
             disabled={rescanning || acting}
@@ -235,6 +238,20 @@ function SuggestionCard({
           </button>
         )}
       </div>
+      {rescanResult && (
+        <div className={`border-t px-4 py-3 text-xs ${rescanResult.error ? "border-red-100 bg-red-50 text-red-700" : "border-teal-100 bg-teal-50 text-teal-700"}`}>
+          {rescanResult.error ? (
+            <span>Rescan error: {rescanResult.error}</span>
+          ) : rescanResult.created.length === 0 ? (
+            <span>Rescan complete — no suggestions created.</span>
+          ) : (
+            <span>
+              Rescan created {rescanResult.created.length} suggestion{rescanResult.created.length !== 1 ? "s" : ""}:{" "}
+              {rescanResult.created.map((c) => c.classification).join(", ")}. Refresh the page to see them.
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -400,9 +417,10 @@ export default function AIInboxClient() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ messageId }),
     });
-    const json = await res.json() as { error?: string };
-    if (!res.ok) { alert(json.error ?? "Rescan failed"); return; }
+    const json = await res.json() as { ok?: boolean; created?: { classification: string; status: string }[]; error?: string };
+    if (!res.ok) return { created: [], error: json.error ?? "Rescan failed" };
     await fetchSuggestions();
+    return { created: json.created ?? [] };
   }
 
   async function handleAction(id: string, action: string, extractedData?: Record<string, unknown>) {
