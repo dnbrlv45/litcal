@@ -48,12 +48,12 @@ function extractBodyText(part: GmailPart): string {
 
 async function extractPdfText(buffer: Buffer): Promise<string> {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdfParse = require("pdf-parse") as (buf: Buffer) => Promise<{ text: string; numpages: number }>;
-    const result = await pdfParse(buffer);
-    return result.text ?? "";
+    const { extractText, getDocumentProxy } = await import("unpdf");
+    const pdf = await getDocumentProxy(new Uint8Array(buffer));
+    const { text } = await extractText(pdf, { mergePages: true });
+    return text ?? "";
   } catch (err) {
-    return `[pdf-parse error: ${String(err)}]`;
+    return `[pdf extract error: ${String(err)}]`;
   }
 }
 
