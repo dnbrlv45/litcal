@@ -23,7 +23,7 @@ export async function GET(request: Request) {
     client_id:     clientId,
     redirect_uri:  redirectUri,
     response_type: "code",
-    scope:         "https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly",
+    scope:         "https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.modify",
     access_type:   "offline",
     prompt:        "consent",
     state,

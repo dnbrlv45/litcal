@@ -136,7 +136,24 @@ export async function processGmailMessages(
         if (extracted.classification === "IGNORE") continue;
 
         let duplicateOfId: string | null = null;
-        if (extracted.dedupeKey) {
+
+        // 1) Content dedup: the same email (re-)forwarded as a different Gmail message
+        // produces an identical sourceHash. This is more reliable than Gemini's free-form
+        // dedupeKey, which varies between runs even for the same matter.
+        const contentDup = await prisma.aISuggestion.findFirst({
+          where: {
+            workspaceId,
+            classification: extracted.classification,
+            status: { in: ["PENDING", "APPROVED"] },
+            sourceHash,
+            gmailMessageId: { not: messageId },
+          },
+          orderBy: { createdAt: "asc" },
+        });
+        if (contentDup) duplicateOfId = contentDup.id;
+
+        // 2) Logical dedup via Gemini's dedupeKey (catches same matter, different text)
+        if (!duplicateOfId && extracted.dedupeKey) {
           const logicalDup = await prisma.aISuggestion.findFirst({
             where: {
               workspaceId,
