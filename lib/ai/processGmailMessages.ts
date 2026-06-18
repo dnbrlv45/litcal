@@ -71,8 +71,10 @@ export async function processGmailMessages(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const gmail = google.gmail({ version: "v1", auth: auth as any });
 
+  // Check across all workspaces — a message routes to its sender's workspace,
+  // so we shouldn't reprocess it just because it isn't in the default one.
   const existing = await prisma.aISuggestion.findMany({
-    where: { workspaceId, gmailMessageId: { in: messageIds } },
+    where: { gmailMessageId: { in: messageIds } },
     select: { gmailMessageId: true },
   });
   const processedIds = new Set(existing.map((s) => s.gmailMessageId));
@@ -102,6 +104,28 @@ export async function processGmailMessages(
       const dateStr  = getHeader("Date") || "";
       const threadId = msg.threadId ?? null;
       const receivedAt = dateStr ? new Date(dateStr) : new Date();
+
+      // Route to the sender's workspace when the forwarder is a known LitCal user
+      // (e.g. forwarding from dnbrlv45@ vs sa@lginjuryattorneys.com lands in the
+      // matching workspace). Falls back to the connection's workspace otherwise.
+      let targetWorkspaceId = workspaceId;
+      const senderEmail =
+        sender.match(/<([^>]+)>/)?.[1]?.trim().toLowerCase() ??
+        (sender.includes("@") ? sender.trim().toLowerCase() : null);
+      if (senderEmail) {
+        const senderUser = await prisma.user.findFirst({
+          where: { email: { equals: senderEmail, mode: "insensitive" } },
+          select: { id: true },
+        });
+        if (senderUser) {
+          const membership = await prisma.workspaceMember.findFirst({
+            where: { userId: senderUser.id },
+            orderBy: { createdAt: "asc" },
+            select: { workspaceId: true },
+          });
+          if (membership) targetWorkspaceId = membership.workspaceId;
+        }
+      }
 
       const bodyText = extractBodyText((msg.payload ?? {}) as GmailPart);
       const pdfParts = collectPdfParts((msg.payload ?? {}) as GmailPart);
@@ -142,7 +166,7 @@ export async function processGmailMessages(
         // dedupeKey, which varies between runs even for the same matter.
         const contentDup = await prisma.aISuggestion.findFirst({
           where: {
-            workspaceId,
+            workspaceId: targetWorkspaceId,
             classification: extracted.classification,
             status: { in: ["PENDING", "APPROVED"] },
             sourceHash,
@@ -156,7 +180,7 @@ export async function processGmailMessages(
         if (!duplicateOfId && extracted.dedupeKey) {
           const logicalDup = await prisma.aISuggestion.findFirst({
             where: {
-              workspaceId,
+              workspaceId: targetWorkspaceId,
               classification: extracted.classification,
               status: { in: ["PENDING", "APPROVED"] },
               extractedData: { path: ["dedupeKey"], equals: extracted.dedupeKey },
@@ -175,7 +199,7 @@ export async function processGmailMessages(
             const dayStart = new Date(`${eventDate}T00:00:00`);
             const dayEnd   = new Date(`${eventDate}T23:59:59`);
             const matchingEvent = await prisma.event.findFirst({
-              where: { workspaceId, startTime: { gte: dayStart, lte: dayEnd }, caseRef: { caseNumber: caseNum } },
+              where: { workspaceId: targetWorkspaceId, startTime: { gte: dayStart, lte: dayEnd }, caseRef: { caseNumber: caseNum } },
             });
             if (matchingEvent) {
               extractedWithWarning.existingEventWarning =
@@ -188,13 +212,13 @@ export async function processGmailMessages(
 
         // Use findFirst + create to avoid conflict with the new compound unique key
         const existing = await prisma.aISuggestion.findFirst({
-          where: { workspaceId, gmailMessageId: messageId, classification: extracted.classification },
+          where: { workspaceId: targetWorkspaceId, gmailMessageId: messageId, classification: extracted.classification },
         });
 
         if (!existing) {
           await prisma.aISuggestion.create({
             data: {
-              workspaceId,
+              workspaceId: targetWorkspaceId,
               gmailMessageId: messageId,
               gmailThreadId:  threadId,
               sourceHash,
