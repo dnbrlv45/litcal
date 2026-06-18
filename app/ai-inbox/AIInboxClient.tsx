@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   Mail,
   ScanLine,
@@ -65,10 +65,12 @@ function SuggestionCard({
   s,
   onAction,
   onRescan,
+  onBusyChange,
 }: {
   s: AISuggestion;
   onAction: (id: string, action: string, extractedData?: Record<string, unknown>) => Promise<void>;
   onRescan: (messageId: string) => Promise<{ created: { classification: string; status: string }[]; error?: string } | null>;
+  onBusyChange?: (id: string, busy: boolean) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [acting, setActing] = useState(false);
@@ -77,6 +79,13 @@ function SuggestionCard({
   const [editMode, setEditMode] = useState(false);
   const [editJson, setEditJson] = useState(() => JSON.stringify(s.extractedData, null, 2));
   const [jsonError, setJsonError] = useState("");
+
+  // Tell the parent when this card is mid-interaction so auto-refresh pauses.
+  const busy = acting || rescanning || editMode;
+  useEffect(() => {
+    onBusyChange?.(s.id, busy);
+    return () => onBusyChange?.(s.id, false);
+  }, [busy, s.id, onBusyChange]);
 
   const data = s.extractedData as {
     case?: Record<string, string | null>;
@@ -354,16 +363,54 @@ export default function AIInboxClient() {
     setConnInfo({ state: json.state, email: json.connection?.email });
   }, []);
 
-  const fetchSuggestions = useCallback(async () => {
-    setLoading(true);
-    const res  = await fetch(`/api/ai-inbox/suggestions?status=${tab}`);
-    const json = await res.json() as { suggestions: AISuggestion[] };
-    setSuggestions(json.suggestions ?? []);
-    setLoading(false);
+  // `silent` skips the loading skeleton so background auto-refreshes don't flicker the list.
+  const fetchingRef = useRef(false);
+  const fetchSuggestions = useCallback(async (opts?: { silent?: boolean }) => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
+    if (!opts?.silent) setLoading(true);
+    try {
+      const res  = await fetch(`/api/ai-inbox/suggestions?status=${tab}`);
+      const json = await res.json() as { suggestions: AISuggestion[] };
+      setSuggestions(json.suggestions ?? []);
+    } finally {
+      if (!opts?.silent) setLoading(false);
+      fetchingRef.current = false;
+    }
   }, [tab]);
+
+  // Idle/activity tracking + busy-card tracking gate the auto-refresh below.
+  const lastActivityRef = useRef(0);
+  const busyIdsRef = useRef<Set<string>>(new Set());
+  const reportBusy = useCallback((id: string, busy: boolean) => {
+    if (busy) busyIdsRef.current.add(id);
+    else busyIdsRef.current.delete(id);
+  }, []);
 
   useEffect(() => { void fetchConnection(); }, [fetchConnection]);
   useEffect(() => { void fetchSuggestions(); }, [fetchSuggestions]);
+
+  // Mark the user "active" on any real interaction so we don't refresh mid-click/typing.
+  useEffect(() => {
+    const bump = () => { lastActivityRef.current = Date.now(); };
+    bump(); // seed on mount so we don't fire an immediate refresh
+    const events = ["mousemove", "mousedown", "keydown", "scroll", "wheel", "touchstart"] as const;
+    for (const ev of events) window.addEventListener(ev, bump, { passive: true });
+    return () => { for (const ev of events) window.removeEventListener(ev, bump); };
+  }, []);
+
+  // Auto-refresh: only when idle ≥8s, tab visible, nothing in flight, no card busy.
+  useEffect(() => {
+    const IDLE_MS = 8000;
+    const id = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastActivityRef.current < IDLE_MS) return;
+      if (busyIdsRef.current.size > 0) return;
+      if (fetchingRef.current || scanning || registeringWatch) return;
+      void fetchSuggestions({ silent: true });
+    }, 4000);
+    return () => clearInterval(id);
+  }, [fetchSuggestions, scanning, registeringWatch]);
 
   useEffect(() => {
     fetch("/api/ai-inbox/watch-status")
@@ -530,7 +577,7 @@ export default function AIInboxClient() {
         ) : (
           <div className="flex flex-col gap-3 max-w-3xl mx-auto">
             {suggestions.map((s) => (
-              <SuggestionCard key={s.id} s={s} onAction={handleAction} onRescan={handleRescan} />
+              <SuggestionCard key={s.id} s={s} onAction={handleAction} onRescan={handleRescan} onBusyChange={reportBusy} />
             ))}
           </div>
         )}
