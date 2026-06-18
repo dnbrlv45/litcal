@@ -238,6 +238,24 @@ ${attachments ? `Attachments:\n${attachments}` : ""}`;
     }
   }
 
+  // Suppress redundant deadline calendar events when the email is really about
+  // discovery: a DISCOVERY/DISCOVERY_EXTENSION already owns its response deadline
+  // (the discovery flow creates the linked calendar entry on approval). The
+  // parallel calendar call often re-emits that same deadline as a CALENDAR_EVENT.
+  // We keep genuine calendar events (hearings, depositions, trials, etc.).
+  const hasDiscovery = results.some(
+    (r) => r.classification === "DISCOVERY" || r.classification === "DISCOVERY_EXTENSION"
+  );
+  if (hasDiscovery) {
+    for (let i = results.length - 1; i >= 0; i--) {
+      if (results[i].classification !== "CALENDAR_EVENT") continue;
+      const type = (results[i].event?.eventType ?? "").toUpperCase();
+      if (type.includes("DEAD") || type.includes("EXTENSION") || type.includes("DUE")) {
+        results.splice(i, 1);
+      }
+    }
+  }
+
   if (results.length === 0) {
     return [{ ...EMPTY_RESULT, classification: "IGNORE", confidence: 1, dedupeKey: "" }];
   }
