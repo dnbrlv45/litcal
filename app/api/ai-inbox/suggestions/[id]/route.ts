@@ -3,7 +3,9 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCurrentWorkspace } from "@/lib/workspaces";
 import { Prisma } from "@prisma/client";
+import { google } from "googleapis";
 import { createDiscoveryItem, grantDiscoveryExtension } from "@/lib/discovery";
+import { getInboxRefreshToken, makeOAuth2Client } from "@/lib/ai/processGmailMessages";
 
 export async function PATCH(
   request: NextRequest,
@@ -279,6 +281,25 @@ export async function PATCH(
         extractedData: (extractedData ?? suggestion.extractedData) as Prisma.InputJsonValue,
       },
     });
+
+    // Mark the source email as read now that the user has acted on it.
+    // (Emails we ignore/decline stay unread for manual review.)
+    if (suggestion.gmailMessageId) {
+      try {
+        const refreshToken = await getInboxRefreshToken();
+        if (refreshToken) {
+          const gmail = google.gmail({ version: "v1", auth: makeOAuth2Client(refreshToken) });
+          await gmail.users.messages.modify({
+            userId: "me",
+            id: suggestion.gmailMessageId,
+            requestBody: { removeLabelIds: ["UNREAD"] },
+          });
+        }
+      } catch (err) {
+        console.warn("Failed to mark Gmail message as read on approve:", err);
+      }
+    }
+
     return NextResponse.json({ suggestion: updated });
   }
 

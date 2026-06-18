@@ -212,14 +212,9 @@ export async function processGmailMessages(
         }
       }
 
-      // Mark message as read
-      try {
-        await gmail.users.messages.modify({
-          userId: "me",
-          id: messageId,
-          requestBody: { removeLabelIds: ["UNREAD"] },
-        });
-      } catch { /* best-effort */ }
+      // Note: the Gmail message is marked read only when the user APPROVES a
+      // suggestion (see app/api/ai-inbox/suggestions/[id]/route.ts), so emails
+      // we don't act on stay unread for manual review.
 
       results.push({ messageId, status: "created" });
     } catch (err) {
