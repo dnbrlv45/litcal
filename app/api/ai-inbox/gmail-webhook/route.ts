@@ -1,21 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { google } from "googleapis";
-import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { makeOAuth2Client, getInboxRefreshToken, processGmailMessages } from "@/lib/ai/processGmailMessages";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
-
-// TEMP DEBUG — reports presence/length/hash of the secret env var (never the value itself).
-export async function GET() {
-  const s = process.env.GMAIL_WEBHOOK_SECRET;
-  return NextResponse.json({
-    hasSecret: !!s,
-    length: s ? s.length : 0,
-    sha256_12: s ? crypto.createHash("sha256").update(s).digest("hex").slice(0, 12) : null,
-  });
-}
 
 function verifyRequest(req: NextRequest): boolean {
   const secret = process.env.GMAIL_WEBHOOK_SECRET;

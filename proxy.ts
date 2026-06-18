@@ -9,6 +9,7 @@ const publicRoutes = [
   /^\/api\/auth\/google\/sign-in(?:\/.*)?$/,
   /^\/api\/auth\/sign-out$/,
   /^\/api\/cron\//, // cron-job.org has no session cookie
+  /^\/api\/ai-inbox\/gmail-webhook$/, // Gmail Pub/Sub push; authenticates via ?secret= param, no session cookie
 ];
 
 function isPublicRoute(pathname: string) {
