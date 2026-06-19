@@ -204,12 +204,32 @@ export async function PATCH(
       const ext = data.discoveryExtension ?? {};
       const caseData = data.case ?? {};
       if (ext.newDate) {
-        const matchingCase = await prisma.case.findFirst({
-          where: {
-            workspaceId: workspace.id,
-            ...(caseData.caseNumber ? { caseNumber: caseData.caseNumber } : {}),
-          },
-        });
+        // 1. Try exact case number match
+        let matchingCase = caseData.caseNumber
+          ? await prisma.case.findFirst({
+              where: { workspaceId: workspace.id, caseNumber: caseData.caseNumber },
+            })
+          : null;
+
+        // 2. Fall back to plaintiff/defendant name match
+        if (!matchingCase && (caseData.plaintiff || caseData.defendant)) {
+          const candidates = await prisma.case.findMany({
+            where: { workspaceId: workspace.id },
+            include: { parties: true },
+          });
+          for (const c of candidates) {
+            const pMatch = !caseData.plaintiff || c.parties.some(
+              (p) => p.role === "PLAINTIFF" &&
+                p.name.toLowerCase().includes((caseData.plaintiff as string).toLowerCase())
+            );
+            const dMatch = !caseData.defendant || c.parties.some(
+              (p) => p.role === "DEFENDANT" &&
+                p.name.toLowerCase().includes((caseData.defendant as string).toLowerCase())
+            );
+            if (pMatch && dMatch) { matchingCase = c; break; }
+          }
+        }
+
         if (!matchingCase) {
           return NextResponse.json({
             error: "No matching case found in LitCal. Create the case first.",
