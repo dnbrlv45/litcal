@@ -37,14 +37,14 @@ export async function buildXlsx(
   // ── Calendar tab (first so it's the default when opened) ──────────────────
   if (calendarDays && calendarDays.length > 0) {
     const cal = wb.addWorksheet("Calendar", {
-      properties: { defaultColWidth: 20 },
+      properties: { defaultColWidth: 22 },
     });
 
-    cal.columns = calendarDays.map((d) => ({ width: 20, key: d.label }));
+    cal.columns = calendarDays.map((d) => ({ width: 22, key: d.label }));
 
     // Header row with day labels
     const hRow = cal.getRow(1);
-    hRow.height = 28;
+    hRow.height = 30;
     calendarDays.forEach((d, ci) => {
       const cell = hRow.getCell(ci + 1);
       cell.value = d.label;
@@ -54,29 +54,47 @@ export async function buildXlsx(
       cell.border = { top: LIGHT_BORDER, left: LIGHT_BORDER, bottom: LIGHT_BORDER, right: LIGHT_BORDER };
     });
 
-    // Find the max number of events in any single day to size the grid
+    // Single body row — all events for a day go into one cell with rich text
+    const bodyRow = cal.getRow(2);
     const maxEvents = Math.max(1, ...calendarDays.map((d) => d.events.length));
+    bodyRow.height = Math.max(80, maxEvents * 42);
 
-    for (let slot = 0; slot < maxEvents; slot++) {
-      const row = cal.getRow(slot + 2);
-      row.height = 48;
-      calendarDays.forEach((d, ci) => {
-        const cell = row.getCell(ci + 1);
-        const ev = d.events[slot];
-        if (ev) {
-          const parts = [ev.time, ev.event, ev.caseName, ev.attorney].filter(Boolean);
-          cell.value = parts.join("\n");
-          cell.font = { size: 10, name: "Calibri" };
-        } else {
-          cell.value = "";
-        }
-        cell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
-        cell.border = { top: LIGHT_BORDER, left: LIGHT_BORDER, bottom: LIGHT_BORDER, right: LIGHT_BORDER };
-        if (d.isWeekend) {
-          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: WEEKEND_BG } };
-        }
-      });
-    }
+    calendarDays.forEach((d, ci) => {
+      const cell = bodyRow.getCell(ci + 1);
+
+      if (d.events.length > 0) {
+        const richParts: ExcelJS.RichText[] = [];
+        d.events.forEach((ev, ei) => {
+          if (ei > 0) {
+            richParts.push({ text: "\n\n", font: { size: 4, name: "Calibri" } });
+          }
+          richParts.push({
+            text: `${ev.time}\n`,
+            font: { bold: true, size: 9, name: "Calibri", color: { argb: "0F766E" } },
+          });
+          richParts.push({
+            text: `${ev.event}\n`,
+            font: { bold: true, size: 10, name: "Calibri", color: { argb: "1E293B" } },
+          });
+          const meta = [ev.caseName, ev.attorney].filter(Boolean).join(" · ");
+          if (meta) {
+            richParts.push({
+              text: meta,
+              font: { size: 9, name: "Calibri", color: { argb: "64748B" } },
+            });
+          }
+        });
+        cell.value = { richText: richParts };
+      } else {
+        cell.value = "";
+      }
+
+      cell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
+      cell.border = { top: LIGHT_BORDER, left: LIGHT_BORDER, bottom: LIGHT_BORDER, right: LIGHT_BORDER };
+      if (d.isWeekend) {
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: WEEKEND_BG } };
+      }
+    });
   }
 
   // ── Events list tab ───────────────────────────────────────────────────────
