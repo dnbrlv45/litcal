@@ -6,6 +6,7 @@ import { Prisma } from "@prisma/client";
 import { google } from "googleapis";
 import { createDiscoveryItem, grantDiscoveryExtension } from "@/lib/discovery";
 import { getInboxRefreshToken, makeOAuth2Client } from "@/lib/ai/processGmailMessages";
+import { toTitleCaseName } from "@/lib/utils";
 
 export async function PATCH(
   request: NextRequest,
@@ -44,6 +45,19 @@ export async function PATCH(
       discoveryExtension?: Record<string, string | boolean | null>;
     };
     const classification = suggestion.classification;
+
+    // Normalize extracted names to Title Case so cases, parties, and the
+    // saved suggestion read like names instead of "ALL CAPS" / "camelCase".
+    // Mutating data.case here also normalizes the value persisted below,
+    // since `data` aliases the extractedData object we save.
+    if (data.case) {
+      data.case.plaintiff       = toTitleCaseName(data.case.plaintiff);
+      data.case.defendant       = toTitleCaseName(data.case.defendant);
+      data.case.defenseFirm     = toTitleCaseName(data.case.defenseFirm);
+      data.case.defenseAttorney = toTitleCaseName(data.case.defenseAttorney);
+      data.case.county          = toTitleCaseName(data.case.county);
+      data.case.court           = toTitleCaseName(data.case.court);
+    }
 
     if (classification === "CALENDAR_EVENT") {
       const event    = data.event;

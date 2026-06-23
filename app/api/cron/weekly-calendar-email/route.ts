@@ -12,6 +12,15 @@ const HEADERS = ["Event", "Date", "Time", "Case Name", "Attorney"];
 const COL_WIDTHS = [36, 14, 12, 32, 24];
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const DAY_ABBR = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+interface DayGroup {
+  day: string;       // full name, used by the plain-text version
+  dayAbbr: string;   // "Mon" — column header in the grid
+  dateNum: number;   // day-of-month shown under the column header
+  isWeekend: boolean;
+  events: { event: string; time: string; caseName: string; attorney: string }[];
+}
 
 /** Returns Monday 00:00 UTC and Sunday 23:59:59 UTC of the next calendar week. */
 function nextWeekBounds(): { start: Date; end: Date; label: string } {
@@ -34,27 +43,39 @@ function escapeHtml(v: string) {
   return v.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 }
 
-function buildEmailHtml(recipientName: string, weekLabel: string, dayGroups: { day: string; events: { event: string; time: string; caseName: string; attorney: string }[] }[]): string {
+function buildEventChip(e: { event: string; time: string; caseName: string; attorney: string }): string {
+  const meta = [e.caseName, e.attorney].filter(Boolean).map(escapeHtml).join(" · ");
+  return `<div style="margin:0 0 5px;padding:5px 6px;background:#f0fdfa;border-left:3px solid #0f766e;border-radius:4px;">
+    <div style="font-size:10px;font-weight:700;color:#0f766e;line-height:1.3;">${escapeHtml(e.time)}</div>
+    <div style="font-size:11px;font-weight:600;color:#1e293b;line-height:1.3;">${escapeHtml(e.event)}</div>
+    ${meta ? `<div style="font-size:10px;color:#64748b;line-height:1.3;">${meta}</div>` : ""}
+  </div>`;
+}
+
+function buildEmailHtml(recipientName: string, weekLabel: string, dayGroups: DayGroup[]): string {
   const hasEvents = dayGroups.some((g) => g.events.length > 0);
 
-  const tableRows = dayGroups
-    .filter((g) => g.events.length > 0)
-    .map((g) => {
-      const eventRows = g.events
-        .map(
-          (e, i) => `
-          <tr style="background:${i % 2 === 0 ? "#ffffff" : "#f0fdfa"};">
-            ${i === 0 ? `<td rowspan="${g.events.length}" style="padding:10px 14px;font-size:13px;font-weight:700;color:#0f766e;vertical-align:top;white-space:nowrap;border-top:2px solid #0f766e;">${escapeHtml(g.day)}</td>` : ""}
-            <td style="padding:8px 14px;font-size:13px;color:#1e293b;border-top:1px solid #e2e8f0;">${escapeHtml(e.event)}</td>
-            <td style="padding:8px 14px;font-size:13px;color:#475569;border-top:1px solid #e2e8f0;white-space:nowrap;">${escapeHtml(e.time)}</td>
-            <td style="padding:8px 14px;font-size:13px;color:#475569;border-top:1px solid #e2e8f0;">${escapeHtml(e.caseName)}</td>
-            <td style="padding:8px 14px;font-size:13px;color:#475569;border-top:1px solid #e2e8f0;">${escapeHtml(e.attorney)}</td>
-          </tr>`
-        )
-        .join("");
-      return eventRows;
-    })
+  const headerCells = dayGroups
+    .map(
+      (g) => `<th style="width:14.28%;padding:8px 4px;background:${g.isWeekend ? "#e2e8f0" : "#f1f5f9"};border:1px solid #cbd5e1;text-align:center;">
+        <div style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.3px;">${escapeHtml(g.dayAbbr)}</div>
+        <div style="font-size:16px;font-weight:700;color:#0f172a;">${g.dateNum}</div>
+      </th>`
+    )
     .join("");
+
+  const bodyCells = dayGroups
+    .map(
+      (g) => `<td style="width:14.28%;padding:6px 5px;border:1px solid #e2e8f0;vertical-align:top;background:${g.isWeekend ? "#fafafa" : "#ffffff"};">
+        ${g.events.length > 0 ? g.events.map(buildEventChip).join("") : `<div style="font-size:11px;color:#cbd5e1;text-align:center;padding-top:6px;">—</div>`}
+      </td>`
+    )
+    .join("");
+
+  const grid = `<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;table-layout:fixed;border:1px solid #cbd5e1;border-radius:8px;overflow:hidden;">
+    <tr>${headerCells}</tr>
+    <tr style="height:96px;">${bodyCells}</tr>
+  </table>`;
 
   const safeRecipientName = escapeHtml(recipientName);
   const safeWeekLabel = escapeHtml(weekLabel);
@@ -65,7 +86,7 @@ function buildEmailHtml(recipientName: string, weekLabel: string, dayGroups: { d
 <body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:32px 16px;">
     <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+      <table width="720" cellpadding="0" cellspacing="0" style="max-width:720px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
 
         <!-- Header -->
         <tr>
@@ -80,27 +101,18 @@ function buildEmailHtml(recipientName: string, weekLabel: string, dayGroups: { d
           <td style="padding:24px 30px 16px;">
             <p style="margin:0 0 6px;font-size:15px;font-weight:600;color:#0f172a;">Hi ${safeRecipientName},</p>
             <p style="margin:0;font-size:14px;line-height:1.6;color:#475569;">
-              Here's your weekly calendar for <strong>${safeWeekLabel}</strong>.
+              Here's your week at a glance for <strong>${safeWeekLabel}</strong>.
               The full schedule is attached as an Excel file.
             </p>
           </td>
         </tr>
 
-        <!-- Calendar table -->
+        <!-- Week grid -->
         <tr>
-          <td style="padding:0 30px 24px;">
+          <td style="padding:0 24px 24px;">
             ${
               hasEvents
-                ? `<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border-radius:8px;overflow:hidden;border:1px solid #e2e8f0;">
-                <tr style="background:#f1f5f9;">
-                  <th style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;text-align:left;border-bottom:1px solid #e2e8f0;">Day</th>
-                  <th style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;text-align:left;border-bottom:1px solid #e2e8f0;">Event</th>
-                  <th style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;text-align:left;border-bottom:1px solid #e2e8f0;">Time</th>
-                  <th style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;text-align:left;border-bottom:1px solid #e2e8f0;">Case</th>
-                  <th style="padding:10px 14px;font-size:12px;font-weight:600;color:#64748b;text-align:left;border-bottom:1px solid #e2e8f0;">Attorney</th>
-                </tr>
-                ${tableRows}
-              </table>`
+                ? grid
                 : `<p style="margin:0;font-size:14px;color:#64748b;font-style:italic;">No events scheduled for this week.</p>`
             }
           </td>
@@ -122,7 +134,7 @@ function buildEmailHtml(recipientName: string, weekLabel: string, dayGroups: { d
 </html>`;
 }
 
-function buildEmailText(recipientName: string, weekLabel: string, dayGroups: { day: string; events: { event: string; time: string; caseName: string; attorney: string }[] }[]): string {
+function buildEmailText(recipientName: string, weekLabel: string, dayGroups: DayGroup[]): string {
   const lines = [`Hi ${recipientName},`, ``, `Your weekly calendar for ${weekLabel}:`, ``];
   const hasEvents = dayGroups.some((g) => g.events.length > 0);
   if (hasEvents) {
@@ -203,10 +215,15 @@ export async function GET(_request: NextRequest) {
     }
 
     // Build ordered day groups (Mon–Sun)
-    const dayGroups = [1, 2, 3, 4, 5, 6, 0].map((dow) => {
+    const dayGroups: DayGroup[] = [1, 2, 3, 4, 5, 6, 0].map((dow, i) => {
       const dayEvents = dayMap.get(dow) ?? [];
+      const dayDate = new Date(start);
+      dayDate.setUTCDate(start.getUTCDate() + i);
       return {
         day: DAY_NAMES[dow],
+        dayAbbr: DAY_ABBR[dow],
+        dateNum: dayDate.getUTCDate(),
+        isWeekend: dow === 0 || dow === 6,
         events: dayEvents.map((ev) => ({
           event: getEventDisplayName({
             title: ev.title,
