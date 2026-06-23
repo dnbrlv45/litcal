@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCurrentWorkspace, canManageWorkspace } from "@/lib/workspaces";
 import { getEventDisplayName, formatCsvDate, formatCsvTime } from "@/lib/event-display";
-import { buildXlsx } from "@/lib/excel";
+import { buildXlsx, type CalendarDay } from "@/lib/excel";
 
 export const dynamic = "force-dynamic";
 
@@ -64,7 +64,42 @@ export async function GET(request: NextRequest) {
       : "",
   }));
 
-  const buffer = await buildXlsx("Weekly Calendar", HEADERS, rows, COL_WIDTHS);
+  const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  // Group events by day for the calendar tab
+  const dayMap = new Map<number, typeof events>();
+  for (const ev of events) {
+    const dow = new Date(ev.startTime.toLocaleString("en-US", { timeZone: tz })).getDay();
+    if (!dayMap.has(dow)) dayMap.set(dow, []);
+    dayMap.get(dow)!.push(ev);
+  }
+
+  // Build Mon–Sun calendar days using the requested date range
+  const calendarDays: CalendarDay[] = [1, 2, 3, 4, 5, 6, 0].map((dow, i) => {
+    const dayDate = new Date(startDate);
+    dayDate.setUTCDate(startDate.getUTCDate() + i);
+    const dayEvents = dayMap.get(dow) ?? [];
+    return {
+      label: `${DAY_NAMES[dow]} ${dayDate.getUTCDate()}`,
+      isWeekend: dow === 0 || dow === 6,
+      events: dayEvents.map((ev) => ({
+        event: getEventDisplayName({
+          title: ev.title,
+          eventType: ev.eventType,
+          subtype: ev.subtype,
+          subtypeReason: ev.subtypeReason,
+          generatedDeadlineRuleKey: ev.generatedDeadline?.ruleKey,
+        }),
+        time: formatCsvTime(ev.startTime, ev.allDay, tz),
+        caseName: ev.caseRef?.title ?? "",
+        attorney: ev.assignedAttorney
+          ? [ev.assignedAttorney.firstName, ev.assignedAttorney.lastName].filter(Boolean).join(" ")
+          : "",
+      })),
+    };
+  });
+
+  const buffer = await buildXlsx("Events", HEADERS, rows, COL_WIDTHS, undefined, calendarDays);
 
   const s = startDate.toISOString().slice(0, 10);
   const e = endDate.toISOString().slice(0, 10);

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendLitCalEmailWithAttachment } from "@/lib/google-mail";
 import { getEventDisplayName, formatCsvDate, formatCsvTime } from "@/lib/event-display";
-import { buildXlsx } from "@/lib/excel";
+import { buildXlsx, type CalendarDay } from "@/lib/excel";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -183,30 +183,7 @@ export async function GET(_request: NextRequest) {
       orderBy: { startTime: "asc" },
     });
 
-    // Build xlsx once per workspace (use UTC for the file)
-    const xlsxRows = events.map((ev) => ({
-      Event: getEventDisplayName({
-        title: ev.title,
-        eventType: ev.eventType,
-        subtype: ev.subtype,
-        subtypeReason: ev.subtypeReason,
-        generatedDeadlineRuleKey: ev.generatedDeadline?.ruleKey,
-      }),
-      Date: formatCsvDate(ev.startTime, "America/Los_Angeles"),
-      Time: formatCsvTime(ev.startTime, ev.allDay, "America/Los_Angeles"),
-      "Case Name": ev.caseRef?.title ?? "",
-      Attorney: ev.assignedAttorney
-        ? [ev.assignedAttorney.firstName, ev.assignedAttorney.lastName].filter(Boolean).join(" ")
-        : "",
-    }));
-
-    const xlsxBlob = await buildXlsx("Weekly Calendar", HEADERS, xlsxRows, COL_WIDTHS);
-    const xlsxBuffer = Buffer.from(await xlsxBlob.arrayBuffer());
-    const s = start.toISOString().slice(0, 10);
-    const e = end.toISOString().slice(0, 10);
-    const xlsxFilename = `litcal-weekly-calendar-${s}-to-${e}.xlsx`;
-
-    // Group events by day of week for the email body
+    // Group events by day of week for the email body and calendar tab
     const dayMap = new Map<number, typeof events>();
     for (const ev of events) {
       const dow = new Date(ev.startTime.toLocaleString("en-US", { timeZone: "America/Los_Angeles" })).getDay();
@@ -240,6 +217,35 @@ export async function GET(_request: NextRequest) {
         })),
       };
     });
+
+    // Build xlsx with both the events list and the calendar tab
+    const xlsxRows = events.map((ev) => ({
+      Event: getEventDisplayName({
+        title: ev.title,
+        eventType: ev.eventType,
+        subtype: ev.subtype,
+        subtypeReason: ev.subtypeReason,
+        generatedDeadlineRuleKey: ev.generatedDeadline?.ruleKey,
+      }),
+      Date: formatCsvDate(ev.startTime, "America/Los_Angeles"),
+      Time: formatCsvTime(ev.startTime, ev.allDay, "America/Los_Angeles"),
+      "Case Name": ev.caseRef?.title ?? "",
+      Attorney: ev.assignedAttorney
+        ? [ev.assignedAttorney.firstName, ev.assignedAttorney.lastName].filter(Boolean).join(" ")
+        : "",
+    }));
+
+    const calendarDays: CalendarDay[] = dayGroups.map((g) => ({
+      label: `${g.dayAbbr} ${g.dateNum}`,
+      events: g.events,
+      isWeekend: g.isWeekend,
+    }));
+
+    const xlsxBlob = await buildXlsx("Events", HEADERS, xlsxRows, COL_WIDTHS, undefined, calendarDays);
+    const xlsxBuffer = Buffer.from(await xlsxBlob.arrayBuffer());
+    const s = start.toISOString().slice(0, 10);
+    const e = end.toISOString().slice(0, 10);
+    const xlsxFilename = `litcal-weekly-calendar-${s}-to-${e}.xlsx`;
 
     for (const member of workspace.members) {
       const { user } = member;
