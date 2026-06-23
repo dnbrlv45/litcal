@@ -169,31 +169,78 @@ export async function GET(_request: NextRequest) {
   let failed = 0;
 
   for (const workspace of workspaces) {
-    const events = await prisma.event.findMany({
-      where: {
-        workspaceId: workspace.id,
-        status: { not: "CANCELLED" },
-        startTime: { gte: start, lte: end },
-      },
-      include: {
-        assignedAttorney: { select: { firstName: true, lastName: true } },
-        caseRef: { select: { title: true } },
-        generatedDeadline: { select: { ruleKey: true } },
-      },
-      orderBy: { startTime: "asc" },
-    });
+    const [events, tasks] = await Promise.all([
+      prisma.event.findMany({
+        where: {
+          workspaceId: workspace.id,
+          status: { not: "CANCELLED" },
+          startTime: { gte: start, lte: end },
+        },
+        include: {
+          assignedAttorney: { select: { firstName: true, lastName: true } },
+          caseRef: { select: { title: true } },
+          generatedDeadline: { select: { ruleKey: true } },
+        },
+        orderBy: { startTime: "asc" },
+      }),
+      prisma.task.findMany({
+        where: {
+          workspaceId: workspace.id,
+          status: { not: "DONE" },
+          dueDate: { gte: start, lte: end },
+        },
+        include: {
+          caseRef: { select: { title: true } },
+          assignees: { include: { user: { select: { firstName: true, lastName: true } } } },
+        },
+        orderBy: { dueDate: "asc" },
+      }),
+    ]);
 
-    // Group events by day of week for the email body and calendar tab
-    const dayMap = new Map<number, typeof events>();
-    for (const ev of events) {
-      const dow = new Date(ev.startTime.toLocaleString("en-US", { timeZone: "America/Los_Angeles" })).getDay();
+    // Normalize events and tasks into a common shape for the calendar
+    type CalItem = { date: Date; event: string; time: string; caseName: string; attorney: string };
+
+    const eventItems: CalItem[] = events.map((ev) => ({
+      date: ev.startTime,
+      event: getEventDisplayName({
+        title: ev.title,
+        eventType: ev.eventType,
+        subtype: ev.subtype,
+        subtypeReason: ev.subtypeReason,
+        generatedDeadlineRuleKey: ev.generatedDeadline?.ruleKey,
+      }),
+      time: formatCsvTime(ev.startTime, ev.allDay, "America/Los_Angeles"),
+      caseName: ev.caseRef?.title ?? "",
+      attorney: ev.assignedAttorney
+        ? [ev.assignedAttorney.firstName, ev.assignedAttorney.lastName].filter(Boolean).join(" ")
+        : "",
+    }));
+
+    const taskItems: CalItem[] = tasks.map((t) => ({
+      date: t.dueDate!,
+      event: `Task: ${t.title}`,
+      time: "Due",
+      caseName: t.caseRef?.title ?? "",
+      attorney: t.assignees
+        .map((a) => [a.user.firstName, a.user.lastName].filter(Boolean).join(" "))
+        .join(", "),
+    }));
+
+    const allItems = [...eventItems, ...taskItems].sort(
+      (a, b) => a.date.getTime() - b.date.getTime()
+    );
+
+    // Group by day of week for the email body and calendar tab
+    const dayMap = new Map<number, CalItem[]>();
+    for (const item of allItems) {
+      const dow = new Date(item.date.toLocaleString("en-US", { timeZone: "America/Los_Angeles" })).getDay();
       if (!dayMap.has(dow)) dayMap.set(dow, []);
-      dayMap.get(dow)!.push(ev);
+      dayMap.get(dow)!.push(item);
     }
 
     // Build ordered day groups (Mon–Sun)
     const dayGroups: DayGroup[] = [1, 2, 3, 4, 5, 6, 0].map((dow, i) => {
-      const dayEvents = dayMap.get(dow) ?? [];
+      const dayItems = dayMap.get(dow) ?? [];
       const dayDate = new Date(start);
       dayDate.setUTCDate(start.getUTCDate() + i);
       return {
@@ -201,38 +248,22 @@ export async function GET(_request: NextRequest) {
         dayAbbr: DAY_ABBR[dow],
         dateNum: dayDate.getUTCDate(),
         isWeekend: dow === 0 || dow === 6,
-        events: dayEvents.map((ev) => ({
-          event: getEventDisplayName({
-            title: ev.title,
-            eventType: ev.eventType,
-            subtype: ev.subtype,
-            subtypeReason: ev.subtypeReason,
-            generatedDeadlineRuleKey: ev.generatedDeadline?.ruleKey,
-          }),
-          time: formatCsvTime(ev.startTime, ev.allDay, "America/Los_Angeles"),
-          caseName: ev.caseRef?.title ?? "",
-          attorney: ev.assignedAttorney
-            ? [ev.assignedAttorney.firstName, ev.assignedAttorney.lastName].filter(Boolean).join(" ")
-            : "",
+        events: dayItems.map((item) => ({
+          event: item.event,
+          time: item.time,
+          caseName: item.caseName,
+          attorney: item.attorney,
         })),
       };
     });
 
-    // Build xlsx with both the events list and the calendar tab
-    const xlsxRows = events.map((ev) => ({
-      Event: getEventDisplayName({
-        title: ev.title,
-        eventType: ev.eventType,
-        subtype: ev.subtype,
-        subtypeReason: ev.subtypeReason,
-        generatedDeadlineRuleKey: ev.generatedDeadline?.ruleKey,
-      }),
-      Date: formatCsvDate(ev.startTime, "America/Los_Angeles"),
-      Time: formatCsvTime(ev.startTime, ev.allDay, "America/Los_Angeles"),
-      "Case Name": ev.caseRef?.title ?? "",
-      Attorney: ev.assignedAttorney
-        ? [ev.assignedAttorney.firstName, ev.assignedAttorney.lastName].filter(Boolean).join(" ")
-        : "",
+    // Build xlsx with both the events/tasks list and the calendar tab
+    const xlsxRows = allItems.map((item) => ({
+      Event: item.event,
+      Date: formatCsvDate(item.date, "America/Los_Angeles"),
+      Time: item.time,
+      "Case Name": item.caseName,
+      Attorney: item.attorney,
     }));
 
     const calendarDays: CalendarDay[] = dayGroups.map((g) => ({
