@@ -4,8 +4,14 @@ const HEADER_BG   = "0F766E"; // teal-700
 const HEADER_FG   = "FFFFFF";
 const ALT_ROW_BG  = "F0FDFA"; // teal-50
 const WEEKEND_BG  = "F1F5F9"; // slate-100
+const TITLE_BG    = "0F172A"; // slate-900
+const TITLE_SUB   = "CCFBF1"; // teal-100
+const EVENT_BG    = "FFFFFF";
+const EMPTY_BG    = "F8FAFC"; // slate-50
+const TEXT_DARK   = "0F172A";
+const TEXT_MUTED  = "64748B";
 const LIGHT_BORDER: Partial<ExcelJS.Border> = { style: "thin", color: { argb: "CBD5E1" } };
-const THIN_BORDER: Partial<ExcelJS.Border> = { style: "thin", color: { argb: "FF000000" } };
+const CALENDAR_COLUMNS = 7;
 
 export interface CalendarDay {
   label: string; // e.g. "Mon 6/23"
@@ -37,69 +43,128 @@ export async function buildXlsx(
   // ── Calendar tab (first so it's the default when opened) ──────────────────
   if (calendarDays && calendarDays.length > 0) {
     const cal = wb.addWorksheet("Calendar", {
-      properties: { defaultColWidth: 22 },
+      properties: {
+        defaultColWidth: 23,
+        defaultRowHeight: 20,
+        tabColor: { argb: HEADER_BG },
+      },
+      pageSetup: {
+        orientation: "landscape",
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 0,
+        margins: {
+          left: 0.25,
+          right: 0.25,
+          top: 0.35,
+          bottom: 0.35,
+          header: 0.15,
+          footer: 0.15,
+        },
+      },
+      views: [{ state: "frozen", ySplit: 3, showGridLines: false }],
     });
 
-    cal.columns = calendarDays.map((d) => ({ width: 22, key: d.label }));
+    cal.columns = calendarDays.map((d) => ({ width: 23, key: d.label }));
 
-    // Header row with day labels
-    const hRow = cal.getRow(1);
-    hRow.height = 30;
+    cal.mergeCells(1, 1, 1, CALENDAR_COLUMNS);
+    const titleCell = cal.getCell(1, 1);
+    titleCell.value = "LitCal Weekly Calendar";
+    titleCell.font = { bold: true, color: { argb: HEADER_FG }, size: 18, name: "Calibri" };
+    titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: TITLE_BG } };
+    titleCell.alignment = { vertical: "middle", horizontal: "left" };
+    titleCell.border = { top: LIGHT_BORDER, left: LIGHT_BORDER, bottom: LIGHT_BORDER, right: LIGHT_BORDER };
+    cal.getRow(1).height = 34;
+
+    cal.mergeCells(2, 1, 2, CALENDAR_COLUMNS);
+    const summaryCell = cal.getCell(2, 1);
+    const totalEvents = calendarDays.reduce((sum, d) => sum + d.events.length, 0);
+    summaryCell.value = `${totalEvents} scheduled ${totalEvents === 1 ? "item" : "items"} across the week`;
+    summaryCell.font = { bold: true, color: { argb: TITLE_BG }, size: 10, name: "Calibri" };
+    summaryCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: TITLE_SUB } };
+    summaryCell.alignment = { vertical: "middle", horizontal: "left" };
+    summaryCell.border = { top: LIGHT_BORDER, left: LIGHT_BORDER, bottom: LIGHT_BORDER, right: LIGHT_BORDER };
+    cal.getRow(2).height = 22;
+
+    // Header row with day labels and per-day counts.
+    const hRow = cal.getRow(3);
+    hRow.height = 34;
     calendarDays.forEach((d, ci) => {
       const cell = hRow.getCell(ci + 1);
-      cell.value = d.label;
+      const countLabel = d.events.length === 1 ? "1 item" : `${d.events.length} items`;
+      cell.value = {
+        richText: [
+          { text: `${d.label}\n`, font: { bold: true, color: { argb: HEADER_FG }, size: 12, name: "Calibri" } },
+          { text: countLabel, font: { bold: false, color: { argb: "D1FAE5" }, size: 9, name: "Calibri" } },
+        ],
+      };
       cell.font = { bold: true, color: { argb: HEADER_FG }, size: 12, name: "Calibri" };
-      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: HEADER_BG } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: d.isWeekend ? "334155" : HEADER_BG } };
       cell.alignment = { vertical: "middle", horizontal: "center" };
       cell.border = { top: LIGHT_BORDER, left: LIGHT_BORDER, bottom: LIGHT_BORDER, right: LIGHT_BORDER };
     });
 
-    // Single body row — all events for a day go into one cell with rich text
-    const bodyRow = cal.getRow(2);
     const maxEvents = Math.max(1, ...calendarDays.map((d) => d.events.length));
-    bodyRow.height = Math.max(80, maxEvents * 42);
 
-    calendarDays.forEach((d, ci) => {
-      const cell = bodyRow.getCell(ci + 1);
+    for (let eventIndex = 0; eventIndex < maxEvents; eventIndex++) {
+      const row = cal.getRow(eventIndex + 4);
+      row.height = 66;
 
-      if (d.events.length > 0) {
-        const richParts: ExcelJS.RichText[] = [];
-        d.events.forEach((ev, ei) => {
-          if (ei > 0) {
-            richParts.push({ text: "\n\n", font: { size: 4, name: "Calibri" } });
-          }
-          richParts.push({
-            text: `${ev.time}\n`,
-            font: { bold: true, size: 9, name: "Calibri", color: { argb: "0F766E" } },
-          });
-          richParts.push({
-            text: `${ev.event}\n`,
-            font: { bold: true, size: 10, name: "Calibri", color: { argb: "1E293B" } },
-          });
-          const meta = [ev.caseName, ev.attorney].filter(Boolean).join(" · ");
+      calendarDays.forEach((d, ci) => {
+        const cell = row.getCell(ci + 1);
+        const ev = d.events[eventIndex];
+
+        if (ev) {
+          const meta = [ev.caseName, ev.attorney].filter(Boolean).join(" | ");
+          const richParts: ExcelJS.RichText[] = [
+            {
+              text: `${ev.time || "All day"}\n`,
+              font: { bold: true, size: 9, name: "Calibri", color: { argb: HEADER_BG } },
+            },
+            {
+              text: `${ev.event}\n`,
+              font: { bold: true, size: 10, name: "Calibri", color: { argb: TEXT_DARK } },
+            },
+          ];
           if (meta) {
-            richParts.push({
-              text: meta,
-              font: { size: 9, name: "Calibri", color: { argb: "64748B" } },
-            });
+            richParts.push({ text: meta, font: { size: 9, name: "Calibri", color: { argb: TEXT_MUTED } } });
           }
-        });
-        cell.value = { richText: richParts };
-      } else {
-        cell.value = "";
-      }
 
-      cell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
-      cell.border = { top: LIGHT_BORDER, left: LIGHT_BORDER, bottom: LIGHT_BORDER, right: LIGHT_BORDER };
-      if (d.isWeekend) {
-        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: WEEKEND_BG } };
-      }
-    });
+          cell.value = { richText: richParts };
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: d.isWeekend ? WEEKEND_BG : EVENT_BG } };
+        } else if (eventIndex === 0) {
+          cell.value = "No scheduled items";
+          cell.font = { italic: true, size: 10, name: "Calibri", color: { argb: TEXT_MUTED } };
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: d.isWeekend ? WEEKEND_BG : EMPTY_BG } };
+        } else {
+          cell.value = "";
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: d.isWeekend ? WEEKEND_BG : EMPTY_BG } };
+        }
+
+        cell.alignment = { vertical: "top", horizontal: "left", wrapText: true, indent: 1 };
+        cell.border = { top: LIGHT_BORDER, left: LIGHT_BORDER, bottom: LIGHT_BORDER, right: LIGHT_BORDER };
+      });
+    }
   }
 
   // ── Events list tab ───────────────────────────────────────────────────────
   const ws = wb.addWorksheet(sheetName, {
-    views: [{ state: "frozen", ySplit: 1 }],
+    properties: { tabColor: { argb: TITLE_BG } },
+    views: [{ state: "frozen", ySplit: 1, showGridLines: false }],
+    pageSetup: {
+      orientation: "landscape",
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 0,
+      margins: {
+        left: 0.25,
+        right: 0.25,
+        top: 0.35,
+        bottom: 0.35,
+        header: 0.15,
+        footer: 0.15,
+      },
+    },
   });
 
   ws.columns = headers.map((h, i) => ({
@@ -114,7 +179,12 @@ export async function buildXlsx(
     cell.font = { bold: true, color: { argb: HEADER_FG }, size: 11, name: "Calibri" };
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: HEADER_BG } };
     cell.alignment = { vertical: "middle", horizontal: "left" };
+    cell.border = { top: LIGHT_BORDER, left: LIGHT_BORDER, bottom: LIGHT_BORDER, right: LIGHT_BORDER };
   });
+  ws.autoFilter = {
+    from: { row: 1, column: 1 },
+    to: { row: 1, column: headers.length },
+  };
 
   rows.forEach((rowData, index) => {
     const row = ws.addRow(headers.map((h) => rowData[h] ?? ""));
@@ -123,12 +193,12 @@ export async function buildXlsx(
     const isAlt = index % 2 === 1;
     row.eachCell((cell) => {
       cell.font = { size: 11, name: "Calibri" };
-      cell.alignment = { vertical: "middle", horizontal: "left" };
+      cell.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
       const bg = customBg ?? (isAlt ? ALT_ROW_BG : null);
       if (bg) {
         cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bg } };
       }
-      cell.border = { top: THIN_BORDER, left: THIN_BORDER, bottom: THIN_BORDER, right: THIN_BORDER };
+      cell.border = { top: LIGHT_BORDER, left: LIGHT_BORDER, bottom: LIGHT_BORDER, right: LIGHT_BORDER };
     });
   });
 

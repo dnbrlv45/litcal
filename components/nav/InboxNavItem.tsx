@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { usePathname } from "next/navigation";
-import { Inbox, X, CheckCheck, ExternalLink } from "lucide-react";
+import { Bell, X, CheckCheck, ExternalLink } from "lucide-react";
 import { notificationHref, notificationTargetLabel } from "@/lib/notification-routing";
 
 interface Notification {
@@ -40,7 +40,7 @@ export default function InboxNavItem({ collapsed }: { collapsed?: boolean }) {
   const knownIdsRef = useRef<Set<string> | null>(null);
   const anchorRef = useRef<HTMLAnchorElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
-  const isActive = pathname === "/inbox";
+  const isActive = pathname === "/notifications" || pathname === "/inbox";
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -66,7 +66,7 @@ export default function InboxNavItem({ collapsed }: { collapsed?: boolean }) {
     return () => clearInterval(interval);
   }, [fetchNotifications]);
 
-  // Refetch immediately when InboxClient marks something read
+  // Refetch immediately when the notifications page marks something read.
   useEffect(() => {
     const handler = () => void fetchNotifications();
     window.addEventListener("notifications-updated", handler);
@@ -130,8 +130,8 @@ export default function InboxNavItem({ collapsed }: { collapsed?: boolean }) {
       >
         <Link
           ref={anchorRef}
-          href="/inbox"
-          aria-label="Inbox"
+          href="/notifications"
+          aria-label="Notifications"
           className={`group relative flex items-center rounded-lg text-sm transition-all ${
             collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5"
           } ${
@@ -143,19 +143,19 @@ export default function InboxNavItem({ collapsed }: { collapsed?: boolean }) {
           <span className={`relative grid size-7 place-items-center rounded-md transition-colors ${
             isActive ? "bg-teal-50 text-teal-700" : "text-slate-500 group-hover:bg-slate-100 group-hover:text-slate-800"
           }`}>
-            <Inbox className="w-4 h-4 shrink-0" />
+            <Bell className="w-4 h-4 shrink-0" />
             {unread > 0 && (
               <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center px-0.5">
                 {unread > 9 ? "9+" : unread}
               </span>
             )}
           </span>
-          {!collapsed && <span className="flex-1 font-medium">Inbox</span>}
+          {!collapsed && <span className="flex-1 font-medium">Notifications</span>}
           {/* Collapsed tooltip — only show when not hovering a popover */}
           {collapsed && recent.length === 0 && (
             <span className="pointer-events-none invisible absolute left-[calc(100%+10px)] top-1/2 z-50 flex -translate-y-1/2 items-center gap-2 whitespace-nowrap rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 opacity-0 shadow-lg transition-all duration-150 group-hover:visible group-hover:opacity-100">
               <span className="size-1.5 rounded-full bg-teal-500" />
-              Inbox
+              Notifications
             </span>
           )}
         </Link>
@@ -174,7 +174,7 @@ export default function InboxNavItem({ collapsed }: { collapsed?: boolean }) {
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Recent</span>
             <Link
-              href="/inbox"
+              href="/notifications"
               className="flex items-center gap-1 text-xs font-semibold text-teal-700 hover:text-teal-800"
             >
               View all <ExternalLink className="size-3" />

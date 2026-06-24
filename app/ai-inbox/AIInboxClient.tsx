@@ -7,18 +7,23 @@ import {
   CheckCircle2,
   XCircle,
   AlertTriangle,
+  Briefcase,
+  CalendarPlus,
   ChevronDown,
   ChevronUp,
+  FileText,
   Loader2,
   Inbox,
   PlugZap,
   RefreshCw,
   RotateCcw,
+  ShieldCheck,
 } from "lucide-react";
 
 type Status = "PENDING" | "APPROVED" | "IGNORED" | "DUPLICATE";
 type FilterTab = "PENDING" | "DUPLICATE" | "APPROVED" | "IGNORED";
 type ConnectionState = "connected" | "needs_read_scope" | "not_connected" | "no_workspace" | "error" | "loading";
+type StatusCounts = Record<FilterTab, number>;
 
 interface AISuggestion {
   id: string;
@@ -42,6 +47,7 @@ interface ConnectionInfo {
 
 const CLASSIFICATION_COLORS: Record<string, string> = {
   CALENDAR_EVENT:       "bg-blue-50 text-blue-700 ring-blue-200",
+  DISCOVERY:            "bg-cyan-50 text-cyan-700 ring-cyan-200",
   DISCOVERY_EXTENSION:  "bg-amber-50 text-amber-700 ring-amber-200",
   NEW_CASE:             "bg-green-50 text-green-700 ring-green-200",
   IGNORE:               "bg-slate-50 text-slate-600 ring-slate-200",
@@ -49,9 +55,17 @@ const CLASSIFICATION_COLORS: Record<string, string> = {
 
 const CLASSIFICATION_LABELS: Record<string, string> = {
   CALENDAR_EVENT:      "Calendar Event",
+  DISCOVERY:           "Discovery",
   DISCOVERY_EXTENSION: "Discovery Extension",
   NEW_CASE:            "New Case",
   IGNORE:              "Ignore",
+};
+
+const EMPTY_COUNTS: StatusCounts = {
+  PENDING: 0,
+  DUPLICATE: 0,
+  APPROVED: 0,
+  IGNORED: 0,
 };
 
 function ConfidenceBadge({ value }: { value: number | null }) {
@@ -59,6 +73,48 @@ function ConfidenceBadge({ value }: { value: number | null }) {
   const pct = Math.round(value * 100);
   const color = pct >= 80 ? "text-green-600" : pct >= 50 ? "text-amber-600" : "text-red-500";
   return <span className={`text-xs font-semibold ${color}`}>{pct}% confidence</span>;
+}
+
+function SummaryField({ label, value }: { label: string; value: unknown }) {
+  return (
+    <div className="min-w-0 rounded-md bg-white px-3 py-2 ring-1 ring-slate-200">
+      <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{label}</div>
+      <div className={`mt-0.5 truncate text-sm font-medium ${value ? "text-slate-800" : "text-slate-400"}`}>
+        {valueOrDash(value)}
+      </div>
+    </div>
+  );
+}
+
+function valueOrDash(value: unknown) {
+  if (value == null || value === "") return "Not found";
+  return String(value);
+}
+
+function formatReceivedAt(value: string | null) {
+  if (!value) return "";
+  return new Date(value).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function suggestionVerb(classification: string, duplicate: boolean) {
+  if (duplicate) return "Review duplicate";
+  if (classification === "CALENDAR_EVENT") return "Create calendar event";
+  if (classification === "DISCOVERY") return "Create discovery deadline";
+  if (classification === "DISCOVERY_EXTENSION") return "Apply discovery extension";
+  if (classification === "NEW_CASE") return "Create case";
+  return "Review suggestion";
+}
+
+function suggestionIcon(classification: string) {
+  if (classification === "CALENDAR_EVENT") return CalendarPlus;
+  if (classification === "DISCOVERY" || classification === "DISCOVERY_EXTENSION") return FileText;
+  if (classification === "NEW_CASE") return Briefcase;
+  return ShieldCheck;
 }
 
 function SuggestionCard({
@@ -90,6 +146,7 @@ function SuggestionCard({
   const data = s.extractedData as {
     case?: Record<string, string | null>;
     event?: Record<string, string | null>;
+    discovery?: Record<string, string | null>;
     discoveryExtension?: Record<string, string | null>;
     existingEventWarning?: string;
   };
@@ -112,43 +169,71 @@ function SuggestionCard({
   }
 
   const isDuplicate = s.status === "DUPLICATE";
+  const ActionIcon = suggestionIcon(s.classification);
+  const actionLabel = suggestionVerb(s.classification, isDuplicate);
+  const caseTitle = [data.case?.plaintiff, "v.", data.case?.defendant].filter(Boolean).join(" ");
+  const primaryDate =
+    data.event?.date ??
+    data.discovery?.servedOrReceivedDate ??
+    data.discoveryExtension?.newDate ??
+    data.case?.dateFiled;
+  const primaryDetail =
+    data.event?.eventType ??
+    data.discovery?.discoveryType ??
+    data.discoveryExtension?.appliesTo ??
+    data.case?.caseType;
 
   return (
     <div className={`rounded-xl border bg-white shadow-sm ${isDuplicate ? "border-amber-200" : "border-slate-200"}`}>
       <div className="p-4">
-        <div className="flex flex-wrap items-center gap-2 mb-1">
-          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ${CLASSIFICATION_COLORS[s.classification] ?? "bg-slate-50 text-slate-600 ring-slate-200"}`}>
-            {CLASSIFICATION_LABELS[s.classification] ?? s.classification}
-          </span>
-          <ConfidenceBadge value={s.confidence} />
-          {isDuplicate && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700 ring-1 ring-amber-200">
-              <AlertTriangle className="size-3" /> Possible Duplicate
-            </span>
-          )}
-          <span className={`ml-auto text-xs px-2 py-0.5 rounded-full font-medium ${
-            s.status === "APPROVED" ? "bg-green-50 text-green-700" :
-            s.status === "IGNORED"  ? "bg-slate-100 text-slate-500" :
-            "bg-slate-100 text-slate-600"
+        <div className="flex items-start gap-3">
+          <div className={`grid size-10 shrink-0 place-items-center rounded-lg ring-1 ${
+            isDuplicate ? "bg-amber-50 text-amber-700 ring-amber-200" : "bg-teal-50 text-teal-700 ring-teal-200"
           }`}>
-            {s.status}
-          </span>
+            {isDuplicate ? <AlertTriangle className="size-5" /> : <ActionIcon className="size-5" />}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2 mb-1">
+              <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ${CLASSIFICATION_COLORS[s.classification] ?? "bg-slate-50 text-slate-600 ring-slate-200"}`}>
+                {CLASSIFICATION_LABELS[s.classification] ?? s.classification}
+              </span>
+              <ConfidenceBadge value={s.confidence} />
+              {isDuplicate && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700 ring-1 ring-amber-200">
+                  <AlertTriangle className="size-3" /> Possible Duplicate
+                </span>
+              )}
+              <span className={`ml-auto text-xs px-2 py-0.5 rounded-full font-medium ${
+                s.status === "APPROVED" ? "bg-green-50 text-green-700" :
+                s.status === "IGNORED"  ? "bg-slate-100 text-slate-500" :
+                "bg-slate-100 text-slate-600"
+              }`}>
+                {s.status}
+              </span>
+            </div>
+
+            <p className="font-semibold text-slate-900 truncate">{s.subject ?? "(no subject)"}</p>
+            <p className="text-sm text-slate-500 mt-0.5">
+              {s.sender}{s.receivedAt ? ` · ${formatReceivedAt(s.receivedAt)}` : ""}
+            </p>
+          </div>
         </div>
 
-        <p className="font-semibold text-slate-900 truncate">{s.subject ?? "(no subject)"}</p>
-        <p className="text-sm text-slate-500 mt-0.5">
-          {s.sender}{s.receivedAt ? ` · ${new Date(s.receivedAt).toLocaleDateString()}` : ""}
-        </p>
-
-        <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm text-slate-600">
-          {data.case?.plaintiff  && <span><span className="font-medium">Plaintiff:</span> {data.case.plaintiff}</span>}
-          {data.case?.defendant  && <span><span className="font-medium">Defendant:</span> {data.case.defendant}</span>}
-          {data.case?.caseNumber && <span><span className="font-medium">Case #:</span> {data.case.caseNumber}</span>}
-          {data.event?.date      && <span><span className="font-medium">Date:</span> {data.event.date}</span>}
-          {data.event?.eventType && <span><span className="font-medium">Type:</span> {data.event.eventType}</span>}
-          {data.discoveryExtension?.newDate && (
-            <span><span className="font-medium">New Discovery Deadline:</span> {data.discoveryExtension.newDate}</span>
-          )}
+        <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50/70 p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wide text-slate-500">Review summary</span>
+            <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-teal-700 ring-1 ring-slate-200">
+              {actionLabel}
+            </span>
+          </div>
+          <div className="mt-3 grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
+            <SummaryField label="Case" value={caseTitle || data.case?.caseNumber} />
+            <SummaryField label="Case number" value={data.case?.caseNumber} />
+            <SummaryField label="Date" value={primaryDate} />
+            <SummaryField label="Type" value={primaryDetail} />
+            <SummaryField label="Court" value={data.case?.court ?? data.case?.county} />
+            <SummaryField label="Attorney" value={data.event?.attorney ?? data.discoveryExtension?.requestedBy} />
+          </div>
         </div>
 
         {data.existingEventWarning && (
@@ -169,8 +254,8 @@ function SuggestionCard({
         className="flex w-full items-center justify-center gap-1 border-t border-slate-100 py-2 text-xs text-slate-500 hover:bg-slate-50 transition-colors"
       >
         {expanded
-          ? <><ChevronUp className="size-3.5" /> Less</>
-          : <><ChevronDown className="size-3.5" /> Details</>}
+          ? <><ChevronUp className="size-3.5" /> Hide raw extraction</>
+          : <><ChevronDown className="size-3.5" /> Raw extraction</>}
       </button>
 
       {expanded && (
@@ -217,7 +302,7 @@ function SuggestionCard({
                 className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50 transition-colors"
               >
                 {acting ? <Loader2 className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />}
-                Approve
+                {actionLabel}
               </button>
             )}
             <button
@@ -271,6 +356,26 @@ const TABS: { label: string; value: FilterTab }[] = [
   { label: "Approved",   value: "APPROVED" },
   { label: "Ignored",    value: "IGNORED" },
 ];
+
+function QueueMetric({ label, value, tone }: {
+  label: string;
+  value: number;
+  tone: "teal" | "amber" | "green" | "slate";
+}) {
+  const colors = {
+    teal:  "bg-teal-50 text-teal-800 ring-teal-200",
+    amber: "bg-amber-50 text-amber-800 ring-amber-200",
+    green: "bg-green-50 text-green-800 ring-green-200",
+    slate: "bg-slate-50 text-slate-700 ring-slate-200",
+  }[tone];
+
+  return (
+    <div className={`rounded-lg px-3 py-2 ring-1 ${colors}`}>
+      <div className="text-lg font-bold leading-none">{value}</div>
+      <div className="mt-1 text-[11px] font-semibold">{label}</div>
+    </div>
+  );
+}
 
 function ConnectionBanner({ info, onScanClick, scanning }: {
   info: ConnectionInfo;
@@ -348,11 +453,13 @@ function ConnectionBanner({ info, onScanClick, scanning }: {
 export default function AIInboxClient() {
   const [tab, setTab] = useState<FilterTab>("PENDING");
   const [suggestions, setSuggestions] = useState<AISuggestion[]>([]);
+  const [counts, setCounts] = useState<StatusCounts>(EMPTY_COUNTS);
   const [connInfo, setConnInfo] = useState<ConnectionInfo>({ state: "loading" });
   const [loading, setLoading]   = useState(true);
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [scanError, setScanError]   = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [watchStatus, setWatchStatus] = useState<{ healthy: boolean; watchExpiration: string | null; lastWebhookAt: string | null; lastWebhookLog: string | null } | null>(null);
   const [registeringWatch, setRegisteringWatch] = useState(false);
 
@@ -371,8 +478,9 @@ export default function AIInboxClient() {
     if (!opts?.silent) setLoading(true);
     try {
       const res  = await fetch(`/api/ai-inbox/suggestions?status=${tab}`);
-      const json = await res.json() as { suggestions: AISuggestion[] };
+      const json = await res.json() as { suggestions: AISuggestion[]; counts?: Partial<StatusCounts> };
       setSuggestions(json.suggestions ?? []);
+      setCounts({ ...EMPTY_COUNTS, ...(json.counts ?? {}) });
     } finally {
       if (!opts?.silent) setLoading(false);
       fetchingRef.current = false;
@@ -440,6 +548,7 @@ export default function AIInboxClient() {
     setScanning(true);
     setScanResult(null);
     setScanError(null);
+    setActionNotice(null);
     const res  = await fetch("/api/ai-inbox/test-scan", { method: "POST" });
     const json = await res.json() as { scanned?: number; created?: number; errors?: number; error?: string };
     if (!res.ok) {
@@ -471,6 +580,7 @@ export default function AIInboxClient() {
   }
 
   async function handleAction(id: string, action: string, extractedData?: Record<string, unknown>) {
+    setActionNotice(null);
     const res  = await fetch(`/api/ai-inbox/suggestions/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -478,6 +588,7 @@ export default function AIInboxClient() {
     });
     const json = await res.json() as { error?: string };
     if (!res.ok) { alert(json.error ?? "Action failed"); return; }
+    setActionNotice(action === "ignore" ? "Suggestion ignored." : "Suggestion approved and applied.");
     await fetchSuggestions();
   }
 
@@ -504,6 +615,16 @@ export default function AIInboxClient() {
         {scanError && (
           <p className="mt-2 text-sm text-red-700 bg-red-50 rounded-lg px-3 py-2">{scanError}</p>
         )}
+        {actionNotice && (
+          <p className="mt-2 text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2">{actionNotice}</p>
+        )}
+
+        <div className="mt-3 grid gap-2 sm:grid-cols-4">
+          <QueueMetric label="Pending review" value={counts.PENDING} tone="teal" />
+          <QueueMetric label="Possible duplicates" value={counts.DUPLICATE} tone="amber" />
+          <QueueMetric label="Approved" value={counts.APPROVED} tone="green" />
+          <QueueMetric label="Ignored" value={counts.IGNORED} tone="slate" />
+        </div>
 
         {watchStatus && !watchStatus.healthy && (
           <div className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-orange-50 border border-orange-200 px-4 py-2.5 text-xs text-orange-800">
@@ -552,13 +673,18 @@ export default function AIInboxClient() {
           <button
             key={t.value}
             onClick={() => setTab(t.value)}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
               tab === t.value
                 ? "border-teal-600 text-teal-700"
                 : "border-transparent text-slate-500 hover:text-slate-800"
             }`}
           >
             {t.label}
+            <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+              tab === t.value ? "bg-teal-50 text-teal-700" : "bg-slate-100 text-slate-500"
+            }`}>
+              {counts[t.value]}
+            </span>
           </button>
         ))}
       </div>

@@ -13,14 +13,28 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status");
 
-  const suggestions = await prisma.aISuggestion.findMany({
-    where: {
-      workspaceId: workspace.id,
-      ...(status ? { status } : {}),
-    },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-  });
+  const baseWhere = { workspaceId: workspace.id };
+  const [suggestions, counts] = await Promise.all([
+    prisma.aISuggestion.findMany({
+      where: {
+        ...baseWhere,
+        ...(status ? { status } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    }),
+    prisma.aISuggestion.groupBy({
+      by: ["status"],
+      where: baseWhere,
+      _count: { _all: true },
+    }),
+  ]);
 
-  return NextResponse.json({ suggestions });
+  return NextResponse.json({
+    suggestions,
+    counts: counts.reduce<Record<string, number>>((acc, row) => {
+      acc[row.status] = row._count._all;
+      return acc;
+    }, {}),
+  });
 }

@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, Briefcase, CheckSquare, Inbox, Settings } from "lucide-react";
+import { Bell, CalendarDays, Briefcase, CheckSquare, Settings } from "lucide-react";
 
 const NAV_ITEMS = [
   { label: "Calendar", href: "/",        icon: CalendarDays },
   { label: "Cases",    href: "/cases",   icon: Briefcase },
   { label: "Tasks",    href: "/tasks",   icon: CheckSquare },
-  { label: "Inbox",    href: "/inbox",   icon: Inbox },
+  { label: "Alerts",   href: "/notifications", icon: Bell },
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 

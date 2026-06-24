@@ -32,12 +32,6 @@ export default async function SettingsPage() {
             Notifications
           </Link>
           <Link
-            href="/settings/exports"
-            className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 shadow-sm transition-colors hover:border-teal-200 hover:bg-teal-50/30"
-          >
-            Exports
-          </Link>
-          <Link
             href="/settings/court-rules"
             className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 shadow-sm transition-colors hover:border-teal-200 hover:bg-teal-50/30"
           >
