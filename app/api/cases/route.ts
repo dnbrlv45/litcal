@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCurrentWorkspace } from "@/lib/workspaces";
@@ -80,6 +81,7 @@ export async function POST(request: NextRequest) {
     judge?: string;
     description?: string;
     filingDate?: string;
+    dateOfLoss?: string | null;
     plaintiff?: string;
     defendant?: string;
     defenseFirm?: string;
@@ -122,6 +124,7 @@ export async function POST(request: NextRequest) {
       judge: body.judge?.trim() || null,
       description: body.description?.trim() || null,
       filingDate: body.filingDate ? new Date(body.filingDate) : null,
+      dateOfLoss: body.dateOfLoss ? new Date(body.dateOfLoss) : null,
       defendant: body.defendant?.trim() || null,
       defenseFirm: body.defenseFirm?.trim() || null,
       defenseAttorney: body.defenseAttorney?.trim() || null,
@@ -134,7 +137,7 @@ export async function POST(request: NextRequest) {
             })),
           }
         : undefined,
-    },
+    } as Prisma.CaseUncheckedCreateInput,
     include: {
       parties: true,
       _count: { select: { events: true } },

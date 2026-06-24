@@ -332,6 +332,7 @@ model Case {
   defenseAttorney String?
 
   filingDate   DateTime?
+  dateOfLoss   DateTime?
   closedDate   DateTime?
 
   createdAt    DateTime   @default(now())

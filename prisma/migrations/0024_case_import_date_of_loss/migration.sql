@@ -1,0 +1,2 @@
+ALTER TABLE "Case"
+ADD COLUMN "dateOfLoss" TIMESTAMP(3);

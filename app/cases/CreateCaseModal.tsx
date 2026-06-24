@@ -28,7 +28,7 @@ interface Props {
 const EMPTY = {
   title: "", caseNumber: "", caseType: "AUTO_ACCIDENT",
   countyName: "", courtName: "",
-  plaintiff: "", filingDate: "",
+  plaintiff: "", filingDate: "", dateOfLoss: "",
   defendant: "", defenseFirm: "", defenseAttorney: "",
 };
 
@@ -69,6 +69,7 @@ export default function CreateCaseModal({ open, onClose, onCreated }: Props) {
           courtName: fields.courtName || null,
           plaintiff: fields.plaintiff || null,
           filingDate: fields.filingDate || null,
+          dateOfLoss: fields.dateOfLoss || null,
           defendant: fields.defendant,
           defenseFirm: fields.defenseFirm,
           defenseAttorney: fields.defenseAttorney,
@@ -127,6 +128,10 @@ export default function CreateCaseModal({ open, onClose, onCreated }: Props) {
               <Label htmlFor="case-filing-date">Date Filed</Label>
               <Input id="case-filing-date" type="date" value={fields.filingDate} onChange={set("filingDate")} />
             </div>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="case-date-of-loss">Date of Loss</Label>
+            <Input id="case-date-of-loss" type="date" value={fields.dateOfLoss} onChange={set("dateOfLoss")} />
           </div>
 
           {/* County + Court */}

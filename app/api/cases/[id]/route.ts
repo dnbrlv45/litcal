@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getAccessToken, deleteGoogleEvent } from "@/lib/google-calendar";
@@ -63,6 +64,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     judge?: string;
     description?: string;
     filingDate?: string | null;
+    dateOfLoss?: string | null;
     closedDate?: string | null;
     plaintiff?: string | null;
     defendant?: string;
@@ -127,11 +129,12 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       ...(body.judge !== undefined && { judge: body.judge?.trim() || null }),
       ...(body.description !== undefined && { description: body.description?.trim() || null }),
       ...(body.filingDate !== undefined && { filingDate: body.filingDate ? new Date(body.filingDate) : null }),
+      ...(body.dateOfLoss !== undefined && { dateOfLoss: body.dateOfLoss ? new Date(body.dateOfLoss) : null }),
       ...(body.closedDate !== undefined && { closedDate: body.closedDate ? new Date(body.closedDate) : null }),
       ...(body.defendant !== undefined && { defendant: body.defendant?.trim() || null }),
       ...(body.defenseFirm !== undefined && { defenseFirm: body.defenseFirm?.trim() || null }),
       ...(body.defenseAttorney !== undefined && { defenseAttorney: body.defenseAttorney?.trim() || null }),
-    },
+    } as Prisma.CaseUncheckedUpdateInput,
     include: {
       parties: true,
       _count: { select: { events: true } },
@@ -231,6 +234,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   if (body.judge !== undefined && (body.judge?.trim() || null) !== existing.judge) editedFields.push("judge");
   if (body.countyName !== undefined) editedFields.push("county/court");
   if (body.description !== undefined && (body.description?.trim() || null) !== existing.description) editedFields.push("description");
+  if (body.dateOfLoss !== undefined) editedFields.push("date of loss");
   if (body.defendant !== undefined) editedFields.push("defendant info");
   if (editedFields.length > 0 && !newStatus) {
     void addTimelineEntry({

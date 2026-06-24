@@ -72,7 +72,7 @@ interface CaseData {
   countyId: string | null; courtId: string | null;
   countyRef: { id: string; name: string } | null;
   courtRef: { id: string; name: string } | null;
-  description: string | null; filingDate: string | null;
+  description: string | null; filingDate: string | null; dateOfLoss: string | null;
   parties: { name: string; role: string }[];
   defendant: string | null; defenseFirm: string | null; defenseAttorney: string | null;
   staff: CaseStaffRow[];
@@ -112,6 +112,7 @@ export default function CaseDetailClient({ id }: { id: string }) {
   const [editDescription, setEditDescription] = useState("");
   const [editPlaintiff, setEditPlaintiff] = useState("");
   const [editFilingDate, setEditFilingDate] = useState("");
+  const [editDateOfLoss, setEditDateOfLoss] = useState("");
   const [editDefendant, setEditDefendant] = useState("");
   const [editDefenseFirm, setEditDefenseFirm] = useState("");
   const [editDefenseAttorney, setEditDefenseAttorney] = useState("");
@@ -197,6 +198,7 @@ export default function CaseDetailClient({ id }: { id: string }) {
     setEditDescription(caseData.description ?? "");
     setEditPlaintiff(caseData.parties.filter((p) => p.role === "PLAINTIFF").map((p) => p.name).join("; "));
     setEditFilingDate(caseData.filingDate ? caseData.filingDate.slice(0, 10) : "");
+    setEditDateOfLoss(caseData.dateOfLoss ? caseData.dateOfLoss.slice(0, 10) : "");
     setEditDefendant(caseData.defendant ?? "");
     setEditDefenseFirm(caseData.defenseFirm ?? "");
     setEditDefenseAttorney(caseData.defenseAttorney ?? "");
@@ -217,6 +219,7 @@ export default function CaseDetailClient({ id }: { id: string }) {
           description: editDescription,
           plaintiff: editPlaintiff || null,
           filingDate: editFilingDate || null,
+          dateOfLoss: editDateOfLoss || null,
           defendant: editDefendant, defenseFirm: editDefenseFirm, defenseAttorney: editDefenseAttorney,
         }),
       });
@@ -458,6 +461,10 @@ export default function CaseDetailClient({ id }: { id: string }) {
             <Field label="Filed" editing={editing}
               display={caseData.filingDate ? new Date(caseData.filingDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : null}
               input={<input type="date" value={editFilingDate} onChange={(e) => setEditFilingDate(e.target.value)} className={select} />}
+            />
+            <Field label="Date of Loss" editing={editing}
+              display={caseData.dateOfLoss ? new Date(caseData.dateOfLoss).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : null}
+              input={<input type="date" value={editDateOfLoss} onChange={(e) => setEditDateOfLoss(e.target.value)} className={select} />}
             />
           </div>
 
