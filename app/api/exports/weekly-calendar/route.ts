@@ -54,12 +54,20 @@ export async function GET(request: NextRequest) {
         status: { not: "DONE" },
         dueDate: { gte: startDate, lte: endDate },
         ...(requestedAttorneyId
-          ? { assignees: { some: { userId: requestedAttorneyId } } }
+          ? { assignees: { some: { member: { userId: requestedAttorneyId } } } }
           : {}),
       },
       include: {
         caseRef: { select: { title: true } },
-        assignees: { include: { user: { select: { firstName: true, lastName: true } } } },
+        assignees: {
+          include: {
+            member: {
+              select: {
+                user: { select: { firstName: true, lastName: true } },
+              },
+            },
+          },
+        },
       },
       orderBy: { dueDate: "asc" },
     }),
@@ -89,7 +97,7 @@ export async function GET(request: NextRequest) {
     time: "Due",
     caseName: t.caseRef?.title ?? "",
     attorney: t.assignees
-      .map((a) => [a.user.firstName, a.user.lastName].filter(Boolean).join(" "))
+      .map((a) => [a.member.user.firstName, a.member.user.lastName].filter(Boolean).join(" "))
       .join(", "),
   }));
 
