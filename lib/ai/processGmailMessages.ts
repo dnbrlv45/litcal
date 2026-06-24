@@ -228,10 +228,12 @@ export async function processGmailMessages(
               classification: extracted.classification,
               confidence:     extracted.confidence,
               extractedData:  extractedWithWarning as unknown as Prisma.InputJsonValue,
+              originalExtractedJson: extractedWithWarning as unknown as Prisma.InputJsonValue,
               missingFields:  extracted.missingFields as unknown as Prisma.InputJsonValue,
               duplicateOfId,
               status,
-            },
+              userAction: duplicateOfId ? "DUPLICATE" : undefined,
+            } as Prisma.AISuggestionUncheckedCreateInput,
           });
         }
       }

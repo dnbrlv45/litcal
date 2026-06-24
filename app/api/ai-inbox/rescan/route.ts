@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCurrentWorkspace } from "@/lib/workspaces";
 import { getInboxRefreshToken, makeOAuth2Client, processGmailMessages } from "@/lib/ai/processGmailMessages";
+import { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -13,12 +14,22 @@ export async function POST(request: NextRequest) {
   const { workspace } = await getCurrentWorkspace(user.id);
   if (!workspace) return NextResponse.json({ error: "No workspace" }, { status: 400 });
 
-  const { messageId } = await request.json() as { messageId?: string };
+  const { messageId } = await request.json() as { messageId?: string; suggestionId?: string };
   if (!messageId) return NextResponse.json({ error: "messageId required" }, { status: 400 });
 
-  // Delete all existing suggestions for this message
-  await prisma.aISuggestion.deleteMany({
-    where: { workspaceId: workspace.id, gmailMessageId: messageId },
+  await prisma.aISuggestion.updateMany({
+    where: {
+      workspaceId: workspace.id,
+      gmailMessageId: messageId,
+    },
+    data: {
+      status: "RESCANNED",
+      gmailMessageId: null,
+      sourceHash: null,
+      userAction: "RESCANNED",
+      reviewedBy: user.id,
+      reviewedAt: new Date(),
+    } as Prisma.AISuggestionUncheckedUpdateManyInput,
   });
 
   const refreshToken = await getInboxRefreshToken();

@@ -37,12 +37,28 @@ interface AISuggestion {
   extractedData: Record<string, unknown>;
   missingFields: string[] | null;
   duplicateOfId: string | null;
+  userAction: string | null;
   createdAt: string;
 }
 
 interface ConnectionInfo {
   email?: string;
   state: ConnectionState;
+}
+
+interface AIInboxMetrics {
+  totalSuggestions: number;
+  approvalRate: number;
+  ignoreRate: number;
+  duplicateRate: number;
+  editBeforeApprovalRate: number;
+  counts: {
+    approved: number;
+    ignored: number;
+    duplicates: number;
+    editedBeforeApproval: number;
+  };
+  mostCommonlyCorrectedFields: { field: string; count: number }[];
 }
 
 const CLASSIFICATION_COLORS: Record<string, string> = {
@@ -125,7 +141,7 @@ function SuggestionCard({
 }: {
   s: AISuggestion;
   onAction: (id: string, action: string, extractedData?: Record<string, unknown>) => Promise<void>;
-  onRescan: (messageId: string) => Promise<{ created: { classification: string; status: string }[]; error?: string } | null>;
+  onRescan: (messageId: string, suggestionId: string) => Promise<{ created: { classification: string; status: string }[]; error?: string } | null>;
   onBusyChange?: (id: string, busy: boolean) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -320,7 +336,7 @@ function SuggestionCard({
             onClick={async () => {
               setRescanning(true);
               setRescanResult(null);
-              const result = await onRescan(s.gmailMessageId!);
+              const result = await onRescan(s.gmailMessageId!, s.id);
               setRescanResult(result);
               setRescanning(false);
             }}
@@ -375,6 +391,55 @@ function QueueMetric({ label, value, tone }: {
       <div className="mt-1 text-[11px] font-semibold">{label}</div>
     </div>
   );
+}
+
+function AdminMetricsPanel({ metrics }: { metrics: AIInboxMetrics | null }) {
+  if (!metrics) return null;
+
+  return (
+    <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xs font-bold uppercase tracking-wide text-slate-500">AI Feedback Metrics</h2>
+          <p className="mt-1 text-xs text-slate-500">Visible to super admins only.</p>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+          <MetricChip label="Total" value={String(metrics.totalSuggestions)} />
+          <MetricChip label="Approved" value={formatRate(metrics.approvalRate)} />
+          <MetricChip label="Ignored" value={formatRate(metrics.ignoreRate)} />
+          <MetricChip label="Duplicates" value={formatRate(metrics.duplicateRate)} />
+          <MetricChip label="Edited" value={formatRate(metrics.editBeforeApprovalRate)} />
+        </div>
+      </div>
+      <div className="mt-3 border-t border-slate-200 pt-3">
+        <p className="text-xs font-semibold text-slate-700">Most commonly corrected fields</p>
+        {metrics.mostCommonlyCorrectedFields.length === 0 ? (
+          <p className="mt-1 text-xs text-slate-500">No corrections recorded yet.</p>
+        ) : (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {metrics.mostCommonlyCorrectedFields.map((item) => (
+              <span key={item.field} className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
+                {item.field} <span className="text-slate-400">({item.count})</span>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MetricChip({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md bg-white px-3 py-2 text-center ring-1 ring-slate-200">
+      <div className="text-sm font-bold text-slate-900">{value}</div>
+      <div className="mt-0.5 text-[10px] font-semibold text-slate-500">{label}</div>
+    </div>
+  );
+}
+
+function formatRate(value: number) {
+  return `${Math.round(value * 100)}%`;
 }
 
 function ConnectionBanner({ info, onScanClick, scanning }: {
@@ -450,10 +515,11 @@ function ConnectionBanner({ info, onScanClick, scanning }: {
   );
 }
 
-export default function AIInboxClient() {
+export default function AIInboxClient({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
   const [tab, setTab] = useState<FilterTab>("PENDING");
   const [suggestions, setSuggestions] = useState<AISuggestion[]>([]);
   const [counts, setCounts] = useState<StatusCounts>(EMPTY_COUNTS);
+  const [metrics, setMetrics] = useState<AIInboxMetrics | null>(null);
   const [connInfo, setConnInfo] = useState<ConnectionInfo>({ state: "loading" });
   const [loading, setLoading]   = useState(true);
   const [scanning, setScanning] = useState(false);
@@ -497,6 +563,13 @@ export default function AIInboxClient() {
 
   useEffect(() => { void fetchConnection(); }, [fetchConnection]);
   useEffect(() => { void fetchSuggestions(); }, [fetchSuggestions]);
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    fetch("/api/ai-inbox/metrics")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => setMetrics(data as AIInboxMetrics | null))
+      .catch(() => null);
+  }, [isSuperAdmin]);
 
   // Mark the user "active" on any real interaction so we don't refresh mid-click/typing.
   useEffect(() => {
@@ -567,15 +640,21 @@ export default function AIInboxClient() {
     setScanning(false);
   }
 
-  async function handleRescan(messageId: string) {
+  async function handleRescan(messageId: string, suggestionId: string) {
     const res = await fetch("/api/ai-inbox/rescan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messageId }),
+      body: JSON.stringify({ messageId, suggestionId }),
     });
     const json = await res.json() as { ok?: boolean; created?: { classification: string; status: string }[]; error?: string };
     if (!res.ok) return { created: [], error: json.error ?? "Rescan failed" };
     await fetchSuggestions();
+    if (isSuperAdmin) {
+      fetch("/api/ai-inbox/metrics")
+        .then((r) => r.ok ? r.json() : null)
+        .then((data) => setMetrics(data as AIInboxMetrics | null))
+        .catch(() => null);
+    }
     return { created: json.created ?? [] };
   }
 
@@ -590,6 +669,12 @@ export default function AIInboxClient() {
     if (!res.ok) { alert(json.error ?? "Action failed"); return; }
     setActionNotice(action === "ignore" ? "Suggestion ignored." : "Suggestion approved and applied.");
     await fetchSuggestions();
+    if (isSuperAdmin) {
+      fetch("/api/ai-inbox/metrics")
+        .then((r) => r.ok ? r.json() : null)
+        .then((data) => setMetrics(data as AIInboxMetrics | null))
+        .catch(() => null);
+    }
   }
 
   return (
@@ -625,6 +710,8 @@ export default function AIInboxClient() {
           <QueueMetric label="Approved" value={counts.APPROVED} tone="green" />
           <QueueMetric label="Ignored" value={counts.IGNORED} tone="slate" />
         </div>
+
+        {isSuperAdmin && <AdminMetricsPanel metrics={metrics} />}
 
         {watchStatus && !watchStatus.healthy && (
           <div className="mt-2 flex items-center justify-between gap-3 rounded-lg bg-orange-50 border border-orange-200 px-4 py-2.5 text-xs text-orange-800">

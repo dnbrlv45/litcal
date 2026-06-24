@@ -815,12 +815,22 @@ model AISuggestion {
   missingFields  Json?
   duplicateOfId  String?
   status         String   @default("PENDING")
+
+  originalExtractedJson Json?
+  finalApprovedJson     Json?
+  correctedFields       Json?
+  userAction            String?
+  reviewedBy            String?
+  reviewedAt            DateTime?
+
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   @@unique([workspaceId, gmailMessageId, classification])
   @@index([workspaceId, status])
   @@index([workspaceId, classification])
+  @@index([userAction])
+  @@index([reviewedAt])
 }
 
 // ─── CASE TIMELINE ────────────────────────────────────────────────────────────

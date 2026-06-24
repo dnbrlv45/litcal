@@ -24,15 +24,24 @@ export async function PATCH(
     where: { id, workspaceId: workspace.id },
   });
   if (!suggestion) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const suggestionFeedback = suggestion as typeof suggestion & {
+    originalExtractedJson?: Prisma.JsonValue | null;
+  };
 
   const body = await request.json() as { action: string; extractedData?: Record<string, unknown> };
   const { action, extractedData } = body;
+  const reviewedAt = new Date();
 
 
   if (action === "ignore") {
     const updated = await prisma.aISuggestion.update({
       where: { id },
-      data: { status: "IGNORED" },
+      data: {
+        status: "IGNORED",
+        userAction: "IGNORED",
+        reviewedBy: user.id,
+        reviewedAt,
+      } as Prisma.AISuggestionUncheckedUpdateInput,
     });
     return NextResponse.json({ suggestion: updated });
   }
@@ -45,6 +54,7 @@ export async function PATCH(
       discoveryExtension?: Record<string, string | boolean | null>;
     };
     const classification = suggestion.classification;
+    const originalJson = (suggestionFeedback.originalExtractedJson ?? suggestion.extractedData) as Prisma.JsonValue;
 
     // Normalize extracted names to Title Case so cases, parties, and the
     // saved suggestion read like names instead of "ALL CAPS" / "camelCase".
@@ -308,12 +318,26 @@ export async function PATCH(
       });
     }
 
+    const finalJson = data as Prisma.InputJsonValue;
+    const correctedFields = extractedData ? changedJsonFields(originalJson, data) : [];
+    const userAction = action === "create_anyway"
+      ? "CREATE_ANYWAY"
+      : correctedFields.length > 0
+        ? "APPROVED_WITH_EDITS"
+        : "APPROVED_WITHOUT_EDITS";
+
     const updated = await prisma.aISuggestion.update({
       where: { id },
       data: {
-        status:        "APPROVED",
-        extractedData: (extractedData ?? suggestion.extractedData) as Prisma.InputJsonValue,
-      },
+        status:                "APPROVED",
+        extractedData:         finalJson,
+        originalExtractedJson: originalJson as Prisma.InputJsonValue,
+        finalApprovedJson:     finalJson,
+        correctedFields:       correctedFields as unknown as Prisma.InputJsonValue,
+        userAction,
+        reviewedBy:            user.id,
+        reviewedAt,
+      } as Prisma.AISuggestionUncheckedUpdateInput,
     });
 
     // Mark the source email as read now that the user has acted on it.
@@ -361,4 +385,32 @@ function mapEventType(raw: string | null | undefined): "HEARING" | "DEPOSITION" 
   if (t.includes("MEDI"))  return "MEDIATION";
   if (t.includes("DEAD") || t.includes("EXTENSION")) return "DEADLINE";
   return "OTHER";
+}
+
+function changedJsonFields(original: unknown, finalValue: unknown) {
+  const paths = new Set<string>();
+  collectChangedPaths(original, finalValue, "", paths);
+  return Array.from(paths).sort();
+}
+
+function collectChangedPaths(original: unknown, finalValue: unknown, path: string, paths: Set<string>) {
+  if (jsonEqual(original, finalValue)) return;
+
+  if (!isRecord(original) || !isRecord(finalValue)) {
+    paths.add(path || "$");
+    return;
+  }
+
+  const keys = new Set([...Object.keys(original), ...Object.keys(finalValue)]);
+  for (const key of keys) {
+    collectChangedPaths(original[key], finalValue[key], path ? `${path}.${key}` : key, paths);
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function jsonEqual(a: unknown, b: unknown) {
+  return JSON.stringify(a) === JSON.stringify(b);
 }
