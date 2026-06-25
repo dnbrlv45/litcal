@@ -291,7 +291,7 @@ export default function CaseDetailClient({ id }: { id: string }) {
   const upcomingEvents = caseData.events.filter((e) => new Date(e.startTime) >= new Date());
   const pastEvents = caseData.events.filter((e) => new Date(e.startTime) < new Date());
 
-  const canAssign = caseData.status === "ACTIVE";
+  const canAssign = !["CLOSED", "ARCHIVED"].includes(caseData.status);
   const staffByRole = (role: StaffRole) => caseData.staff.filter((s) => s.role === role);
   const attorneyNames = staffByRole("ATTORNEY").map((s) => userName(s.user)).filter(Boolean);
   const assignedIds = new Set(caseData.staff.map((s) => `${s.user.id}:${s.role}`));

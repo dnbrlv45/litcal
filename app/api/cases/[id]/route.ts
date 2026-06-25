@@ -59,6 +59,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     caseNumber?: string;
     caseType?: string;
     status?: string;
+    caseTrack?: string;
     countyName?: string | null;
     courtName?: string | null;
     judge?: string;
