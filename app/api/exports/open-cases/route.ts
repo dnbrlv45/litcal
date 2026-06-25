@@ -2,50 +2,82 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCurrentWorkspace, canManageWorkspace } from "@/lib/workspaces";
-import { buildXlsx } from "@/lib/excel";
+import { buildXlsxWorkbook } from "@/lib/excel";
 
 export const dynamic = "force-dynamic";
 
-const HEADERS_ALL = [
-  "Plaintiff", "Defendant", "Case Type", "Case Number",
-  "County", "Court", "Defense Firm", "Defense Attorney",
-  "Date Filed", "Status", "Assigned Attorney", "Assigned Paralegal", "Assigned Assistant",
+const HEADERS = [
+  "Case Name",
+  "Case Number",
+  "Case Type",
+  "Status",
+  "County",
+  "Court",
+  "Defendant",
+  "Defense Firm",
+  "Defense Attorney",
+  "Date Filed",
+  "Date of Loss",
+  "Served Date",
+  "Assigned Attorney",
+  "Assigned Paralegal",
 ];
-const COL_WIDTHS_ALL = [28, 28, 22, 16, 18, 28, 28, 24, 14, 14, 24, 24, 24];
 
-const HEADERS_FILTERED = [
-  "Plaintiff", "Defendant", "Case Type", "Case Number",
-  "County", "Court", "Defense Firm", "Defense Attorney",
-  "Date Filed", "Status",
-];
-const COL_WIDTHS_FILTERED = [28, 28, 22, 16, 18, 28, 28, 24, 14, 14];
+const COL_WIDTHS = [42, 18, 20, 22, 20, 30, 28, 28, 24, 14, 14, 14, 24, 24];
 
 const CASE_TYPE_LABELS: Record<string, string> = {
-  AUTO_ACCIDENT:       "Auto Accident",
-  SLIP_AND_FALL:       "Slip and Fall",
-  GOVERNMENT_CLAIM:    "Government Claim",
-  DOG_BITE:            "Dog Bite",
-  PREMISES_LIABILITY:  "Premises Liability",
+  AUTO_ACCIDENT: "Auto Accident",
+  SLIP_AND_FALL: "Slip and Fall",
+  GOVERNMENT_CLAIM: "Government Claim",
+  DOG_BITE: "Dog Bite",
+  PREMISES_LIABILITY: "Premises Liability",
   MEDICAL_MALPRACTICE: "Medical Malpractice",
-  WRONGFUL_DEATH:      "Wrongful Death",
-  PRODUCT_LIABILITY:   "Product Liability",
-  OTHER:               "Other",
+  WRONGFUL_DEATH: "Wrongful Death",
+  PRODUCT_LIABILITY: "Product Liability",
+  OTHER: "Other",
 };
 
-// ARGB background colors for each status (no leading #)
 const STATUS_ROW_COLORS: Record<string, string> = {
-  ACTIVE:   "E2EFDA", // light green
-  PENDING:  "FFF2CC", // light yellow
-  CLOSED:   "F2F2F2", // light gray
-  ARCHIVED: "DCDCDC", // medium gray
+  ACTIVE: "E2EFDA",
+  DISCOVERY: "E2EFDA",
+  SERVED: "E2EFDA",
+  ARBITRATION: "D6E4F0",
+  UIM_ARBITRATION: "D6E4F0",
+  UM_ARBITRATION: "D6E4F0",
+  PENDING: "FFF2CC",
+  PENDING_SERVICE: "FFF2CC",
+  SENT_FOR_SERVICE: "FFF2CC",
+  PARTIALLY_SERVED: "FFF2CC",
+  SERVICE_POSTPONED: "FFF2CC",
+  PENDING_RFD: "FFF2CC",
+  SETTLED: "F2F2F2",
+  CLOSED: "F2F2F2",
+  DISBURSEMENT: "F2F2F2",
+  LIEN_NEGOTIATIONS: "F2F2F2",
+  DISMISSAL_FILED: "F2F2F2",
+  ARCHIVED: "DCDCDC",
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  ACTIVE:   "Active",
-  PENDING:  "Pending",
-  CLOSED:   "Closed",
-  ARCHIVED: "Archived",
-};
+const OPEN_STATUSES = [
+  "ACTIVE", "DISCOVERY", "SERVED",
+  "ARBITRATION", "UIM_ARBITRATION", "UM_ARBITRATION",
+  "PENDING", "PENDING_SERVICE", "SENT_FOR_SERVICE",
+  "PARTIALLY_SERVED", "SERVICE_POSTPONED", "PENDING_RFD",
+];
+
+const CLOSED_STATUSES = [
+  "SETTLED", "CLOSED", "DISBURSEMENT",
+  "LIEN_NEGOTIATIONS", "DISMISSAL_FILED", "ARCHIVED",
+];
+
+function fmtDate(d: Date | null) {
+  if (!d) return "";
+  return d.toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric", timeZone: "UTC" });
+}
+
+function statusLabel(s: string) {
+  return s.replace(/_/g, " ");
+}
 
 export async function GET(request: NextRequest) {
   const currentUser = await requireUser();
@@ -62,29 +94,18 @@ export async function GET(request: NextRequest) {
   const cases = await prisma.case.findMany({
     where: {
       workspaceId: workspace.id,
-      status: { in: ["ACTIVE", "PENDING"] },
       ...(requestedAttorneyId
         ? { staff: { some: { userId: requestedAttorneyId, role: "ATTORNEY" } } }
         : {}),
     },
     include: {
       parties: { select: { name: true, role: true } },
-      staff:   { include: { user: { select: { firstName: true, lastName: true } } } },
+      staff: { include: { user: { select: { firstName: true, lastName: true } } } },
     },
     orderBy: { title: "asc" },
   });
 
-  const rows = cases.map((c) => {
-    const plaintiffs = c.parties
-      .filter((p) => p.role === "PLAINTIFF")
-      .map((p) => p.name)
-      .join("; ");
-
-    const defendants = c.parties
-      .filter((p) => p.role === "DEFENDANT")
-      .map((p) => p.name)
-      .join("; ") || c.defendant || "";
-
+  function buildRow(c: typeof cases[number]) {
     const staffNames = (role: "ATTORNEY" | "PARALEGAL" | "ASSISTANT") =>
       c.staff
         .filter((s) => s.role === role)
@@ -92,35 +113,48 @@ export async function GET(request: NextRequest) {
         .join("; ");
 
     return {
-      Plaintiff:            plaintiffs,
-      Defendant:            defendants,
-      "Case Type":          CASE_TYPE_LABELS[c.caseType] ?? c.caseType,
-      "Case Number":        c.caseNumber ?? "",
-      County:               c.county ?? "",
-      Court:                c.court ?? "",
-      "Defense Firm":       c.defenseFirm ?? "",
-      "Defense Attorney":   c.defenseAttorney ?? "",
-      "Date Filed":         c.filingDate
-        ? c.filingDate.toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric", timeZone: "UTC" })
-        : "",
-      Status:               STATUS_LABELS[c.status] ?? c.status,
-      "Assigned Attorney":  staffNames("ATTORNEY"),
+      "Case Name": c.title,
+      "Case Number": c.caseNumber ?? "",
+      "Case Type": CASE_TYPE_LABELS[c.caseType] ?? c.caseType,
+      Status: statusLabel(c.status),
+      County: c.county ?? "",
+      Court: c.court ?? "",
+      Defendant: c.defendant ?? "",
+      "Defense Firm": c.defenseFirm ?? "",
+      "Defense Attorney": c.defenseAttorney ?? "",
+      "Date Filed": fmtDate(c.filingDate),
+      "Date of Loss": fmtDate(c.dateOfLoss),
+      "Served Date": fmtDate(c.servedDate),
+      "Assigned Attorney": staffNames("ATTORNEY"),
       "Assigned Paralegal": staffNames("PARALEGAL"),
-      "Assigned Assistant": staffNames("ASSISTANT"),
-      _status:              c.status, // internal — used for row coloring, not written to sheet
+      _status: c.status,
     };
-  });
+  }
 
-  const headers = requestedAttorneyId ? HEADERS_FILTERED : HEADERS_ALL;
-  const colWidths = requestedAttorneyId ? COL_WIDTHS_FILTERED : COL_WIDTHS_ALL;
+  const openCases = cases.filter((c) => OPEN_STATUSES.includes(c.status));
+  const closedCases = cases.filter((c) => CLOSED_STATUSES.includes(c.status));
 
-  const buffer = await buildXlsx(
-    "Open Cases",
-    headers,
-    rows,
-    colWidths,
-    (row) => STATUS_ROW_COLORS[row["_status"] ?? ""] ?? null
-  );
+  const sheetConfig = {
+    headers: HEADERS,
+    colWidths: COL_WIDTHS,
+    rowHeight: 20,
+    wrapText: false,
+    rowBgColor: (row: Record<string, string | null | undefined>) =>
+      STATUS_ROW_COLORS[row["_status"] ?? ""] ?? null,
+  };
+
+  const buffer = await buildXlsxWorkbook([
+    {
+      name: "Open Cases",
+      rows: openCases.map(buildRow),
+      ...sheetConfig,
+    },
+    {
+      name: "Closed Cases",
+      rows: closedCases.map(buildRow),
+      ...sheetConfig,
+    },
+  ]);
 
   const today = new Date().toISOString().slice(0, 10);
   let filename: string;
@@ -130,9 +164,9 @@ export async function GET(request: NextRequest) {
     const slug = attyStaff
       ? [attyStaff.user.firstName, attyStaff.user.lastName].filter(Boolean).join("-").toLowerCase()
       : requestedAttorneyId;
-    filename = `litcal-open-cases-${slug}-${today}.xlsx`;
+    filename = `litcal-cases-${slug}-${today}.xlsx`;
   } else {
-    filename = `litcal-open-cases-${today}.xlsx`;
+    filename = `litcal-cases-${today}.xlsx`;
   }
 
   return new NextResponse(buffer, {
