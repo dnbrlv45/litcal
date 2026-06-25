@@ -50,7 +50,8 @@ function parseIcsComponents(text: string): IcsComponent[] {
       const value = line.slice(colonIdx + 1);
       // Strip parameters (e.g. DTSTART;VALUE=DATE → DTSTART)
       const propName = keyPart.split(";")[0];
-      stack[stack.length - 1].props.set(propName, value);
+      const unescaped = value.replace(/\\,/g, ",").replace(/\\\\/g, "\\");
+      stack[stack.length - 1].props.set(propName, unescaped);
     }
   }
   return stack[0].children;
@@ -78,12 +79,8 @@ function parseIcsDateTime(raw: string, keyLine: string): { date: Date; allDay: b
     const y = parseInt(raw.slice(0, 4));
     const m = parseInt(raw.slice(4, 6)) - 1;
     const d = parseInt(raw.slice(6, 8));
-    // Start of day in LA timezone: create as UTC offset for LA
-    // LA is UTC-7 (PDT) or UTC-8 (PST). Use a simpler approach:
-    // Create date at midnight UTC, then shift by +7 or +8 hours.
-    // For simplicity, store as midnight LA = 07:00 UTC (PDT) or 08:00 UTC (PST)
-    // We'll use a fixed approach: create as ISO with explicit offset
-    const date = new Date(Date.UTC(y, m, d, 7, 0, 0)); // approx PDT midnight
+    // Store all-day events at midnight UTC of that date
+    const date = new Date(Date.UTC(y, m, d, 0, 0, 0));
     return { date, allDay: true };
   }
   // Full datetime: 20260728T153000Z
@@ -148,6 +145,7 @@ function classifyEvent(
   if (/\bCMC\b/i.test(s)) return { eventType: "CASE_MANAGEMENT_CONFERENCE", subtype: null };
   if (/\bMSC\b/i.test(s)) return { eventType: "HEARING", subtype: "MSC" };
   if (/\bMotion\b/i.test(s)) return { eventType: "HEARING", subtype: "Motion Hearing" };
+  if (/\bRequest Remote Appearance\b/i.test(s)) return { eventType: "DEADLINE", subtype: "Request Remote Appearance" };
 
   return { eventType: "OTHER", subtype: null };
 }
@@ -245,8 +243,7 @@ export async function POST(request: NextRequest) {
       }
 
       const descRaw = props.get("DESCRIPTION") ?? null;
-      // Unescape ICS text
-      const desc = descRaw?.replace(/\\n/g, "\n").replace(/\\,/g, ",").replace(/\\\\/g, "\\") ?? null;
+      const desc = descRaw?.replace(/\\n/g, "\n") ?? null;
 
       // Parse dates - need to check the raw line for VALUE=DATE parameter
       const dtStartRaw = props.get("DTSTART") ?? "";
@@ -264,8 +261,16 @@ export async function POST(request: NextRequest) {
         endDate = new Date(startParsed.date.getTime() + (startParsed.allDay ? 86400000 : 3600000));
       }
 
-      // For all-day events, set endTime to end of day (23:59:59 LA)
       const allDay = startParsed.allDay;
+      if (allDay) {
+        // ICS DTEND for all-day is exclusive (next day). Set endTime to 23:59:59 of the start day.
+        endDate = new Date(Date.UTC(
+          startParsed.date.getUTCFullYear(),
+          startParsed.date.getUTCMonth(),
+          startParsed.date.getUTCDate(),
+          23, 59, 59,
+        ));
+      }
 
       // Skip past events
       if (startParsed.date.getTime() < Date.now()) continue;
