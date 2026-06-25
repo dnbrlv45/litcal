@@ -80,7 +80,6 @@ export default function CasesClient() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [missingFilter, setMissingFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
   const [modalOpen, setModalOpen]             = useState(false);
   const [discoveryModalOpen, setDiscoveryModalOpen] = useState(false);
 
@@ -106,10 +105,10 @@ export default function CasesClient() {
       const q = search.toLowerCase();
       if (!c.title.toLowerCase().includes(q) &&
           !(c.caseNumber ?? "").toLowerCase().includes(q) &&
-          !(c.court ?? "").toLowerCase().includes(q)) return false;
+          !(c.court ?? "").toLowerCase().includes(q) &&
+          !c.status.replace(/_/g, " ").toLowerCase().includes(q)) return false;
     }
     if (activeMissingFilter && !activeMissingFilter.test(c)) return false;
-    if (statusFilter && c.status !== statusFilter) return false;
     return true;
   });
 
@@ -163,22 +162,12 @@ export default function CasesClient() {
           <div className="relative max-w-md flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              placeholder="Search cases, numbers, courts…"
+              placeholder="Search cases, numbers, courts, status…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="h-10 rounded-lg border-slate-200 bg-white pl-9 shadow-sm"
             />
           </div>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className={`h-10 rounded-lg border px-3 text-sm shadow-sm ${statusFilter ? "border-teal-300 bg-teal-50 text-teal-800" : "border-slate-200 bg-white text-slate-600"}`}
-          >
-            <option value="">All statuses</option>
-            {[...new Set(cases.map((c) => c.status))].sort().map((s) => (
-              <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
-            ))}
-          </select>
           <select
             value={missingFilter}
             onChange={(e) => setMissingFilter(e.target.value)}
@@ -189,8 +178,8 @@ export default function CasesClient() {
               <option key={f.label} value={f.label}>Missing {f.label}</option>
             ))}
           </select>
-          {(statusFilter || missingFilter) && (
-            <span className="text-xs text-slate-500">{filtered.length} case{filtered.length !== 1 ? "s" : ""}</span>
+          {missingFilter && (
+            <span className="text-xs text-slate-500">{filtered.length} case{filtered.length !== 1 ? "s" : ""} missing {missingFilter.toLowerCase()}</span>
           )}
         </div>
       </div>
