@@ -25,21 +25,12 @@ type ImportCase = {
   duplicateCaseId: string | null;
 };
 
-async function resolveCountyCourt(countyName?: string | null, courtName?: string | null) {
-  if (!countyName) return { countyId: null, courtId: null, county: null, court: courtName ?? null };
-  const county = await prisma.county.findFirst({ where: { name: { equals: countyName, mode: "insensitive" } } });
-  if (!county) return { countyId: null, courtId: null, county: countyName, court: courtName ?? null };
-  let courtId: string | null = null;
-  let court: string | null = courtName ?? null;
-  if (courtName) {
-    const courtRow = await prisma.court.findFirst({
-      where: { countyId: county.id, name: { equals: courtName, mode: "insensitive" } },
-    });
-    courtId = courtRow?.id ?? null;
-    court = courtRow?.name ?? courtName;
-  }
-  return { countyId: county.id, courtId, county: county.name, court };
-}
+type CountyCourtResult = {
+  countyId: string | null;
+  courtId: string | null;
+  county: string | null;
+  court: string | null;
+};
 
 function clean(value: string | null | undefined) {
   return value?.trim() || null;
@@ -63,25 +54,76 @@ export async function POST(request: NextRequest) {
   if (!importCases.length) return NextResponse.json({ error: "No cases to import." }, { status: 400 });
   if (importCases.length > 500) return NextResponse.json({ error: "Import is limited to 500 grouped cases at a time." }, { status: 400 });
 
-  const created: string[] = [];
-  const skipped: string[] = [];
+  const toImport = body.skipDuplicates !== false
+    ? importCases.filter((item) => !item.duplicateCaseId)
+    : importCases;
+  const skippedCount = importCases.length - toImport.length;
+
+  const validCases = toImport.filter((item) => {
+    const plaintiffs = item.plaintiffs.map((n) => n.trim()).filter(Boolean);
+    return item.title?.trim() && plaintiffs.length > 0;
+  });
+  const failedValidation = toImport.length - validCases.length;
+
+  // Batch-resolve all unique county/court combos
+  const countyCourtKeys = [...new Set(validCases.map((c) => `${c.county ?? ""}|||${c.court ?? ""}`))];
+  const countyCourtMap = new Map<string, CountyCourtResult>();
+
+  const uniqueCounties = [...new Set(validCases.map((c) => c.county?.trim()).filter(Boolean))] as string[];
+  const uniqueCourts = [...new Set(validCases.map((c) => c.court?.trim()).filter(Boolean))] as string[];
+
+  const [counties, courts] = await Promise.all([
+    uniqueCounties.length > 0
+      ? prisma.county.findMany({ where: { name: { in: uniqueCounties, mode: "insensitive" } } })
+      : [],
+    uniqueCourts.length > 0
+      ? prisma.court.findMany({
+          where: { name: { in: uniqueCourts, mode: "insensitive" } },
+          select: { id: true, name: true, countyId: true },
+        })
+      : [],
+  ]);
+
+  const countyByName = new Map(counties.map((c) => [c.name.toLowerCase(), c]));
+  const courtsByCounty = new Map<string, Map<string, { id: string; name: string }>>();
+  for (const c of courts) {
+    let m = courtsByCounty.get(c.countyId);
+    if (!m) { m = new Map(); courtsByCounty.set(c.countyId, m); }
+    m.set(c.name.toLowerCase(), c);
+  }
+
+  for (const key of countyCourtKeys) {
+    const [countyName, courtName] = key.split("|||");
+    if (!countyName) {
+      countyCourtMap.set(key, { countyId: null, courtId: null, county: null, court: courtName || null });
+      continue;
+    }
+    const county = countyByName.get(countyName.toLowerCase());
+    if (!county) {
+      countyCourtMap.set(key, { countyId: null, courtId: null, county: countyName, court: courtName || null });
+      continue;
+    }
+    let courtId: string | null = null;
+    let courtDisplay: string | null = courtName || null;
+    if (courtName) {
+      const courtRow = courtsByCounty.get(county.id)?.get(courtName.toLowerCase());
+      courtId = courtRow?.id ?? null;
+      courtDisplay = courtRow?.name ?? courtName;
+    }
+    countyCourtMap.set(key, { countyId: county.id, courtId, county: county.name, court: courtDisplay });
+  }
+
+  // Create all cases in a single transaction
   const failed: { title: string; error: string }[] = [];
+  const created: string[] = [];
 
-  for (const item of importCases) {
-    try {
-      if (body.skipDuplicates !== false && item.duplicateCaseId) {
-        skipped.push(item.title);
-        continue;
-      }
+  const result = await prisma.$transaction(
+    validCases.map((item) => {
+      const ccKey = `${item.county ?? ""}|||${item.court ?? ""}`;
+      const cc = countyCourtMap.get(ccKey)!;
+      const plaintiffs = item.plaintiffs.map((n) => n.trim()).filter(Boolean);
 
-      const countyCourt = await resolveCountyCourt(item.county, item.court);
-      const plaintiffs = item.plaintiffs.map((name) => name.trim()).filter(Boolean);
-      if (!item.title?.trim() || plaintiffs.length === 0) {
-        failed.push({ title: item.title || item.caseNumber || "Untitled row", error: "Missing title or plaintiff." });
-        continue;
-      }
-
-      const newCase = await prisma.case.create({
+      return prisma.case.create({
         data: {
           userId: currentUser.id,
           workspaceId: workspace.id,
@@ -89,11 +131,11 @@ export async function POST(request: NextRequest) {
           title: item.title.trim(),
           caseNumber: clean(item.caseNumber),
           caseType: (item.caseType as any) || "AUTO_ACCIDENT",
-          status: item.status,
-          county: countyCourt.county,
-          court: countyCourt.court,
-          countyId: countyCourt.countyId,
-          courtId: countyCourt.courtId,
+          status: item.status as any,
+          county: cc.county,
+          court: cc.court,
+          countyId: cc.countyId,
+          courtId: cc.courtId,
           filingDate: dateOrNull(item.filingDate),
           servedDate: dateOrNull(item.servedDate),
           dateOfLoss: dateOrNull(item.dateOfLoss),
@@ -101,35 +143,38 @@ export async function POST(request: NextRequest) {
           defenseFirm: clean(item.defenseFirm),
           defenseAttorney: clean(item.defenseAttorney),
           parties: {
-            create: plaintiffs.map((name) => ({
-              name,
-              role: "PLAINTIFF" as const,
-            })),
+            create: plaintiffs.map((name) => ({ name, role: "PLAINTIFF" as const })),
           },
         } as Prisma.CaseUncheckedCreateInput,
         select: { id: true, title: true, caseNumber: true },
       });
+    }),
+  );
 
-      created.push(newCase.id);
-      void addTimelineEntry({
+  for (const newCase of result) {
+    created.push(newCase.id);
+  }
+
+  // Fire timeline entries in parallel (non-blocking)
+  void Promise.all(
+    result.map((newCase) =>
+      addTimelineEntry({
         caseId: newCase.id,
         workspaceId: workspace.id,
         actorUserId: currentUser.id,
         type: "case.created",
         title: "Case imported",
         description: newCase.caseNumber ? `Case #${newCase.caseNumber}` : "Imported from spreadsheet",
-      });
-    } catch (error) {
-      failed.push({ title: item.title || item.caseNumber || "Untitled row", error: error instanceof Error ? error.message : "Import failed." });
-    }
-  }
+      }),
+    ),
+  );
 
   return NextResponse.json({
     createdCount: created.length,
-    skippedCount: skipped.length,
-    failedCount: failed.length,
+    skippedCount,
+    failedCount: failedValidation + failed.length,
     created,
-    skipped,
+    skipped: [] as string[],
     failed,
   });
 }
