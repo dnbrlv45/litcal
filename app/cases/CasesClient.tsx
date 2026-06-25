@@ -52,15 +52,34 @@ interface Case {
   status: string;
   caseType: string;
   court: string | null;
+  county: string | null;
   judge: string | null;
+  defendant: string | null;
+  defenseFirm: string | null;
+  defenseAttorney: string | null;
+  filingDate: string | null;
+  dateOfLoss: string | null;
+  parties: { id: string; name: string; role: string }[];
   _count: { events: number };
   updatedAt: string;
 }
+
+const MISSING_FILTERS: { label: string; test: (c: Case) => boolean }[] = [
+  { label: "Case Number", test: (c) => !c.caseNumber },
+  { label: "Defendant", test: (c) => !c.defendant },
+  { label: "County", test: (c) => !c.county },
+  { label: "Court", test: (c) => !c.court },
+  { label: "Defense Attorney", test: (c) => !c.defenseAttorney },
+  { label: "Defense Firm", test: (c) => !c.defenseFirm },
+  { label: "Filing Date", test: (c) => !c.filingDate },
+  { label: "Date of Loss", test: (c) => !c.dateOfLoss },
+];
 
 export default function CasesClient() {
   const [cases, setCases] = useState<Case[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [missingFilter, setMissingFilter] = useState("");
   const [modalOpen, setModalOpen]             = useState(false);
   const [discoveryModalOpen, setDiscoveryModalOpen] = useState(false);
 
@@ -79,11 +98,18 @@ export default function CasesClient() {
     void Promise.resolve().then(fetchCases);
   }, []);
 
-  const filtered = cases.filter((c) =>
-    c.title.toLowerCase().includes(search.toLowerCase()) ||
-    (c.caseNumber ?? "").toLowerCase().includes(search.toLowerCase()) ||
-    (c.court ?? "").toLowerCase().includes(search.toLowerCase())
-  );
+  const activeMissingFilter = MISSING_FILTERS.find((f) => f.label === missingFilter);
+
+  const filtered = cases.filter((c) => {
+    if (search) {
+      const q = search.toLowerCase();
+      if (!c.title.toLowerCase().includes(q) &&
+          !(c.caseNumber ?? "").toLowerCase().includes(q) &&
+          !(c.court ?? "").toLowerCase().includes(q)) return false;
+    }
+    if (activeMissingFilter && !activeMissingFilter.test(c)) return false;
+    return true;
+  });
 
   const grouped = STATUS_GROUPS.map((group) => ({
     ...group,
@@ -129,16 +155,31 @@ export default function CasesClient() {
         </Button>
       </div>
 
-      {/* Search */}
+      {/* Search & Filters */}
       <div className="px-4 py-3 md:px-8 md:py-4 shrink-0 border-b border-slate-200/80 bg-white/70">
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search cases, numbers, courts…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-10 rounded-lg border-slate-200 bg-white pl-9 shadow-sm"
-          />
+        <div className="flex flex-col gap-3 md:flex-row md:items-center">
+          <div className="relative max-w-md flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Search cases, numbers, courts…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-10 rounded-lg border-slate-200 bg-white pl-9 shadow-sm"
+            />
+          </div>
+          <select
+            value={missingFilter}
+            onChange={(e) => setMissingFilter(e.target.value)}
+            className={`h-10 rounded-lg border px-3 text-sm shadow-sm ${missingFilter ? "border-amber-300 bg-amber-50 text-amber-800" : "border-slate-200 bg-white text-slate-600"}`}
+          >
+            <option value="">All cases</option>
+            {MISSING_FILTERS.map((f) => (
+              <option key={f.label} value={f.label}>Missing {f.label}</option>
+            ))}
+          </select>
+          {missingFilter && (
+            <span className="text-xs text-slate-500">{filtered.length} case{filtered.length !== 1 ? "s" : ""} missing {missingFilter.toLowerCase()}</span>
+          )}
         </div>
       </div>
 
