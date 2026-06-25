@@ -459,11 +459,11 @@ export default function CaseDetailClient({ id }: { id: string }) {
               input={<Input value={editPlaintiff} onChange={(e) => setEditPlaintiff(e.target.value)} placeholder="e.g. Jane Garcia; John Garcia" />}
             />
             <Field label="Filed" editing={editing}
-              display={caseData.filingDate ? new Date(caseData.filingDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : null}
+              display={caseData.filingDate ? new Date(caseData.filingDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" }) : null}
               input={<input type="date" value={editFilingDate} onChange={(e) => setEditFilingDate(e.target.value)} className={select} />}
             />
             <Field label="Date of Loss" editing={editing}
-              display={caseData.dateOfLoss ? new Date(caseData.dateOfLoss).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : null}
+              display={caseData.dateOfLoss ? new Date(caseData.dateOfLoss).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" }) : null}
               input={<input type="date" value={editDateOfLoss} onChange={(e) => setEditDateOfLoss(e.target.value)} className={select} />}
             />
           </div>
