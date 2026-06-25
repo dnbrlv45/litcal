@@ -221,14 +221,34 @@ function addListSheet(wb: ExcelJS.Workbook, sheet: XlsxListSheet) {
     to: { row: 1, column: sheet.headers.length },
   };
 
+  const wrapText = sheet.wrapText ?? true;
+  const baseRowHeight = sheet.rowHeight ?? 18;
+
   sheet.rows.forEach((rowData, index) => {
-    const row = ws.addRow(sheet.headers.map((h) => rowData[h] ?? ""));
-    row.height = sheet.rowHeight ?? 18;
+    const values = sheet.headers.map((h) => rowData[h] ?? "");
+    const row = ws.addRow(values);
+
+    if (wrapText) {
+      let maxLines = 1;
+      values.forEach((val, colIdx) => {
+        const colWidth = sheet.colWidths?.[colIdx] ?? Math.max(sheet.headers[colIdx].length + 4, 14);
+        const charWidth = colWidth - 2;
+        const text = String(val);
+        const lines = text.split("\n").reduce((sum, line) => {
+          return sum + Math.max(1, Math.ceil(line.length / Math.max(charWidth, 1)));
+        }, 0);
+        if (lines > maxLines) maxLines = lines;
+      });
+      row.height = Math.max(baseRowHeight, maxLines * 15);
+    } else {
+      row.height = baseRowHeight;
+    }
+
     const customBg = sheet.rowBgColor?.(rowData, index);
     const isAlt = index % 2 === 1;
     row.eachCell((cell) => {
       cell.font = { size: 11, name: "Calibri" };
-      cell.alignment = { vertical: "middle", horizontal: "left", wrapText: sheet.wrapText ?? true };
+      cell.alignment = { vertical: "middle", horizontal: "left", wrapText };
       const bg = customBg ?? (isAlt ? ALT_ROW_BG : null);
       if (bg) {
         cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bg } };

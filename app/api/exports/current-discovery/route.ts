@@ -104,7 +104,7 @@ export async function GET(request: NextRequest) {
     headers: HEADERS,
     colWidths: COL_WIDTHS,
     rowHeight: 22,
-    wrapText: false,
+    wrapText: true,
     rowBgColor: (row: Record<string, string | null | undefined>) =>
       ROW_COLORS[row["_rowStatus"] ?? ""] ?? null,
   };
