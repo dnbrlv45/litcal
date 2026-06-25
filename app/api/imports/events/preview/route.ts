@@ -303,12 +303,16 @@ export async function POST(request: NextRequest) {
 
       // Fuzzy title match if no case number match
       if (!caseId) {
-        const names = extractCaseNames(summary);
-        if (names.length > 0) {
-          const normalized = names.map(normalizeForMatch);
+        const caseField = desc ? extractField(desc, "Case") : null;
+        const matchSource = caseField || summary;
+        const names = extractCaseNames(matchSource);
+        if (names.length === 2) {
+          // Require BOTH plaintiff and defendant sides to match
+          const [plaintiffNorm, defendantNorm] = names.map(normalizeForMatch);
           for (const c of cases) {
             const cNorm = normalizeForMatch(c.title);
-            if (normalized.some((n) => n.length > 3 && cNorm.includes(n))) {
+            if (plaintiffNorm.length > 3 && defendantNorm.length > 3 &&
+                cNorm.includes(plaintiffNorm) && cNorm.includes(defendantNorm)) {
               caseId = c.id;
               caseTitle = c.title;
               matchedCaseNumber = c.caseNumber;
@@ -321,27 +325,18 @@ export async function POST(request: NextRequest) {
 
       // Name-based match: for events like "ARTUR HAKOBYAN Trial" with no "v." pattern
       if (!caseId) {
-        const caseField = desc ? extractField(desc, "Case") : null;
-        const searchText = caseField || summary;
-        // Strip trailing keywords to isolate the name
+        const searchText = summary;
         const nameOnly = searchText
-          .replace(/\b(Trial|Discovery\s*Due|Deposition|Depo|Mediation|CCP\s*998\s*Due|Discovery\s*responses?\s*due.*)\b.*$/i, "")
+          .replace(/\b(Trial|Discovery\s*Due|Deposition|Depo|Mediation|CCP\s*998\s*Due|Discovery\s*responses?\s*due.*|File\s*CMS\s*[-–—]\s*)\b/i, "")
           .replace(/[-–—]/g, " ")
           .trim();
-        if (nameOnly.length > 3) {
+        if (nameOnly.length > 5) {
           const nameNorm = normalizeForMatch(nameOnly);
+          // Only match against party names (full name match, not substring)
           for (const c of cases) {
-            // Check against case title
-            if (normalizeForMatch(c.title).includes(nameNorm)) {
-              caseId = c.id;
-              caseTitle = c.title;
-              matchedCaseNumber = c.caseNumber;
-              matchMethod = "nameFuzzy";
-              break;
-            }
-            // Check against party names
             for (const p of c.parties) {
-              if (normalizeForMatch(p.name).includes(nameNorm) || nameNorm.includes(normalizeForMatch(p.name))) {
+              const pNorm = normalizeForMatch(p.name);
+              if (pNorm.length > 3 && (pNorm === nameNorm || nameNorm.includes(pNorm))) {
                 caseId = c.id;
                 caseTitle = c.title;
                 matchedCaseNumber = c.caseNumber;
