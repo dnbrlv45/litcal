@@ -61,17 +61,13 @@ export default function CaseImportClient() {
   const duplicateCount = preview?.cases.filter((item) => item.duplicateCaseId).length ?? 0;
   const warningCount = preview?.cases.filter((item) => item.warnings.length > 0).length ?? 0;
 
-  async function handlePreview() {
-    if (!file) {
-      setError("Choose an Excel or CSV file first.");
-      return;
-    }
+  async function handlePreviewFile(selected: File) {
     setLoading(true);
     setError(null);
     setResult(null);
     try {
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", selected);
       const res = await fetch("/api/imports/cases/preview", { method: "POST", body: formData });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Could not preview import.");
@@ -150,12 +146,13 @@ export default function CaseImportClient() {
                   <input
                     id="case-import-file"
                     type="file"
-                    accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
                     onChange={(event) => {
-                      setFile(event.target.files?.[0] ?? null);
+                      const selected = event.target.files?.[0] ?? null;
+                      setFile(selected);
                       setPreview(null);
                       setResult(null);
                       setError(null);
+                      if (selected) handlePreviewFile(selected);
                     }}
                     className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-teal-700 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white"
                   />
@@ -163,11 +160,8 @@ export default function CaseImportClient() {
                 </div>
               </div>
             </div>
-            <Button type="button" onClick={handlePreview} disabled={!file || loading} className="bg-teal-700 text-white hover:bg-teal-800">
-              {loading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
-              Preview Import
-            </Button>
           </div>
+          {loading && <div className="mt-3 flex items-center gap-2 text-sm text-slate-500"><Loader2 className="size-4 animate-spin" /> Parsing spreadsheet…</div>}
           {error && <p className="mt-3 text-sm font-medium text-red-600">{error}</p>}
         </section>
 
