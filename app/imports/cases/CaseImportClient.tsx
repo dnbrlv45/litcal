@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, FileSpreadsheet, Loader2, Upload, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -60,6 +60,16 @@ export default function CaseImportClient() {
   );
   const duplicateCount = preview?.cases.filter((item) => item.duplicateCaseId).length ?? 0;
   const warningCount = preview?.cases.filter((item) => item.warnings.length > 0).length ?? 0;
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+
+  const onFileSelected = useCallback((selected: File) => {
+    setFile(selected);
+    setPreview(null);
+    setResult(null);
+    setError(null);
+    handlePreviewFile(selected);
+  }, []);
 
   async function handlePreviewFile(selected: File) {
     setLoading(true);
@@ -137,30 +147,38 @@ export default function CaseImportClient() {
 
       <div className="mx-auto flex max-w-7xl flex-col gap-5 px-4 py-5 md:px-8">
         <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end">
-            <div className="flex-1">
-              <label htmlFor="case-import-file" className="text-sm font-semibold text-slate-950">Spreadsheet</label>
-              <div className="mt-2 flex min-h-24 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-center md:flex-row md:justify-start md:text-left">
-                <FileSpreadsheet className="size-8 text-teal-700" />
-                <div className="min-w-0">
-                  <input
-                    id="case-import-file"
-                    type="file"
-                    onChange={(event) => {
-                      const selected = event.target.files?.[0] ?? null;
-                      setFile(selected);
-                      setPreview(null);
-                      setResult(null);
-                      setError(null);
-                      if (selected) handlePreviewFile(selected);
-                    }}
-                    className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-teal-700 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white"
-                  />
-                  <p className="mt-1 text-xs text-slate-500">Supported columns: Plaintiff/Case, Defendant(s), Case Number, County, Court/Courthouse, Defense Attorney/Counsel, Defense Firm, Date Filed, Served Date, Status, Date of Loss/DOI, Case Type, ATTY.</p>
-                </div>
-              </div>
-            </div>
-          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            onChange={(event) => {
+              const selected = event.target.files?.[0];
+              if (selected) onFileSelected(selected);
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragOver(false);
+              const dropped = e.dataTransfer.files?.[0];
+              if (dropped) onFileSelected(dropped);
+            }}
+            className={`flex w-full min-h-28 flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-6 text-center transition-colors ${dragOver ? "border-teal-500 bg-teal-50" : "border-slate-300 bg-slate-50 hover:border-slate-400 hover:bg-slate-100"}`}
+          >
+            <FileSpreadsheet className="size-8 text-teal-700" />
+            {file ? (
+              <p className="text-sm font-medium text-slate-700">{file.name}</p>
+            ) : (
+              <>
+                <p className="text-sm font-medium text-slate-700">Click to choose a file or drag &amp; drop</p>
+                <p className="text-xs text-slate-500">.xlsx, .xls, or .csv</p>
+              </>
+            )}
+          </button>
           {loading && <div className="mt-3 flex items-center gap-2 text-sm text-slate-500"><Loader2 className="size-4 animate-spin" /> Parsing spreadsheet…</div>}
           {error && <p className="mt-3 text-sm font-medium text-red-600">{error}</p>}
         </section>
