@@ -332,6 +332,7 @@ model Case {
   defenseAttorney String?
 
   filingDate   DateTime?
+  servedDate   DateTime?
   dateOfLoss   DateTime?
   closedDate   DateTime?
 

@@ -16,8 +16,11 @@ type ImportRow = {
   defenseAttorney: string | null;
   defenseFirm: string | null;
   dateFiled: string | null;
+  servedDate: string | null;
   status: string | null;
   dateOfLoss: string | null;
+  caseType: string | null;
+  attorney: string | null;
 };
 
 type ImportCase = {
@@ -31,7 +34,10 @@ type ImportCase = {
   defenseAttorney: string | null;
   defenseFirm: string | null;
   filingDate: string | null;
+  servedDate: string | null;
   dateOfLoss: string | null;
+  caseType: string | null;
+  attorney: string | null;
   status: "ACTIVE" | "PENDING" | "CLOSED" | "ARCHIVED";
   sourceRows: number[];
   warnings: string[];
@@ -39,16 +45,19 @@ type ImportCase = {
 };
 
 const COLUMN_ALIASES: Record<keyof Omit<ImportRow, "rowNumber">, string[]> = {
-  plaintiff: ["plaintiff", "plaintiffs", "claimant", "client"],
+  plaintiff: ["plaintiff", "plaintiffs", "claimant", "client", "case"],
   defendants: ["defendant", "defendants", "defendant(s)", "defendant s"],
-  caseNumber: ["case number", "case no", "case #", "caseno", "docket", "docket number"],
+  caseNumber: ["case number", "case no", "case #", "caseno", "docket", "docket number", "court case number"],
   county: ["county", "venue county"],
-  court: ["court", "court name", "venue", "superior court"],
-  defenseAttorney: ["defense attorney", "defense counsel", "attorney"],
+  court: ["court", "court name", "venue", "superior court", "courthouse"],
+  defenseAttorney: ["defense attorney", "defense counsel"],
   defenseFirm: ["defense firm", "defense law firm", "firm"],
-  dateFiled: ["date filed", "filed", "filing date"],
+  dateFiled: ["date filed", "filed", "filing date", "file date"],
+  servedDate: ["served date", "date served", "service date", "date of service"],
   status: ["status", "case status"],
-  dateOfLoss: ["date of loss", "dol", "loss date", "incident date"],
+  dateOfLoss: ["date of loss", "dol", "doi", "loss date", "incident date"],
+  caseType: ["case type", "type", "matter type"],
+  attorney: ["atty", "attorney", "assigned attorney", "lead attorney"],
 };
 
 const STATUS_ALIASES: Record<string, ImportCase["status"]> = {
@@ -58,6 +67,30 @@ const STATUS_ALIASES: Record<string, ImportCase["status"]> = {
   closed: "CLOSED",
   archived: "ARCHIVED",
   settled: "CLOSED",
+  discovery: "ACTIVE",
+  arbitration: "ACTIVE",
+  litigation: "ACTIVE",
+  trial: "ACTIVE",
+  "pending service": "PENDING",
+  "sent for service": "PENDING",
+  served: "ACTIVE",
+  "pre-litigation": "PENDING",
+  "pre litigation": "PENDING",
+};
+
+const CASE_TYPE_ALIASES: Record<string, string> = {
+  auto: "AUTO_ACCIDENT",
+  "auto accident": "AUTO_ACCIDENT",
+  "motor vehicle": "AUTO_ACCIDENT",
+  "slip and fall": "SLIP_AND_FALL",
+  "slip/fall": "SLIP_AND_FALL",
+  "slip / fall": "SLIP_AND_FALL",
+  "government claim": "GOVERNMENT_CLAIM",
+  "dog bite": "DOG_BITE",
+  "premises liability": "PREMISES_LIABILITY",
+  "medical malpractice": "MEDICAL_MALPRACTICE",
+  "wrongful death": "WRONGFUL_DEATH",
+  "product liability": "PRODUCT_LIABILITY",
 };
 
 function normalizeHeader(value: unknown) {
@@ -131,6 +164,25 @@ function normalizeStatus(value: string | null): ImportCase["status"] {
   return STATUS_ALIASES[value.trim().toLowerCase()] ?? "ACTIVE";
 }
 
+function normalizeCaseType(value: string | null): string | null {
+  if (!value) return null;
+  return CASE_TYPE_ALIASES[value.trim().toLowerCase()] ?? null;
+}
+
+function parseNameFromCaseColumn(value: string | null): string | null {
+  if (!value) return null;
+  const match = value.match(/^(.+?)\s*-\s*(?:\d{1,2}\/\d{1,2}\/\d{2,4}|DOL\b)/i);
+  if (match) return match[1].trim();
+  const plusMatch = value.match(/^(.+?)\s*\+\s*\d+$/);
+  if (plusMatch) return plusMatch[1].trim();
+  return value.trim();
+}
+
+function normalizeCounty(value: string | null): string | null {
+  if (!value) return null;
+  return value.replace(/_/g, " ").trim() || null;
+}
+
 function compactNameList(names: string[]) {
   const seen = new Set<string>();
   return names
@@ -193,15 +245,29 @@ export async function POST(request: NextRequest) {
   } else {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(buffer as unknown as ExcelJS.Buffer);
-    const worksheet = workbook.worksheets[0];
-    if (!worksheet) return NextResponse.json({ error: "No worksheet found." }, { status: 400 });
-    worksheet.eachRow((row) => {
+    const SKIP_SHEETS = new Set(["sheet1", "sheet2"]);
+    const dataSheets = workbook.worksheets.filter(
+      (ws) => !SKIP_SHEETS.has(ws.name.toLowerCase()) && ws.rowCount > 1,
+    );
+    if (dataSheets.length === 0) return NextResponse.json({ error: "No worksheet found." }, { status: 400 });
+    const firstSheet = dataSheets[0];
+    firstSheet.eachRow((row) => {
       const values: string[] = [];
       for (let index = 1; index <= row.cellCount; index += 1) {
         values.push(cellText(row.getCell(index).value));
       }
       rawRows.push(values);
     });
+    for (const sheet of dataSheets.slice(1)) {
+      sheet.eachRow((row, rowNum) => {
+        if (rowNum === 1) return;
+        const values: string[] = [];
+        for (let index = 1; index <= row.cellCount; index += 1) {
+          values.push(cellText(row.getCell(index).value));
+        }
+        rawRows.push(values);
+      });
+    }
   }
 
   if (rawRows.length === 0) return NextResponse.json({ error: "No rows found." }, { status: 400 });
@@ -218,8 +284,8 @@ export async function POST(request: NextRequest) {
     ]),
   ) as Record<keyof Omit<ImportRow, "rowNumber">, number | null>;
 
-  if (columns.plaintiff === null || columns.caseNumber === null) {
-    return NextResponse.json({ error: "The file needs at least Plaintiff and Case Number columns." }, { status: 400 });
+  if (columns.plaintiff === null && columns.caseNumber === null) {
+    return NextResponse.json({ error: "The file needs at least a Plaintiff/Case or Case Number column." }, { status: 400 });
   }
 
   const rows: ImportRow[] = [];
@@ -229,23 +295,29 @@ export async function POST(request: NextRequest) {
       const col = columns[key];
       return col !== null ? row[col] || null : null;
     };
+    const plaintiffValue = parseNameFromCaseColumn(get("plaintiff"));
     const rawDateFiled = get("dateFiled");
     const rawDateOfLoss = get("dateOfLoss");
+    const rawServedDate = get("servedDate");
     const item: ImportRow = {
       rowNumber,
-      plaintiff: get("plaintiff"),
+      plaintiff: plaintiffValue,
       defendants: get("defendants"),
       caseNumber: get("caseNumber"),
-      county: get("county"),
+      county: normalizeCounty(get("county")),
       court: get("court"),
       defenseAttorney: get("defenseAttorney"),
       defenseFirm: get("defenseFirm"),
       dateFiled: parseDate(rawDateFiled),
+      servedDate: parseDate(rawServedDate),
       status: get("status"),
       dateOfLoss: parseDate(rawDateOfLoss),
+      caseType: get("caseType"),
+      attorney: get("attorney"),
     };
     if (isInvalidDateValue(rawDateFiled, item.dateFiled)) item.dateFiled = "INVALID_DATE";
     if (isInvalidDateValue(rawDateOfLoss, item.dateOfLoss)) item.dateOfLoss = "INVALID_DATE";
+    if (isInvalidDateValue(rawServedDate, item.servedDate)) item.servedDate = "INVALID_DATE";
     if (Object.entries(item).some(([key, value]) => key !== "rowNumber" && value)) rows.push(item);
   });
 
@@ -266,6 +338,7 @@ export async function POST(request: NextRequest) {
     if (!row.defendants) warnings.push("Missing defendant");
     if (row.dateFiled === "INVALID_DATE") warnings.push("Invalid filing date");
     if (row.dateOfLoss === "INVALID_DATE") warnings.push("Invalid date of loss");
+    if (row.servedDate === "INVALID_DATE") warnings.push("Invalid served date");
 
     grouped.set(key, {
       importKey: key,
@@ -278,7 +351,10 @@ export async function POST(request: NextRequest) {
       defenseAttorney: row.defenseAttorney,
       defenseFirm: row.defenseFirm,
       filingDate: row.dateFiled === "INVALID_DATE" ? null : row.dateFiled,
+      servedDate: row.servedDate === "INVALID_DATE" ? null : row.servedDate,
       dateOfLoss: row.dateOfLoss === "INVALID_DATE" ? null : row.dateOfLoss,
+      caseType: normalizeCaseType(row.caseType),
+      attorney: row.attorney,
       status: normalizeStatus(row.status),
       sourceRows: [row.rowNumber],
       warnings,

@@ -17,7 +17,10 @@ type ImportCase = {
   defenseAttorney: string | null;
   defenseFirm: string | null;
   filingDate: string | null;
+  servedDate: string | null;
   dateOfLoss: string | null;
+  caseType: string | null;
+  attorney: string | null;
   status: "ACTIVE" | "PENDING" | "CLOSED" | "ARCHIVED";
   duplicateCaseId: string | null;
 };
@@ -85,13 +88,14 @@ export async function POST(request: NextRequest) {
           orgId: null,
           title: item.title.trim(),
           caseNumber: clean(item.caseNumber),
-          caseType: "AUTO_ACCIDENT",
+          caseType: (item.caseType as any) || "AUTO_ACCIDENT",
           status: item.status,
           county: countyCourt.county,
           court: countyCourt.court,
           countyId: countyCourt.countyId,
           courtId: countyCourt.courtId,
           filingDate: dateOrNull(item.filingDate),
+          servedDate: dateOrNull(item.servedDate),
           dateOfLoss: dateOrNull(item.dateOfLoss),
           defendant: clean(item.defendants),
           defenseFirm: clean(item.defenseFirm),
