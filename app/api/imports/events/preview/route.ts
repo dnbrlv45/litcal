@@ -203,10 +203,10 @@ export async function POST(request: NextRequest) {
     // Parse all VEVENT components
     const vevents = extractVEvents(icsContent);
 
-    // Load all workspace cases for matching
+    // Load all workspace cases with parties for matching
     const cases = await prisma.case.findMany({
       where: { workspaceId: workspace.id },
-      select: { id: true, title: true, caseNumber: true },
+      select: { id: true, title: true, caseNumber: true, parties: { select: { name: true } } },
     });
     const casesByNumber = new Map<string, typeof cases[number]>();
     for (const c of cases) {
@@ -310,6 +310,41 @@ export async function POST(request: NextRequest) {
               matchMethod = "titleFuzzy";
               break;
             }
+          }
+        }
+      }
+
+      // Name-based match: for events like "ARTUR HAKOBYAN Trial" with no "v." pattern
+      if (!caseId) {
+        const caseField = desc ? extractField(desc, "Case") : null;
+        const searchText = caseField || summary;
+        // Strip trailing keywords to isolate the name
+        const nameOnly = searchText
+          .replace(/\b(Trial|Discovery\s*Due|Deposition|Depo|Mediation|CCP\s*998\s*Due|Discovery\s*responses?\s*due.*)\b.*$/i, "")
+          .replace(/[-–—]/g, " ")
+          .trim();
+        if (nameOnly.length > 3) {
+          const nameNorm = normalizeForMatch(nameOnly);
+          for (const c of cases) {
+            // Check against case title
+            if (normalizeForMatch(c.title).includes(nameNorm)) {
+              caseId = c.id;
+              caseTitle = c.title;
+              matchedCaseNumber = c.caseNumber;
+              matchMethod = "nameFuzzy";
+              break;
+            }
+            // Check against party names
+            for (const p of c.parties) {
+              if (normalizeForMatch(p.name).includes(nameNorm) || nameNorm.includes(normalizeForMatch(p.name))) {
+                caseId = c.id;
+                caseTitle = c.title;
+                matchedCaseNumber = c.caseNumber;
+                matchMethod = "partyName";
+                break;
+              }
+            }
+            if (caseId) break;
           }
         }
       }
