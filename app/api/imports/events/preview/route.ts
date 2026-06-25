@@ -395,6 +395,7 @@ export async function POST(request: NextRequest) {
       matched,
       unmatched,
       events: parsedEvents,
+      workspaceCases: cases.map((c) => ({ id: c.id, title: c.title, caseNumber: c.caseNumber })),
     });
   } catch (err) {
     console.error("Event import preview error:", err);

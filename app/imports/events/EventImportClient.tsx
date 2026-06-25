@@ -24,6 +24,12 @@ type ParsedEvent = {
   warnings: string[];
 };
 
+type WorkspaceCase = {
+  id: string;
+  title: string;
+  caseNumber: string | null;
+};
+
 type PreviewResult = {
   totalParsed: number;
   eventsToImport: number;
@@ -32,6 +38,7 @@ type PreviewResult = {
   matched: number;
   unmatched: number;
   events: ParsedEvent[];
+  workspaceCases: WorkspaceCase[];
 };
 
 type CommitResult = {
@@ -69,10 +76,24 @@ export default function EventImportClient() {
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CommitResult | null>(null);
+  const [caseOverrides, setCaseOverrides] = useState<Map<string, string>>(new Map());
+
+  function overrideCase(uid: string, caseId: string) {
+    setCaseOverrides((prev) => {
+      const next = new Map(prev);
+      if (caseId) next.set(uid, caseId);
+      else next.delete(uid);
+      return next;
+    });
+  }
 
   const selectedEvents = useMemo(
-    () => preview?.events.filter((e) => selectedUids.has(e.uid)) ?? [],
-    [preview, selectedUids],
+    () => (preview?.events.filter((e) => selectedUids.has(e.uid)) ?? []).map((e) => {
+      const overrideCaseId = caseOverrides.get(e.uid);
+      if (!overrideCaseId) return e;
+      return { ...e, caseId: overrideCaseId };
+    }),
+    [preview, selectedUids, caseOverrides],
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -269,14 +290,18 @@ export default function EventImportClient() {
                           </span>
                         </td>
                         <td className="px-4 py-3 align-top text-slate-700">
-                          {ev.caseId ? (
+                          {ev.caseId && !caseOverrides.has(ev.uid) ? (
                             <div>
                               <div className="font-medium max-w-xs truncate" title={ev.caseTitle ?? ""}>{ev.caseTitle}</div>
                               {ev.caseNumber && <div className="mt-1 text-xs text-slate-500">#{ev.caseNumber}</div>}
-                              <Badge className="mt-1 bg-green-100 text-green-700">{ev.matchMethod === "caseNumber" ? "Case #" : "Title"}</Badge>
+                              <Badge className="mt-1 bg-green-100 text-green-700">{ev.matchMethod === "caseNumber" ? "Case #" : ev.matchMethod === "partyName" ? "Party" : "Title"}</Badge>
                             </div>
                           ) : (
-                            <span className="text-slate-400">No match</span>
+                            <CasePicker
+                              cases={preview?.workspaceCases ?? []}
+                              value={caseOverrides.get(ev.uid) ?? ""}
+                              onChange={(caseId) => overrideCase(ev.uid, caseId)}
+                            />
                           )}
                         </td>
                         <td className="px-4 py-3 align-top text-slate-700">
@@ -322,6 +347,60 @@ function Metric({ label, value }: { label: string; value: number }) {
     <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
       <div className="text-2xl font-bold text-slate-950">{value}</div>
       <div className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</div>
+    </div>
+  );
+}
+
+function CasePicker({ cases, value, onChange }: { cases: WorkspaceCase[]; value: string; onChange: (id: string) => void }) {
+  const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
+  const selected = cases.find((c) => c.id === value);
+
+  const filtered = search
+    ? cases.filter((c) => {
+        const q = search.toLowerCase();
+        return c.title.toLowerCase().includes(q) || (c.caseNumber?.toLowerCase().includes(q) ?? false);
+      })
+    : cases;
+
+  return (
+    <div className="relative">
+      {selected ? (
+        <div className="flex items-center gap-1">
+          <div className="text-sm font-medium truncate max-w-[180px]" title={selected.title}>{selected.title}</div>
+          <button type="button" onClick={() => onChange("")} className="text-xs text-slate-400 hover:text-slate-600 ml-1">✕</button>
+        </div>
+      ) : (
+        <input
+          type="text"
+          placeholder="Search cases…"
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 200)}
+          className="w-full max-w-[220px] rounded border border-slate-300 px-2 py-1 text-sm placeholder:text-slate-400 focus:border-teal-500 focus:outline-none"
+        />
+      )}
+      {open && !selected && (
+        <div className="absolute z-50 mt-1 max-h-48 w-72 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+          {filtered.length === 0 ? (
+            <div className="px-3 py-2 text-sm text-slate-400">No cases found</div>
+          ) : (
+            filtered.slice(0, 20).map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => { onChange(c.id); setSearch(""); setOpen(false); }}
+                className="flex w-full flex-col px-3 py-2 text-left hover:bg-slate-50"
+              >
+                <span className="text-sm font-medium text-slate-900 truncate">{c.title}</span>
+                {c.caseNumber && <span className="text-xs text-slate-500">#{c.caseNumber}</span>}
+              </button>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }
