@@ -7,6 +7,13 @@ import { addTimelineEntry } from "@/lib/case-timeline";
 
 export const runtime = "nodejs";
 
+const VALID_STATUSES = new Set([
+  "ACTIVE","CLOSED","ARCHIVED","PENDING","DISCOVERY","ARBITRATION",
+  "UIM_ARBITRATION","UM_ARBITRATION","SERVED","PARTIALLY_SERVED",
+  "PENDING_SERVICE","SENT_FOR_SERVICE","SERVICE_POSTPONED","PENDING_RFD",
+  "SETTLED","DISBURSEMENT","LIEN_NEGOTIATIONS","DISMISSAL_FILED",
+]);
+
 type ImportCase = {
   title: string;
   plaintiffs: string[];
@@ -131,7 +138,7 @@ export async function POST(request: NextRequest) {
           title: item.title.trim(),
           caseNumber: clean(item.caseNumber),
           caseType: (item.caseType as any) || "AUTO_ACCIDENT",
-          status: item.status as any,
+          status: (VALID_STATUSES.has(item.status) ? item.status : "ACTIVE") as any,
           county: cc.county,
           court: cc.court,
           countyId: cc.countyId,
