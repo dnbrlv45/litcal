@@ -8,12 +8,34 @@ import { Input } from "@/components/ui/input";
 import CreateCaseModal from "./CreateCaseModal";
 import QuickAddDiscoveryModal from "./QuickAddDiscoveryModal";
 
-const STATUS_COLORS = {
-  ACTIVE:   "bg-green-100 text-green-700",
-  PENDING:  "bg-yellow-100 text-yellow-700",
-  CLOSED:   "bg-slate-100 text-slate-600",
-  ARCHIVED: "bg-slate-100 text-slate-400",
+const STATUS_COLORS: Record<string, string> = {
+  ACTIVE:             "bg-green-100 text-green-700",
+  DISCOVERY:          "bg-green-100 text-green-700",
+  SERVED:             "bg-green-100 text-green-700",
+  ARBITRATION:        "bg-blue-100 text-blue-700",
+  UIM_ARBITRATION:    "bg-blue-100 text-blue-700",
+  UM_ARBITRATION:     "bg-blue-100 text-blue-700",
+  PENDING:            "bg-yellow-100 text-yellow-700",
+  PENDING_SERVICE:    "bg-yellow-100 text-yellow-700",
+  SENT_FOR_SERVICE:   "bg-yellow-100 text-yellow-700",
+  PARTIALLY_SERVED:   "bg-yellow-100 text-yellow-700",
+  SERVICE_POSTPONED:  "bg-yellow-100 text-yellow-700",
+  PENDING_RFD:        "bg-yellow-100 text-yellow-700",
+  SETTLED:            "bg-slate-100 text-slate-600",
+  CLOSED:             "bg-slate-100 text-slate-600",
+  DISBURSEMENT:       "bg-slate-100 text-slate-600",
+  LIEN_NEGOTIATIONS:  "bg-slate-100 text-slate-600",
+  DISMISSAL_FILED:    "bg-slate-100 text-slate-600",
+  ARCHIVED:           "bg-slate-100 text-slate-400",
 };
+
+const STATUS_GROUPS: { label: string; statuses: string[] }[] = [
+  { label: "Active", statuses: ["ACTIVE", "DISCOVERY", "SERVED"] },
+  { label: "Arbitration", statuses: ["ARBITRATION", "UIM_ARBITRATION", "UM_ARBITRATION"] },
+  { label: "Pending", statuses: ["PENDING", "PENDING_SERVICE", "SENT_FOR_SERVICE", "PARTIALLY_SERVED", "SERVICE_POSTPONED", "PENDING_RFD"] },
+  { label: "Settled / Closed", statuses: ["SETTLED", "CLOSED", "DISBURSEMENT", "LIEN_NEGOTIATIONS", "DISMISSAL_FILED"] },
+  { label: "Archived", statuses: ["ARCHIVED"] },
+];
 
 const TYPE_LABELS: Record<string, string> = {
   AUTO_ACCIDENT: "Auto Accident", SLIP_AND_FALL: "Slip & Fall",
@@ -27,7 +49,7 @@ interface Case {
   id: string;
   title: string;
   caseNumber: string | null;
-  status: keyof typeof STATUS_COLORS;
+  status: string;
   caseType: string;
   court: string | null;
   judge: string | null;
@@ -63,17 +85,19 @@ export default function CasesClient() {
     (c.court ?? "").toLowerCase().includes(search.toLowerCase())
   );
 
-  const grouped = {
-    ACTIVE:   filtered.filter((c) => c.status === "ACTIVE"),
-    PENDING:  filtered.filter((c) => c.status === "PENDING"),
-    CLOSED:   filtered.filter((c) => c.status === "CLOSED"),
-    ARCHIVED: filtered.filter((c) => c.status === "ARCHIVED"),
-  };
+  const grouped = STATUS_GROUPS.map((group) => ({
+    ...group,
+    cases: filtered.filter((c) => group.statuses.includes(c.status)),
+  }));
+
+  const activeCount = grouped[0].cases.length + grouped[1].cases.length;
+  const pendingCount = grouped[2].cases.length;
+  const closedCount = grouped[3].cases.length + grouped[4].cases.length;
 
   const stats = [
-    { label: "Active", value: grouped.ACTIVE.length, icon: CheckCircle2 },
-    { label: "Pending", value: grouped.PENDING.length, icon: Clock3 },
-    { label: "Archived", value: grouped.ARCHIVED.length + grouped.CLOSED.length, icon: Archive },
+    { label: "Active", value: activeCount, icon: CheckCircle2 },
+    { label: "Pending", value: pendingCount, icon: Clock3 },
+    { label: "Closed", value: closedCount, icon: Archive },
   ];
 
   return (
@@ -137,16 +161,15 @@ export default function CasesClient() {
           </div>
         ) : (
           <div className="flex flex-col gap-8">
-            {(["ACTIVE", "PENDING", "CLOSED", "ARCHIVED"] as const).map((status) => {
-              const group = grouped[status];
-              if (group.length === 0) return null;
+            {grouped.map((group) => {
+              if (group.cases.length === 0) return null;
               return (
-                <div key={status}>
+                <div key={group.label}>
                   <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">
-                    {status} · {group.length}
+                    {group.label} · {group.cases.length}
                   </h2>
                   <div className="flex flex-col gap-2">
-                    {group.map((c) => (
+                    {group.cases.map((c) => (
                       <Link
                         key={c.id}
                         href={`/cases/${c.id}`}
@@ -158,8 +181,8 @@ export default function CasesClient() {
                             {c.caseNumber && (
                               <span className="text-xs text-muted-foreground font-mono shrink-0">#{c.caseNumber}</span>
                             )}
-                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${STATUS_COLORS[c.status]}`}>
-                              {c.status.charAt(0) + c.status.slice(1).toLowerCase()}
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${STATUS_COLORS[c.status] ?? "bg-slate-100 text-slate-600"}`}>
+                              {c.status.replace(/_/g, " ")}
                             </span>
                           </div>
                           <div className="flex items-center gap-3 mt-1 text-xs font-medium text-slate-500 flex-wrap">
