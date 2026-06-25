@@ -6,7 +6,6 @@ import { buildXlsxWorkbook } from "@/lib/excel";
 import { formatCsvDate } from "@/lib/event-display";
 import {
   DISCOVERY_STATUS_LABELS,
-  DISCOVERY_TYPE_LABELS,
 } from "@/lib/discovery-constants";
 
 export const dynamic = "force-dynamic";
@@ -15,13 +14,20 @@ const HEADERS = [
   "Due Date",
   "Case Name",
   "Case Number",
-  "Discovery Type",
+  "Assigned To",
   "Served/Received",
   "Status",
+  "Progress",
   "Notes",
 ];
 
-const COL_WIDTHS = [14, 52, 18, 34, 18, 20, 46];
+const COL_WIDTHS = [14, 52, 18, 22, 18, 20, 22, 46];
+
+const PROGRESS_LABELS: Record<string, string> = {
+  NOT_STARTED: "Not Started",
+  QUESTIONNAIRE_SENT: "Questionnaire Sent",
+  IN_PROGRESS: "In Progress",
+};
 
 const ROW_COLORS: Record<string, string> = {
   OVERDUE:  "FEE2E2",
@@ -51,7 +57,7 @@ export async function GET(request: NextRequest) {
       status: { notIn: ["COMPLETED", "RESPONSES_RECEIVED"] },
       currentDueDate: { lte: endDate },
       caseRef: {
-        status: { in: ["ACTIVE", "PENDING"] },
+        status: { in: ["ACTIVE", "PENDING", "DISCOVERY", "SERVED", "ARBITRATION", "UIM_ARBITRATION", "UM_ARBITRATION", "PENDING_SERVICE", "SENT_FOR_SERVICE", "PARTIALLY_SERVED", "SERVICE_POSTPONED", "PENDING_RFD"] },
         ...(requestedAttorneyId
           ? { staff: { some: { userId: requestedAttorneyId, role: "ATTORNEY" } } }
           : {}),
@@ -60,6 +66,9 @@ export async function GET(request: NextRequest) {
     include: {
       caseRef: {
         select: { title: true, caseNumber: true },
+      },
+      assignedTo: {
+        select: { firstName: true, lastName: true },
       },
     },
     orderBy: { currentDueDate: "asc" },
@@ -73,13 +82,18 @@ export async function GET(request: NextRequest) {
         ? "EXTENDED"
         : "CURRENT";
 
+    const assigneeName = item.assignedTo
+      ? [item.assignedTo.firstName, item.assignedTo.lastName].filter(Boolean).join(" ")
+      : "";
+
     return {
       "Due Date": formatCsvDate(item.currentDueDate),
       "Case Name": item.caseRef.title,
       "Case Number": item.caseRef.caseNumber ?? "",
-      "Discovery Type": DISCOVERY_TYPE_LABELS[item.discoveryType] ?? item.discoveryType,
+      "Assigned To": assigneeName,
       "Served/Received": formatCsvDate(item.servedOrReceivedDate),
       Status: DISCOVERY_STATUS_LABELS[item.status] ?? item.status,
+      Progress: PROGRESS_LABELS[item.progressStatus] ?? item.progressStatus,
       Notes: item.notes ?? "",
       _rowStatus: rowStatus,
       _direction: item.direction,

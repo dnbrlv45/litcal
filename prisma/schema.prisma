@@ -35,7 +35,8 @@ model User {
   assignedEvents       Event[]    @relation("EventAttorney")
   courtRuleRequests    CourtRuleRequest[]
   caseTimeline         CaseTimeline[]
-  createdDiscovery     DiscoveryItem[]
+  createdDiscovery     DiscoveryItem[] @relation("DiscoveryCreator")
+  assignedDiscovery    DiscoveryItem[] @relation("DiscoveryAssignee")
 }
 
 model AuthSession {
@@ -734,6 +735,12 @@ enum DiscoveryStatus {
   COMPLETED
 }
 
+enum DiscoveryProgressStatus {
+  NOT_STARTED
+  QUESTIONNAIRE_SENT
+  IN_PROGRESS
+}
+
 enum ExtensionAppliesTo {
   OUR_DEADLINE
   OPPOSING_DEADLINE
@@ -754,6 +761,8 @@ model DiscoveryItem {
   currentDueDate       DateTime
 
   status               DiscoveryStatus    @default(AWAITING_RESPONSE)
+  progressStatus       DiscoveryProgressStatus @default(NOT_STARTED)
+  assignedToId         String?
   notes                String?
 
   linkedEventId        String?            @unique
@@ -764,7 +773,8 @@ model DiscoveryItem {
 
   caseRef              Case               @relation(fields: [caseId],       references: [id], onDelete: Cascade)
   workspace            Workspace          @relation(fields: [workspaceId],  references: [id], onDelete: Cascade)
-  creator              User               @relation(fields: [createdBy],    references: [id], onDelete: Cascade)
+  creator              User               @relation("DiscoveryCreator", fields: [createdBy],    references: [id], onDelete: Cascade)
+  assignedTo           User?              @relation("DiscoveryAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
   linkedEvent          Event?             @relation("DiscoveryLinkedEvent", fields: [linkedEventId], references: [id], onDelete: SetNull)
   linkedTask           Task?              @relation("DiscoveryLinkedTask",  fields: [linkedTaskId],  references: [id], onDelete: SetNull)
   extensions           DiscoveryExtension[]
@@ -772,6 +782,7 @@ model DiscoveryItem {
   @@index([caseId])
   @@index([workspaceId])
   @@index([status])
+  @@index([assignedToId])
 }
 
 model DiscoveryExtension {
