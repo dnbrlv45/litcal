@@ -267,6 +267,9 @@ export async function POST(request: NextRequest) {
       // For all-day events, set endTime to end of day (23:59:59 LA)
       const allDay = startParsed.allDay;
 
+      // Skip past events
+      if (startParsed.date.getTime() < Date.now()) continue;
+
       // Classify event type
       const { eventType, subtype } = classifyEvent(summary, desc);
 
