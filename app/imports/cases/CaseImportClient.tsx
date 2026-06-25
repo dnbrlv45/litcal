@@ -78,7 +78,8 @@ export default function CaseImportClient() {
       setPreview(data);
       setSelectedKeys(new Set((data.cases as ImportCase[]).filter((item) => !item.duplicateCaseId && item.warnings.length === 0).map((item) => item.importKey)));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not preview import.");
+      console.error("Import preview failed:", err);
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
     }
@@ -144,15 +145,22 @@ export default function CaseImportClient() {
           <input
             ref={fileInputRef}
             type="file"
-            className="hidden"
+            tabIndex={-1}
+            style={{ position: "absolute", width: 0, height: 0, overflow: "hidden", opacity: 0 }}
             onChange={(event) => {
               const selected = event.target.files?.[0];
               if (selected) onFileSelected(selected);
+              event.target.value = "";
             }}
           />
           <button
             type="button"
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => {
+              if (fileInputRef.current) {
+                fileInputRef.current.value = "";
+                fileInputRef.current.click();
+              }
+            }}
             onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
             onDragLeave={() => setDragOver(false)}
             onDrop={(e) => {
