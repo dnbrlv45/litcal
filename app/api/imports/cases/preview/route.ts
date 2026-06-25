@@ -226,6 +226,7 @@ async function resolveDuplicate(workspaceId: string, item: ImportCase) {
 }
 
 export async function POST(request: NextRequest) {
+  try {
   const currentUser = await requireUser();
   if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -376,4 +377,9 @@ export async function POST(request: NextRequest) {
     mergedPlaintiffRows: Math.max(0, rows.length - cases.length),
     cases,
   });
+  } catch (err) {
+    console.error("Import preview error:", err);
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
