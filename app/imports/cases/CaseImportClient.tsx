@@ -150,7 +150,7 @@ export default function CaseImportClient() {
                   <input
                     id="case-import-file"
                     type="file"
-                    accept=".xlsx,.xls,.csv"
+                    accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
                     onChange={(event) => {
                       setFile(event.target.files?.[0] ?? null);
                       setPreview(null);
@@ -163,7 +163,7 @@ export default function CaseImportClient() {
                 </div>
               </div>
             </div>
-            <Button onClick={handlePreview} disabled={!file || loading} className="bg-teal-700 text-white hover:bg-teal-800">
+            <Button type="button" onClick={handlePreview} disabled={!file || loading} className="bg-teal-700 text-white hover:bg-teal-800">
               {loading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
               Preview Import
             </Button>
