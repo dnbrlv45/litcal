@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, FileSpreadsheet, Loader2, Upload, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -63,18 +63,12 @@ export default function CaseImportClient() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
 
-  const onFileSelected = useCallback((selected: File) => {
+  async function onFileSelected(selected: File) {
     setFile(selected);
     setPreview(null);
     setResult(null);
     setError(null);
-    handlePreviewFile(selected);
-  }, []);
-
-  async function handlePreviewFile(selected: File) {
     setLoading(true);
-    setError(null);
-    setResult(null);
     try {
       const formData = new FormData();
       formData.append("file", selected);
