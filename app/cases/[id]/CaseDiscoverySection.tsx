@@ -39,6 +39,12 @@ interface Extension {
   createdAt: string;
 }
 
+interface TeamMember {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+}
+
 interface DiscoveryItem {
   id: string;
   direction: DiscoveryDirection;
@@ -46,10 +52,25 @@ interface DiscoveryItem {
   originalDueDate: string;
   currentDueDate: string;
   status: DiscoveryStatus;
+  progressStatus: "NOT_STARTED" | "QUESTIONNAIRE_SENT" | "IN_PROGRESS";
+  assignedToId: string | null;
+  assignedTo: TeamMember | null;
   notes: string | null;
   extensions: Extension[];
   createdAt: string;
 }
+
+const PROGRESS_LABELS: Record<string, string> = {
+  NOT_STARTED: "Not Started",
+  QUESTIONNAIRE_SENT: "Questionnaire Sent",
+  IN_PROGRESS: "In Progress",
+};
+
+const PROGRESS_COLORS: Record<string, string> = {
+  NOT_STARTED: "bg-slate-100 text-slate-600",
+  QUESTIONNAIRE_SENT: "bg-purple-100 text-purple-700",
+  IN_PROGRESS: "bg-blue-100 text-blue-700",
+};
 
 
 function fmt(dateStr: string) {
@@ -327,9 +348,10 @@ function AddExtensionModal({ item, caseId, onClose, onGranted }: {
 
 // ─── Discovery Item Card ──────────────────────────────────────────────────────
 
-function DiscoveryCard({ item, caseId, onUpdate, onDelete }: {
+function DiscoveryCard({ item, caseId, members, onUpdate, onDelete }: {
   item: DiscoveryItem;
   caseId: string;
+  members: TeamMember[];
   onUpdate: (updated: DiscoveryItem) => void;
   onDelete: (id: string) => void;
 }) {
@@ -341,6 +363,15 @@ function DiscoveryCard({ item, caseId, onUpdate, onDelete }: {
   const overdue = isOverdue(item.currentDueDate, item.status);
   const isCompleted = item.status === "COMPLETED" || item.status === "RESPONSES_RECEIVED";
   const effectiveStatus = displayStatus(item, overdue, isCompleted);
+
+  async function patchField(data: Record<string, unknown>) {
+    const res = await fetch(`/api/cases/${caseId}/discovery/${item.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (res.ok) { const { item: updated } = await res.json(); onUpdate(updated); }
+  }
 
   async function markResponsesReceived() {
     setMarkingDone(true);
@@ -388,8 +419,16 @@ function DiscoveryCard({ item, caseId, onUpdate, onDelete }: {
                   Ext. {item.extensions.length}
                 </span>
               )}
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${PROGRESS_COLORS[item.progressStatus]}`}>
+                {PROGRESS_LABELS[item.progressStatus]}
+              </span>
             </div>
-            <p className="text-xs text-slate-500 mt-0.5">{DISCOVERY_DIRECTION_LABELS[item.direction]}</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {DISCOVERY_DIRECTION_LABELS[item.direction]}
+              {item.assignedTo && (
+                <span className="ml-1.5">· {[item.assignedTo.firstName, item.assignedTo.lastName].filter(Boolean).join(" ")}</span>
+              )}
+            </p>
           </div>
           <div className="text-right shrink-0">
             <p className={`text-sm font-medium ${overdue && !isCompleted ? "text-rose-600" : "text-slate-700"}`}>
@@ -425,6 +464,39 @@ function DiscoveryCard({ item, caseId, onUpdate, onDelete }: {
                 <p className="text-slate-700 font-semibold mt-0.5">{item.extensions.length}</p>
               </div>
             </div>
+
+            {/* Assigned To & Progress */}
+            {!isCompleted && (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-slate-400 font-medium uppercase tracking-wide mb-1">Assigned To</p>
+                  <select
+                    value={item.assignedToId ?? ""}
+                    onChange={(e) => patchField({ assignedToId: e.target.value || null })}
+                    className="w-full h-8 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700"
+                  >
+                    <option value="">Unassigned</option>
+                    {members.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {[m.firstName, m.lastName].filter(Boolean).join(" ")}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400 font-medium uppercase tracking-wide mb-1">Progress</p>
+                  <select
+                    value={item.progressStatus}
+                    onChange={(e) => patchField({ progressStatus: e.target.value })}
+                    className="w-full h-8 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700"
+                  >
+                    {Object.entries(PROGRESS_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
 
             {item.notes && (
               <div className="text-xs">
@@ -513,6 +585,7 @@ function DiscoveryCard({ item, caseId, onUpdate, onDelete }: {
 
 export default function CaseDiscoverySection({ caseId }: { caseId: string }) {
   const [items, setItems]                   = useState<DiscoveryItem[]>([]);
+  const [members, setMembers]               = useState<TeamMember[]>([]);
   const [loading, setLoading]               = useState(true);
   const [showAddModal, setShowAddModal]     = useState(false);
   const [prefillDirection, setPrefillDirection] = useState<DiscoveryDirection | undefined>(undefined);
@@ -520,8 +593,15 @@ export default function CaseDiscoverySection({ caseId }: { caseId: string }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/cases/${caseId}/discovery`);
-      if (res.ok) { const { items: data } = await res.json(); setItems(data); }
+      const [discRes, membersRes] = await Promise.all([
+        fetch(`/api/cases/${caseId}/discovery`),
+        fetch("/api/workspaces/members"),
+      ]);
+      if (discRes.ok) { const { items: data } = await discRes.json(); setItems(data); }
+      if (membersRes.ok) {
+        const data = await membersRes.json();
+        setMembers((data.members ?? []).map((m: { user: TeamMember }) => m.user));
+      }
     } finally { setLoading(false); }
   }, [caseId]);
 
@@ -607,6 +687,7 @@ export default function CaseDiscoverySection({ caseId }: { caseId: string }) {
               key={item.id}
               item={item}
               caseId={caseId}
+              members={members}
               onUpdate={handleUpdate}
               onDelete={handleDelete}
             />
@@ -614,7 +695,7 @@ export default function CaseDiscoverySection({ caseId }: { caseId: string }) {
 
           {/* Completed items */}
           {completed.length > 0 && (
-            <CompletedSection items={completed} caseId={caseId} onUpdate={handleUpdate} onDelete={handleDelete} />
+            <CompletedSection items={completed} caseId={caseId} members={members} onUpdate={handleUpdate} onDelete={handleDelete} />
           )}
         </div>
       )}
@@ -631,9 +712,10 @@ export default function CaseDiscoverySection({ caseId }: { caseId: string }) {
   );
 }
 
-function CompletedSection({ items, caseId, onUpdate, onDelete }: {
+function CompletedSection({ items, caseId, members, onUpdate, onDelete }: {
   items: DiscoveryItem[];
   caseId: string;
+  members: TeamMember[];
   onUpdate: (updated: DiscoveryItem) => void;
   onDelete: (id: string) => void;
 }) {
@@ -651,7 +733,7 @@ function CompletedSection({ items, caseId, onUpdate, onDelete }: {
       {open && (
         <div className="mt-2 space-y-2">
           {items.map((item) => (
-            <DiscoveryCard key={item.id} item={item} caseId={caseId} onUpdate={onUpdate} onDelete={onDelete} />
+            <DiscoveryCard key={item.id} item={item} caseId={caseId} members={members} onUpdate={onUpdate} onDelete={onDelete} />
           ))}
         </div>
       )}

@@ -42,20 +42,31 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   });
   if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const body = await req.json() as { action?: string; notes?: string };
+  const body = await req.json() as {
+    action?: string;
+    notes?: string;
+    assignedToId?: string | null;
+    progressStatus?: string;
+  };
 
   if (body.action === "responses_received") {
     await markDiscoveryResponsesReceived(discoveryId, user.id);
-  } else if (body.notes !== undefined) {
-    await prisma.discoveryItem.update({
-      where: { id: discoveryId },
-      data: { notes: body.notes },
-    });
+  } else {
+    const data: Record<string, unknown> = {};
+    if (body.notes !== undefined) data.notes = body.notes;
+    if (body.assignedToId !== undefined) data.assignedToId = body.assignedToId || null;
+    if (body.progressStatus !== undefined) data.progressStatus = body.progressStatus;
+    if (Object.keys(data).length > 0) {
+      await prisma.discoveryItem.update({ where: { id: discoveryId }, data });
+    }
   }
 
   const updated = await prisma.discoveryItem.findUnique({
     where: { id: discoveryId },
-    include: { extensions: { orderBy: { extensionNumber: "asc" } } },
+    include: {
+      extensions: { orderBy: { extensionNumber: "asc" } },
+      assignedTo: { select: { id: true, firstName: true, lastName: true } },
+    },
   });
 
   return NextResponse.json({ item: updated });

@@ -26,7 +26,10 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
   const items = await prisma.discoveryItem.findMany({
     where: { caseId },
-    include: { extensions: { orderBy: { extensionNumber: "asc" } } },
+    include: {
+      extensions: { orderBy: { extensionNumber: "asc" } },
+      assignedTo: { select: { id: true, firstName: true, lastName: true } },
+    },
     orderBy: { createdAt: "desc" },
   });
 
@@ -84,7 +87,10 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const full = await prisma.discoveryItem.findUnique({
     where: { id: item.id },
-    include: { extensions: { orderBy: { extensionNumber: "asc" } } },
+    include: {
+      extensions: { orderBy: { extensionNumber: "asc" } },
+      assignedTo: { select: { id: true, firstName: true, lastName: true } },
+    },
   });
 
   return NextResponse.json({ item: full }, { status: 201 });
