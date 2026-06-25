@@ -19,6 +19,18 @@ export interface CalendarDay {
   isWeekend: boolean;
 }
 
+type XlsxRow = Record<string, string | null | undefined>;
+
+interface XlsxListSheet {
+  name: string;
+  headers: string[];
+  rows: XlsxRow[];
+  colWidths?: number[];
+  rowBgColor?: (row: XlsxRow, index: number) => string | null;
+  rowHeight?: number;
+  wrapText?: boolean;
+}
+
 /**
  * Build a styled .xlsx workbook buffer.
  * @param sheetName  Name shown on the first (list) worksheet tab.
@@ -31,9 +43,9 @@ export interface CalendarDay {
 export async function buildXlsx(
   sheetName: string,
   headers: string[],
-  rows: Record<string, string | null | undefined>[],
+  rows: XlsxRow[],
   colWidths?: number[],
-  rowBgColor?: (row: Record<string, string | null | undefined>, index: number) => string | null,
+  rowBgColor?: (row: XlsxRow, index: number) => string | null,
   calendarDays?: CalendarDay[],
 ): Promise<Blob> {
   const wb = new ExcelJS.Workbook();
@@ -147,8 +159,31 @@ export async function buildXlsx(
     }
   }
 
-  // ── Events list tab ───────────────────────────────────────────────────────
-  const ws = wb.addWorksheet(sheetName, {
+  addListSheet(wb, {
+    name: sheetName,
+    headers,
+    rows,
+    colWidths,
+    rowBgColor,
+  });
+
+  const buf = await wb.xlsx.writeBuffer();
+  return new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+}
+
+export async function buildXlsxWorkbook(sheets: XlsxListSheet[]): Promise<Blob> {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = "LitCal";
+  wb.created = new Date();
+
+  sheets.forEach((sheet) => addListSheet(wb, sheet));
+
+  const buf = await wb.xlsx.writeBuffer();
+  return new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+}
+
+function addListSheet(wb: ExcelJS.Workbook, sheet: XlsxListSheet) {
+  const ws = wb.addWorksheet(sheet.name, {
     properties: { tabColor: { argb: TITLE_BG } },
     views: [{ state: "frozen", ySplit: 1, showGridLines: false }],
     pageSetup: {
@@ -167,10 +202,10 @@ export async function buildXlsx(
     },
   });
 
-  ws.columns = headers.map((h, i) => ({
+  ws.columns = sheet.headers.map((h, i) => ({
     header: h,
     key: h,
-    width: colWidths?.[i] ?? Math.max(h.length + 4, 14),
+    width: sheet.colWidths?.[i] ?? Math.max(h.length + 4, 14),
   }));
 
   const headerRow = ws.getRow(1);
@@ -183,17 +218,17 @@ export async function buildXlsx(
   });
   ws.autoFilter = {
     from: { row: 1, column: 1 },
-    to: { row: 1, column: headers.length },
+    to: { row: 1, column: sheet.headers.length },
   };
 
-  rows.forEach((rowData, index) => {
-    const row = ws.addRow(headers.map((h) => rowData[h] ?? ""));
-    row.height = 18;
-    const customBg = rowBgColor?.(rowData, index);
+  sheet.rows.forEach((rowData, index) => {
+    const row = ws.addRow(sheet.headers.map((h) => rowData[h] ?? ""));
+    row.height = sheet.rowHeight ?? 18;
+    const customBg = sheet.rowBgColor?.(rowData, index);
     const isAlt = index % 2 === 1;
     row.eachCell((cell) => {
       cell.font = { size: 11, name: "Calibri" };
-      cell.alignment = { vertical: "middle", horizontal: "left", wrapText: true };
+      cell.alignment = { vertical: "middle", horizontal: "left", wrapText: sheet.wrapText ?? true };
       const bg = customBg ?? (isAlt ? ALT_ROW_BG : null);
       if (bg) {
         cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bg } };
@@ -202,18 +237,15 @@ export async function buildXlsx(
     });
   });
 
-  if (!colWidths) {
+  if (!sheet.colWidths) {
     ws.columns.forEach((col) => {
       if (!col.key) return;
       let maxLen = (col.header as string)?.length ?? 10;
-      rows.forEach((r) => {
+      sheet.rows.forEach((r) => {
         const val = r[col.key as string] ?? "";
         if (val.length > maxLen) maxLen = val.length;
       });
       col.width = Math.min(maxLen + 4, 50);
     });
   }
-
-  const buf = await wb.xlsx.writeBuffer();
-  return new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
 }

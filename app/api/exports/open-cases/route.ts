@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   let requestedAttorneyId = url.searchParams.get("attorneyId") ?? null;
   const isAdmin = canManageWorkspace(membership.role);
-  if (!isAdmin) requestedAttorneyId = currentUser.id;
+  if (!isAdmin) requestedAttorneyId = null;
 
   const cases = await prisma.case.findMany({
     where: {

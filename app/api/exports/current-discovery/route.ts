@@ -2,10 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCurrentWorkspace, canManageWorkspace } from "@/lib/workspaces";
-import { buildXlsx } from "@/lib/excel";
+import { buildXlsxWorkbook } from "@/lib/excel";
 import { formatCsvDate } from "@/lib/event-display";
 import {
-  DISCOVERY_DIRECTION_LABELS,
   DISCOVERY_STATUS_LABELS,
   DISCOVERY_TYPE_LABELS,
 } from "@/lib/discovery-constants";
@@ -14,32 +13,21 @@ export const dynamic = "force-dynamic";
 
 const HEADERS = [
   "Due Date",
-  "Status",
-  "Discovery Type",
-  "Direction",
   "Case Name",
   "Case Number",
-  "Plaintiff",
-  "Defendant",
-  "County",
-  "Court",
-  "Assigned Attorney",
-  "Assigned Paralegal",
+  "Discovery Type",
   "Served/Received",
-  "Original Due",
-  "Extensions",
+  "Status",
   "Notes",
 ];
 
-const COL_WIDTHS = [14, 20, 30, 26, 32, 16, 24, 24, 18, 28, 24, 24, 16, 16, 12, 36];
+const COL_WIDTHS = [14, 52, 18, 34, 18, 20, 46];
 
 const ROW_COLORS: Record<string, string> = {
   OVERDUE:  "FEE2E2",
   EXTENDED: "FEF3C7",
   CURRENT:  "ECFDF5",
 };
-
-type StaffRole = "ATTORNEY" | "PARALEGAL" | "ASSISTANT";
 
 export async function GET(request: NextRequest) {
   const currentUser = await requireUser();
@@ -66,18 +54,12 @@ export async function GET(request: NextRequest) {
         status: { in: ["ACTIVE", "PENDING"] },
         ...(requestedAttorneyId
           ? { staff: { some: { userId: requestedAttorneyId, role: "ATTORNEY" } } }
-          : !isAdmin
-            ? { staff: { some: { userId: currentUser.id } } }
-            : {}),
+          : {}),
       },
     },
     include: {
-      extensions: { select: { id: true } },
       caseRef: {
-        include: {
-          parties: { select: { name: true, role: true } },
-          staff: { include: { user: { select: { firstName: true, lastName: true } } } },
-        },
+        select: { title: true, caseNumber: true },
       },
     },
     orderBy: { currentDueDate: "asc" },
@@ -85,9 +67,6 @@ export async function GET(request: NextRequest) {
 
   const now = new Date();
   const rows = items.map((item) => {
-    const c = item.caseRef;
-    const plaintiffs = c.parties.filter((p) => p.role === "PLAINTIFF").map((p) => p.name).join("; ");
-    const defendants = c.parties.filter((p) => p.role === "DEFENDANT").map((p) => p.name).join("; ") || c.defendant || "";
     const rowStatus = item.currentDueDate < startOfToday(now)
       ? "OVERDUE"
       : item.status === "EXTENSION_GRANTED"
@@ -96,32 +75,38 @@ export async function GET(request: NextRequest) {
 
     return {
       "Due Date": formatCsvDate(item.currentDueDate),
-      Status: DISCOVERY_STATUS_LABELS[item.status] ?? item.status,
+      "Case Name": item.caseRef.title,
+      "Case Number": item.caseRef.caseNumber ?? "",
       "Discovery Type": DISCOVERY_TYPE_LABELS[item.discoveryType] ?? item.discoveryType,
-      Direction: DISCOVERY_DIRECTION_LABELS[item.direction] ?? item.direction,
-      "Case Name": c.title,
-      "Case Number": c.caseNumber ?? "",
-      Plaintiff: plaintiffs,
-      Defendant: defendants,
-      County: c.county ?? "",
-      Court: c.court ?? "",
-      "Assigned Attorney": staffNames(c.staff, "ATTORNEY"),
-      "Assigned Paralegal": staffNames(c.staff, "PARALEGAL"),
       "Served/Received": formatCsvDate(item.servedOrReceivedDate),
-      "Original Due": formatCsvDate(item.originalDueDate),
-      Extensions: String(item.extensions.length),
+      Status: DISCOVERY_STATUS_LABELS[item.status] ?? item.status,
       Notes: item.notes ?? "",
       _rowStatus: rowStatus,
+      _direction: item.direction,
     };
   });
 
-  const buffer = await buildXlsx(
-    "Current Discovery Due",
-    HEADERS,
-    rows,
-    COL_WIDTHS,
-    (row) => ROW_COLORS[row["_rowStatus"] ?? ""] ?? null
-  );
+  const sheetConfig = {
+    headers: HEADERS,
+    colWidths: COL_WIDTHS,
+    rowHeight: 22,
+    wrapText: false,
+    rowBgColor: (row: Record<string, string | null | undefined>) =>
+      ROW_COLORS[row["_rowStatus"] ?? ""] ?? null,
+  };
+
+  const buffer = await buildXlsxWorkbook([
+    {
+      name: "Received - Our Due",
+      rows: rows.filter((row) => row["_direction"] === "RECEIVED"),
+      ...sheetConfig,
+    },
+    {
+      name: "Sent - Opposing Due",
+      rows: rows.filter((row) => row["_direction"] === "SERVED"),
+      ...sheetConfig,
+    },
+  ]);
 
   const today = new Date().toISOString().slice(0, 10);
   const through = endDate.toISOString().slice(0, 10);
@@ -134,14 +119,6 @@ export async function GET(request: NextRequest) {
       "Content-Disposition": `attachment; filename="${filename}"`,
     },
   });
-}
-
-function staffNames(staff: { role: StaffRole; user: { firstName: string | null; lastName: string | null } }[], role: StaffRole) {
-  return staff
-    .filter((s) => s.role === role)
-    .map((s) => [s.user.firstName, s.user.lastName].filter(Boolean).join(" "))
-    .filter(Boolean)
-    .join("; ");
 }
 
 function daysFromNow(days: number) {

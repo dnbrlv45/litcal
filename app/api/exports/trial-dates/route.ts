@@ -56,9 +56,7 @@ export async function GET(request: NextRequest) {
         status: { in: ["ACTIVE", "PENDING"] },
         ...(requestedAttorneyId
           ? { staff: { some: { userId: requestedAttorneyId, role: "ATTORNEY" } } }
-          : !isAdmin
-            ? { staff: { some: { userId: currentUser.id } } }
-            : {}),
+          : {}),
       },
     },
     include: {

@@ -22,8 +22,8 @@ export async function GET(request: NextRequest) {
   const end   = url.searchParams.get("end");
   if (!start || !end) return NextResponse.json({ error: "start and end are required" }, { status: 400 });
 
-  const startDate = new Date(start);
-  const endDate   = new Date(end);
+  const startDate = new Date(`${start}T00:00:00.000Z`);
+  const endDate   = new Date(`${end}T23:59:59.999Z`);
   if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
     return NextResponse.json({ error: "Invalid date range" }, { status: 400 });
   }
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
   const tz = url.searchParams.get("tz") ?? "UTC";
   let requestedAttorneyId = url.searchParams.get("attorneyId") ?? null;
   const isAdmin = canManageWorkspace(membership.role);
-  if (!isAdmin) requestedAttorneyId = currentUser.id;
+  if (!isAdmin) requestedAttorneyId = null;
 
   const [events, tasks] = await Promise.all([
     prisma.event.findMany({
