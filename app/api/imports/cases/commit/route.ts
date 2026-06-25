@@ -120,51 +120,57 @@ export async function POST(request: NextRequest) {
     countyCourtMap.set(key, { countyId: county.id, courtId, county: county.name, court: courtDisplay });
   }
 
-  // Create all cases in a single transaction
+  // Create cases in batches to avoid transaction timeout
   const failed: { title: string; error: string }[] = [];
   const created: string[] = [];
+  const BATCH_SIZE = 20;
+  const allResults: { id: string; title: string; caseNumber: string | null }[] = [];
 
-  const result = await prisma.$transaction(
-    validCases.map((item) => {
-      const ccKey = `${item.county ?? ""}|||${item.court ?? ""}`;
-      const cc = countyCourtMap.get(ccKey)!;
-      const plaintiffs = item.plaintiffs.map((n) => n.trim()).filter(Boolean);
+  for (let i = 0; i < validCases.length; i += BATCH_SIZE) {
+    const batch = validCases.slice(i, i + BATCH_SIZE);
+    const batchResult = await prisma.$transaction(
+      batch.map((item) => {
+        const ccKey = `${item.county ?? ""}|||${item.court ?? ""}`;
+        const cc = countyCourtMap.get(ccKey)!;
+        const plaintiffs = item.plaintiffs.map((n) => n.trim()).filter(Boolean);
 
-      return prisma.case.create({
-        data: {
-          userId: currentUser.id,
-          workspaceId: workspace.id,
-          orgId: null,
-          title: item.title.trim(),
-          caseNumber: clean(item.caseNumber),
-          caseType: (item.caseType as any) || "AUTO_ACCIDENT",
-          status: (VALID_STATUSES.has(item.status) ? item.status : "ACTIVE") as any,
-          county: cc.county,
-          court: cc.court,
-          countyId: cc.countyId,
-          courtId: cc.courtId,
-          filingDate: dateOrNull(item.filingDate),
-          servedDate: dateOrNull(item.servedDate),
-          dateOfLoss: dateOrNull(item.dateOfLoss),
-          defendant: clean(item.defendants),
-          defenseFirm: clean(item.defenseFirm),
-          defenseAttorney: clean(item.defenseAttorney),
-          parties: {
-            create: plaintiffs.map((name) => ({ name, role: "PLAINTIFF" as const })),
-          },
-        } as Prisma.CaseUncheckedCreateInput,
-        select: { id: true, title: true, caseNumber: true },
-      });
-    }),
-  );
+        return prisma.case.create({
+          data: {
+            userId: currentUser.id,
+            workspaceId: workspace.id,
+            orgId: null,
+            title: item.title.trim(),
+            caseNumber: clean(item.caseNumber),
+            caseType: (item.caseType as any) || "AUTO_ACCIDENT",
+            status: (VALID_STATUSES.has(item.status) ? item.status : "ACTIVE") as any,
+            county: cc.county,
+            court: cc.court,
+            countyId: cc.countyId,
+            courtId: cc.courtId,
+            filingDate: dateOrNull(item.filingDate),
+            servedDate: dateOrNull(item.servedDate),
+            dateOfLoss: dateOrNull(item.dateOfLoss),
+            defendant: clean(item.defendants),
+            defenseFirm: clean(item.defenseFirm),
+            defenseAttorney: clean(item.defenseAttorney),
+            parties: {
+              create: plaintiffs.map((name) => ({ name, role: "PLAINTIFF" as const })),
+            },
+          } as Prisma.CaseUncheckedCreateInput,
+          select: { id: true, title: true, caseNumber: true },
+        });
+      }),
+    );
+    allResults.push(...batchResult);
+  }
 
-  for (const newCase of result) {
+  for (const newCase of allResults) {
     created.push(newCase.id);
   }
 
   // Fire timeline entries in parallel (non-blocking)
   void Promise.all(
-    result.map((newCase) =>
+    allResults.map((newCase) =>
       addTimelineEntry({
         caseId: newCase.id,
         workspaceId: workspace.id,
