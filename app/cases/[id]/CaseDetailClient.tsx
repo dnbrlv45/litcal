@@ -143,6 +143,7 @@ export default function CaseDetailClient({ id }: { id: string }) {
   const [editCaseNumber, setEditCaseNumber] = useState("");
   const [editStatus, setEditStatus] = useState<string>("ACTIVE");
   const [editTrack, setEditTrack] = useState<string>("LITIGATION");
+  const [editCaseType, setEditCaseType] = useState<string>("AUTO_ACCIDENT");
   const [editCountyName, setEditCountyName] = useState("");
   const [editCourtName, setEditCourtName] = useState("");
   const [editJudge, setEditJudge] = useState("");
@@ -230,6 +231,7 @@ export default function CaseDetailClient({ id }: { id: string }) {
     setEditCaseNumber(caseData.caseNumber ?? "");
     setEditStatus(caseData.status);
     setEditTrack(caseData.caseTrack);
+    setEditCaseType(caseData.caseType);
     setEditCountyName(caseData.countyRef?.name ?? caseData.county ?? "");
     setEditCourtName(caseData.courtRef?.name ?? caseData.court ?? "");
     setEditJudge(caseData.judge ?? "");
@@ -252,7 +254,7 @@ export default function CaseDetailClient({ id }: { id: string }) {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: editTitle, caseNumber: editCaseNumber, status: editStatus, caseTrack: editTrack,
+          title: editTitle, caseNumber: editCaseNumber, status: editStatus, caseTrack: editTrack, caseType: editCaseType,
           countyName: editCountyName || null, courtName: editCourtName || null, judge: editJudge,
           description: editDescription,
           plaintiff: editPlaintiff || null,
@@ -337,7 +339,17 @@ export default function CaseDetailClient({ id }: { id: string }) {
                     {TRACK_LABELS[caseData.caseTrack] ?? caseData.caseTrack}
                   </span>
                 )}
-                <span className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600">{TYPE_LABELS[caseData.caseType]}</span>
+                {editing ? (
+                  <select
+                    value={editCaseType}
+                    onChange={(e) => setEditCaseType(e.target.value)}
+                    className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600 focus-visible:outline-none"
+                  >
+                    {Object.entries(TYPE_LABELS).map(([val, label]) => <option key={val} value={val}>{label}</option>)}
+                  </select>
+                ) : (
+                  <span className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600">{TYPE_LABELS[caseData.caseType]}</span>
+                )}
               </div>
             </div>
           </div>
