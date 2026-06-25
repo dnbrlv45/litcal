@@ -31,12 +31,41 @@ import CaseTasksSection from "./CaseTasksSection";
 import CaseTimeline from "./CaseTimeline";
 import CaseDiscoverySection from "./CaseDiscoverySection";
 
-const STATUS_OPTIONS = ["ACTIVE", "PENDING", "CLOSED", "ARCHIVED"] as const;
-const STATUS_COLORS = {
-  ACTIVE:   "bg-green-100 text-green-700",
-  PENDING:  "bg-yellow-100 text-yellow-700",
-  CLOSED:   "bg-slate-100 text-slate-600",
-  ARCHIVED: "bg-slate-100 text-slate-400",
+const STATUS_OPTIONS = [
+  "ACTIVE", "PENDING", "DISCOVERY", "ARBITRATION", "UIM_ARBITRATION", "UM_ARBITRATION",
+  "SERVED", "PARTIALLY_SERVED", "PENDING_SERVICE", "SENT_FOR_SERVICE", "SERVICE_POSTPONED",
+  "PENDING_RFD", "SETTLED", "DISBURSEMENT", "LIEN_NEGOTIATIONS", "DISMISSAL_FILED",
+  "CLOSED", "ARCHIVED",
+] as const;
+const STATUS_COLORS: Record<string, string> = {
+  ACTIVE:             "bg-green-100 text-green-700",
+  PENDING:            "bg-yellow-100 text-yellow-700",
+  DISCOVERY:          "bg-blue-100 text-blue-700",
+  ARBITRATION:        "bg-purple-100 text-purple-700",
+  UIM_ARBITRATION:    "bg-purple-100 text-purple-700",
+  UM_ARBITRATION:     "bg-purple-100 text-purple-700",
+  SERVED:             "bg-teal-100 text-teal-700",
+  PARTIALLY_SERVED:   "bg-teal-100 text-teal-700",
+  PENDING_SERVICE:    "bg-yellow-100 text-yellow-700",
+  SENT_FOR_SERVICE:   "bg-yellow-100 text-yellow-700",
+  SERVICE_POSTPONED:  "bg-orange-100 text-orange-700",
+  PENDING_RFD:        "bg-yellow-100 text-yellow-700",
+  SETTLED:            "bg-emerald-100 text-emerald-700",
+  DISBURSEMENT:       "bg-emerald-100 text-emerald-700",
+  LIEN_NEGOTIATIONS:  "bg-amber-100 text-amber-700",
+  DISMISSAL_FILED:    "bg-slate-100 text-slate-600",
+  CLOSED:             "bg-slate-100 text-slate-600",
+  ARCHIVED:           "bg-slate-100 text-slate-400",
+};
+const STATUS_LABELS: Record<string, string> = {
+  ACTIVE: "Active", PENDING: "Pending", DISCOVERY: "Discovery",
+  ARBITRATION: "Arbitration", UIM_ARBITRATION: "UIM Arbitration", UM_ARBITRATION: "UM Arbitration",
+  SERVED: "Served", PARTIALLY_SERVED: "Partially Served",
+  PENDING_SERVICE: "Pending Service", SENT_FOR_SERVICE: "Sent for Service",
+  SERVICE_POSTPONED: "Service Postponed", PENDING_RFD: "Pending RFD",
+  SETTLED: "Settled", DISBURSEMENT: "Disbursement",
+  LIEN_NEGOTIATIONS: "Lien Negotiations", DISMISSAL_FILED: "Dismissal Filed",
+  CLOSED: "Closed", ARCHIVED: "Archived",
 };
 const TYPE_LABELS: Record<string, string> = {
   AUTO_ACCIDENT: "Auto Accident", SLIP_AND_FALL: "Slip & Fall",
@@ -67,7 +96,7 @@ interface CaseEvent {
 
 interface CaseData {
   id: string; title: string; caseNumber: string | null;
-  status: keyof typeof STATUS_COLORS; caseType: string;
+  status: string; caseType: string;
   court: string | null; county: string | null; judge: string | null;
   countyId: string | null; courtId: string | null;
   countyRef: { id: string; name: string } | null;
@@ -291,11 +320,11 @@ export default function CaseDetailClient({ id }: { id: string }) {
                     onChange={(e) => setEditStatus(e.target.value)}
                     className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium focus-visible:outline-none"
                   >
-                    {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s.charAt(0) + s.slice(1).toLowerCase()}</option>)}
+                    {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{STATUS_LABELS[s] ?? s}</option>)}
                   </select>
                 ) : (
                   <span className={`rounded-md px-2 py-1 text-xs font-semibold ${STATUS_COLORS[caseData.status]}`}>
-                    {caseData.status.charAt(0) + caseData.status.slice(1).toLowerCase()}
+                    {STATUS_LABELS[caseData.status] ?? caseData.status}
                   </span>
                 )}
                 <span className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600">{TYPE_LABELS[caseData.caseType]}</span>
