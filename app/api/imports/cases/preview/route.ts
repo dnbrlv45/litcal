@@ -37,7 +37,7 @@ type ImportCase = {
   dateOfLoss: string | null;
   caseType: string | null;
   attorney: string | null;
-  status: "ACTIVE" | "PENDING" | "CLOSED" | "ARCHIVED";
+  status: string;
   sourceRows: number[];
   warnings: string[];
   duplicateCaseId: string | null;
@@ -65,14 +65,22 @@ const STATUS_ALIASES: Record<string, ImportCase["status"]> = {
   pending: "PENDING",
   closed: "CLOSED",
   archived: "ARCHIVED",
-  settled: "CLOSED",
-  discovery: "ACTIVE",
-  arbitration: "ACTIVE",
+  settled: "SETTLED",
+  discovery: "DISCOVERY",
+  arbitration: "ARBITRATION",
+  "uim arbitration": "UIM_ARBITRATION",
+  "um arbitration": "UM_ARBITRATION",
   litigation: "ACTIVE",
   trial: "ACTIVE",
-  "pending service": "PENDING",
-  "sent for service": "PENDING",
-  served: "ACTIVE",
+  served: "SERVED",
+  "partially served": "PARTIALLY_SERVED",
+  "pending service": "PENDING_SERVICE",
+  "sent for service": "SENT_FOR_SERVICE",
+  "service postponed": "SERVICE_POSTPONED",
+  "pending rfd": "PENDING_RFD",
+  disbursement: "DISBURSEMENT",
+  "lien negotiations": "LIEN_NEGOTIATIONS",
+  "dismissal filed": "DISMISSAL_FILED",
   "pre-litigation": "PENDING",
   "pre litigation": "PENDING",
 };

@@ -19,7 +19,7 @@ type ImportCase = {
   defenseFirm: string | null;
   filingDate: string | null;
   dateOfLoss: string | null;
-  status: "ACTIVE" | "PENDING" | "CLOSED" | "ARCHIVED";
+  status: string;
   sourceRows: number[];
   warnings: string[];
   duplicateCaseId: string | null;
@@ -39,10 +39,24 @@ type CommitResult = {
   failed: { title: string; error: string }[];
 };
 
-const STATUS_STYLES: Record<ImportCase["status"], string> = {
+const STATUS_STYLES: Record<string, string> = {
   ACTIVE: "bg-green-100 text-green-700",
+  DISCOVERY: "bg-green-100 text-green-700",
+  SERVED: "bg-green-100 text-green-700",
+  ARBITRATION: "bg-blue-100 text-blue-700",
+  UIM_ARBITRATION: "bg-blue-100 text-blue-700",
+  UM_ARBITRATION: "bg-blue-100 text-blue-700",
   PENDING: "bg-yellow-100 text-yellow-700",
+  PENDING_SERVICE: "bg-yellow-100 text-yellow-700",
+  SENT_FOR_SERVICE: "bg-yellow-100 text-yellow-700",
+  PARTIALLY_SERVED: "bg-yellow-100 text-yellow-700",
+  SERVICE_POSTPONED: "bg-yellow-100 text-yellow-700",
+  PENDING_RFD: "bg-yellow-100 text-yellow-700",
+  SETTLED: "bg-slate-100 text-slate-700",
   CLOSED: "bg-slate-100 text-slate-700",
+  DISBURSEMENT: "bg-slate-100 text-slate-700",
+  LIEN_NEGOTIATIONS: "bg-slate-100 text-slate-700",
+  DISMISSAL_FILED: "bg-slate-100 text-slate-700",
   ARCHIVED: "bg-slate-100 text-slate-500",
 };
 
@@ -300,7 +314,7 @@ export default function CaseImportClient() {
                           <div className="mt-1 text-xs text-slate-500">Loss: {item.dateOfLoss || "Not set"}</div>
                         </td>
                         <td className="px-4 py-3 align-top">
-                          <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${STATUS_STYLES[item.status]}`}>{item.status}</span>
+                          <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${STATUS_STYLES[item.status] ?? "bg-slate-100 text-slate-600"}`}>{item.status.replace(/_/g, " ")}</span>
                         </td>
                       </tr>
                     ))}

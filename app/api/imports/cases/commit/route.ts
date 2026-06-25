@@ -21,7 +21,7 @@ type ImportCase = {
   dateOfLoss: string | null;
   caseType: string | null;
   attorney: string | null;
-  status: "ACTIVE" | "PENDING" | "CLOSED" | "ARCHIVED";
+  status: string;
   duplicateCaseId: string | null;
 };
 
