@@ -2,7 +2,8 @@
 
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, FileSpreadsheet, Loader2, Upload, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileSpreadsheet, Loader2, XCircle } from "lucide-react";
+import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -63,6 +64,39 @@ export default function CaseImportClient() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
 
+  function parseFileToRows(file: File): Promise<string[][]> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target?.result as ArrayBuffer);
+          const wb = XLSX.read(data, { type: "array", cellDates: true });
+          const SKIP_SHEETS = new Set(["sheet1", "sheet2"]);
+          const dataSheets = wb.SheetNames.filter(
+            (name) => !SKIP_SHEETS.has(name.toLowerCase()),
+          );
+          if (dataSheets.length === 0) { reject(new Error("No worksheets found.")); return; }
+
+          const rawRows: string[][] = [];
+          dataSheets.forEach((name, sheetIdx) => {
+            const ws = wb.Sheets[name];
+            const rows: string[][] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: "" });
+            if (sheetIdx === 0) {
+              rawRows.push(...rows.filter((r) => r.some(Boolean)));
+            } else {
+              rawRows.push(...rows.slice(1).filter((r) => r.some(Boolean)));
+            }
+          });
+          resolve(rawRows);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = () => reject(new Error("Could not read file."));
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
   async function onFileSelected(selected: File) {
     setFile(selected);
     setPreview(null);
@@ -70,9 +104,12 @@ export default function CaseImportClient() {
     setError(null);
     setLoading(true);
     try {
-      const formData = new FormData();
-      formData.append("file", selected);
-      const res = await fetch("/api/imports/cases/preview", { method: "POST", body: formData });
+      const rawRows = await parseFileToRows(selected);
+      const res = await fetch("/api/imports/cases/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rawRows }),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Could not preview import.");
       setPreview(data);
