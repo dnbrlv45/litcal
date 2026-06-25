@@ -159,7 +159,7 @@ export default function CaseImportClient() {
                     }}
                     className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-teal-700 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white"
                   />
-                  <p className="mt-1 text-xs text-slate-500">Expected columns: Plaintiff, Defendant(s), Case Number, County, Court, Defense Attorney, Defense Firm, Date Filed, Status, Date of Loss.</p>
+                  <p className="mt-1 text-xs text-slate-500">Supported columns: Plaintiff/Case, Defendant(s), Case Number, County, Court/Courthouse, Defense Attorney/Counsel, Defense Firm, Date Filed, Served Date, Status, Date of Loss/DOI, Case Type, ATTY.</p>
                 </div>
               </div>
             </div>
