@@ -32,18 +32,26 @@ import CaseTimeline from "./CaseTimeline";
 import CaseDiscoverySection from "./CaseDiscoverySection";
 
 const STATUS_OPTIONS = [
-  "ACTIVE", "PENDING", "DISCOVERY", "ARBITRATION", "UIM_ARBITRATION", "UM_ARBITRATION",
+  "ACTIVE", "PENDING", "DISCOVERY",
   "SERVED", "PARTIALLY_SERVED", "PENDING_SERVICE", "SENT_FOR_SERVICE", "SERVICE_POSTPONED",
   "PENDING_RFD", "SETTLED", "DISBURSEMENT", "LIEN_NEGOTIATIONS", "DISMISSAL_FILED",
   "CLOSED", "ARCHIVED",
 ] as const;
+const TRACK_OPTIONS = ["LITIGATION", "ARBITRATION", "UIM_ARBITRATION", "UM_ARBITRATION"] as const;
+const TRACK_LABELS: Record<string, string> = {
+  LITIGATION: "Litigation", ARBITRATION: "Arbitration",
+  UIM_ARBITRATION: "UIM Arbitration", UM_ARBITRATION: "UM Arbitration",
+};
+const TRACK_COLORS: Record<string, string> = {
+  LITIGATION:      "bg-indigo-100 text-indigo-700",
+  ARBITRATION:     "bg-purple-100 text-purple-700",
+  UIM_ARBITRATION: "bg-purple-100 text-purple-700",
+  UM_ARBITRATION:  "bg-purple-100 text-purple-700",
+};
 const STATUS_COLORS: Record<string, string> = {
   ACTIVE:             "bg-green-100 text-green-700",
   PENDING:            "bg-yellow-100 text-yellow-700",
   DISCOVERY:          "bg-blue-100 text-blue-700",
-  ARBITRATION:        "bg-purple-100 text-purple-700",
-  UIM_ARBITRATION:    "bg-purple-100 text-purple-700",
-  UM_ARBITRATION:     "bg-purple-100 text-purple-700",
   SERVED:             "bg-teal-100 text-teal-700",
   PARTIALLY_SERVED:   "bg-teal-100 text-teal-700",
   PENDING_SERVICE:    "bg-yellow-100 text-yellow-700",
@@ -59,7 +67,6 @@ const STATUS_COLORS: Record<string, string> = {
 };
 const STATUS_LABELS: Record<string, string> = {
   ACTIVE: "Active", PENDING: "Pending", DISCOVERY: "Discovery",
-  ARBITRATION: "Arbitration", UIM_ARBITRATION: "UIM Arbitration", UM_ARBITRATION: "UM Arbitration",
   SERVED: "Served", PARTIALLY_SERVED: "Partially Served",
   PENDING_SERVICE: "Pending Service", SENT_FOR_SERVICE: "Sent for Service",
   SERVICE_POSTPONED: "Service Postponed", PENDING_RFD: "Pending RFD",
@@ -96,7 +103,7 @@ interface CaseEvent {
 
 interface CaseData {
   id: string; title: string; caseNumber: string | null;
-  status: string; caseType: string;
+  status: string; caseTrack: string; caseType: string;
   court: string | null; county: string | null; judge: string | null;
   countyId: string | null; courtId: string | null;
   countyRef: { id: string; name: string } | null;
@@ -135,6 +142,7 @@ export default function CaseDetailClient({ id }: { id: string }) {
   const [editTitle, setEditTitle] = useState("");
   const [editCaseNumber, setEditCaseNumber] = useState("");
   const [editStatus, setEditStatus] = useState<string>("ACTIVE");
+  const [editTrack, setEditTrack] = useState<string>("LITIGATION");
   const [editCountyName, setEditCountyName] = useState("");
   const [editCourtName, setEditCourtName] = useState("");
   const [editJudge, setEditJudge] = useState("");
@@ -221,6 +229,7 @@ export default function CaseDetailClient({ id }: { id: string }) {
     setEditTitle(caseData.title);
     setEditCaseNumber(caseData.caseNumber ?? "");
     setEditStatus(caseData.status);
+    setEditTrack(caseData.caseTrack);
     setEditCountyName(caseData.countyRef?.name ?? caseData.county ?? "");
     setEditCourtName(caseData.courtRef?.name ?? caseData.court ?? "");
     setEditJudge(caseData.judge ?? "");
@@ -243,7 +252,7 @@ export default function CaseDetailClient({ id }: { id: string }) {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: editTitle, caseNumber: editCaseNumber, status: editStatus,
+          title: editTitle, caseNumber: editCaseNumber, status: editStatus, caseTrack: editTrack,
           countyName: editCountyName || null, courtName: editCourtName || null, judge: editJudge,
           description: editDescription,
           plaintiff: editPlaintiff || null,
@@ -319,6 +328,13 @@ export default function CaseDetailClient({ id }: { id: string }) {
                 ) : (
                   <span className={`rounded-md px-2 py-1 text-xs font-semibold ${STATUS_COLORS[caseData.status] ?? "bg-slate-100 text-slate-600"}`}>
                     {STATUS_LABELS[caseData.status] ?? caseData.status}
+                  </span>
+                )}
+                {editing ? (
+                  <TrackPicker value={editTrack} onChange={setEditTrack} />
+                ) : (
+                  <span className={`rounded-md px-2 py-1 text-xs font-semibold ${TRACK_COLORS[caseData.caseTrack] ?? "bg-indigo-100 text-indigo-700"}`}>
+                    {TRACK_LABELS[caseData.caseTrack] ?? caseData.caseTrack}
                   </span>
                 )}
                 <span className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600">{TYPE_LABELS[caseData.caseType]}</span>
@@ -693,6 +709,36 @@ function StatusPicker({ value, onChange }: { value: string; onChange: (v: string
             ))}
             {filtered.length === 0 && <div className="px-3 py-2 text-xs text-slate-400">No match</div>}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TrackPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className={`rounded-md px-2 py-1 text-xs font-semibold ${TRACK_COLORS[value] ?? "bg-indigo-100 text-indigo-700"}`}
+      >
+        {TRACK_LABELS[value] ?? value} ▾
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 w-48 rounded-lg border border-slate-200 bg-white shadow-lg py-1">
+          {TRACK_OPTIONS.map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => { onChange(t); setOpen(false); }}
+              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-slate-50 ${t === value ? "font-semibold" : ""}`}
+            >
+              <span className={`inline-block size-2 rounded-full ${(TRACK_COLORS[t] ?? "bg-indigo-100").split(" ")[0]}`} />
+              {TRACK_LABELS[t] ?? t}
+            </button>
+          ))}
         </div>
       )}
     </div>

@@ -105,10 +105,16 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   }
 
   const validTypes = ["AUTO_ACCIDENT","SLIP_AND_FALL","GOVERNMENT_CLAIM","DOG_BITE","PREMISES_LIABILITY","MEDICAL_MALPRACTICE","WRONGFUL_DEATH","PRODUCT_LIABILITY","OTHER"];
-  const validStatuses = ["ACTIVE","CLOSED","ARCHIVED","PENDING"];
+  const validStatuses = [
+    "ACTIVE","CLOSED","ARCHIVED","PENDING","DISCOVERY",
+    "SERVED","PARTIALLY_SERVED","PENDING_SERVICE","SENT_FOR_SERVICE","SERVICE_POSTPONED",
+    "PENDING_RFD","SETTLED","DISBURSEMENT","LIEN_NEGOTIATIONS","DISMISSAL_FILED",
+  ];
+  const validTracks = ["LITIGATION","ARBITRATION","UIM_ARBITRATION","UM_ARBITRATION"];
   const closingStatuses = ["CLOSED", "ARCHIVED"];
 
   const newStatus = body.status && validStatuses.includes(body.status) ? body.status : null;
+  const newTrack = body.caseTrack && validTracks.includes(body.caseTrack) ? body.caseTrack : null;
   const isClosing = newStatus && closingStatuses.includes(newStatus) && !closingStatuses.includes(existing.status);
 
   const countyCourt = await resolveCountyCourt(body.countyName, body.courtName);
@@ -120,6 +126,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       ...(body.caseNumber !== undefined && { caseNumber: body.caseNumber?.trim() || null }),
       ...(body.caseType && validTypes.includes(body.caseType) && { caseType: body.caseType as never }),
       ...(newStatus && { status: newStatus as never }),
+      ...(newTrack && { caseTrack: newTrack as never }),
       ...(countyCourt && {
         county: countyCourt.county,
         court: countyCourt.court,

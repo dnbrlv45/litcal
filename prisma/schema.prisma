@@ -320,6 +320,7 @@ model Case {
   title        String
   description  String?
   status       CaseStatus @default(ACTIVE)
+  caseTrack    CaseTrack  @default(LITIGATION)
   caseType     CaseType   @default(AUTO_ACCIDENT)
 
   court        String?
@@ -360,15 +361,22 @@ model Case {
   @@index([courtId])
 }
 
+enum CaseTrack {
+  LITIGATION
+  ARBITRATION
+  UIM_ARBITRATION
+  UM_ARBITRATION
+}
+
 enum CaseStatus {
   ACTIVE
   CLOSED
   ARCHIVED
   PENDING
   DISCOVERY
-  ARBITRATION
-  UIM_ARBITRATION
-  UM_ARBITRATION
+  ARBITRATION        // @deprecated — use CaseTrack; kept for existing rows
+  UIM_ARBITRATION    // @deprecated — use CaseTrack; kept for existing rows
+  UM_ARBITRATION     // @deprecated — use CaseTrack; kept for existing rows
   SERVED
   PARTIALLY_SERVED
   PENDING_SERVICE
