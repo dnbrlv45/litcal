@@ -886,7 +886,7 @@ model AISuggestion {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  @@unique([workspaceId, gmailMessageId, classification])
+  @@index([workspaceId, gmailMessageId, classification])
   @@index([workspaceId, status])
   @@index([workspaceId, classification])
   @@index([userAction])

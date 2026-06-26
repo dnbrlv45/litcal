@@ -210,10 +210,20 @@ export async function processGmailMessages(
 
         const status = duplicateOfId ? "DUPLICATE" : "PENDING";
 
-        // Use findFirst + create to avoid conflict with the new compound unique key
-        const existing = await prisma.aISuggestion.findFirst({
-          where: { workspaceId: targetWorkspaceId, gmailMessageId: messageId, classification: extracted.classification },
-        });
+        // Use findFirst + create to avoid conflict — include dedupeKey to allow
+        // multiple suggestions of the same classification from one email
+        const existing = extracted.dedupeKey
+          ? await prisma.aISuggestion.findFirst({
+              where: {
+                workspaceId: targetWorkspaceId,
+                gmailMessageId: messageId,
+                classification: extracted.classification,
+                extractedData: { path: ["dedupeKey"], equals: extracted.dedupeKey },
+              },
+            })
+          : await prisma.aISuggestion.findFirst({
+              where: { workspaceId: targetWorkspaceId, gmailMessageId: messageId, classification: extracted.classification },
+            });
 
         if (!existing) {
           await prisma.aISuggestion.create({
