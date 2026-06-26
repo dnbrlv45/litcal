@@ -23,6 +23,12 @@ import type { CalEvent, EventType } from "@/lib/google-calendar";
 
 type CalView = "month" | "week" | "day" | "team";
 
+function parseLocalDate(iso: string): Date {
+  const m = iso.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return new Date(iso);
+  return new Date(+m[1], +m[2] - 1, +m[3]);
+}
+
 const MONTH_NAMES = [
   "January","February","March","April","May","June",
   "July","August","September","October","November","December",
@@ -157,8 +163,8 @@ export default function CalendarView() {
       setEvents(
         (data.events as CalEvent[]).map((e) => ({
           ...e,
-          start: new Date(e.start),
-          end: new Date(e.end),
+          start: e.allDay ? parseLocalDate(e.start as unknown as string) : new Date(e.start),
+          end: e.allDay ? parseLocalDate(e.end as unknown as string) : new Date(e.end),
           eventType: e.eventType ?? "OTHER",
           caseId: e.caseId ?? undefined,
           caseTitle: e.caseTitle ?? undefined,
