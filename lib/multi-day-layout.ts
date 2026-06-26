@@ -32,9 +32,16 @@ export function layoutSpanningEvents(
   const weekStart = dayStart(weekDays[0]);
   const weekEnd   = new Date(weekDays[6]); weekEnd.setHours(23, 59, 59, 999);
 
-  // Include all-day events that overlap with this week
+  // Include multi-day all-day events that overlap with this week
+  // Single-day all-day events are rendered inline like regular events
   const relevant = events
-    .filter((e) => e.allDay && e.start <= weekEnd && e.end >= weekStart)
+    .filter((e) => {
+      if (!e.allDay || e.start > weekEnd || e.end < weekStart) return false;
+      const sameDay = e.start.getFullYear() === e.end.getFullYear() &&
+        e.start.getMonth() === e.end.getMonth() &&
+        e.start.getDate() === e.end.getDate();
+      return !sameDay;
+    })
     .sort((a, b) => {
       const sd = a.start.getTime() - b.start.getTime();
       if (sd !== 0) return sd;

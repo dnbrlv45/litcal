@@ -79,9 +79,14 @@ export default function MonthView({ date, today, events, onCellClick, onSelectDa
   const MAX_VISIBLE_SPAN_ROWS = 2;
   const SPAN_TOP = 34;
 
+  function isSingleDayAllDay(e: CalEvent) {
+    return e.allDay && e.start.getFullYear() === e.end.getFullYear() &&
+      e.start.getMonth() === e.end.getMonth() && e.start.getDate() === e.end.getDate();
+  }
+
   function eventsForDay(day: number): CalEvent[] {
     return events.filter((e) => {
-      if (e.allDay) return false; // handled separately as spans
+      if (e.allDay && !isSingleDayAllDay(e)) return false; // multi-day handled as spans
       const d = e.start;
       return d.getDate() === day && d.getMonth() === month && d.getFullYear() === year;
     });
