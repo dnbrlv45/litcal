@@ -470,22 +470,31 @@ export async function markDiscoveryResponsesReceived(discoveryItemId: string, ac
   });
 
   // Remove the deadline from Google Calendar
-  if (item.linkedEvent?.googleSync) {
-    const connection = await prisma.userCalendarConnection.findFirst({
-      where: { userId: actorUserId, provider: "GOOGLE", isActive: true },
-    });
-    if (connection) {
-      try {
-        const accessToken = await getAccessToken(connection.refreshToken);
-        await deleteGoogleEvent(
-          accessToken,
-          item.linkedEvent.googleSync.googleCalendarId,
-          item.linkedEvent.googleSync.googleEventId,
-        );
-        await prisma.googleCalendarSync.delete({
-          where: { eventId: item.linkedEventId! },
-        });
-      } catch { /* best-effort */ }
+  if (item.linkedEventId) {
+    const syncInfo = item.linkedEvent?.googleSync;
+    const userSync = !syncInfo
+      ? await prisma.$queryRaw<Array<{ googleEventId: string; googleCalendarId: string }>>`
+          SELECT "googleEventId", "googleCalendarId" FROM "UserGoogleCalendarSync"
+          WHERE "eventId" = ${item.linkedEventId} AND "googleCalendarId" != 'ics-import'
+          LIMIT 1
+        `.then((rows) => rows[0] ?? null)
+      : null;
+    const syncToDelete = userSync ?? syncInfo;
+
+    if (syncToDelete) {
+      const connection = await prisma.userCalendarConnection.findFirst({
+        where: { userId: actorUserId, provider: "GOOGLE", isActive: true },
+      });
+      if (connection) {
+        try {
+          const accessToken = await getAccessToken(connection.refreshToken);
+          await deleteGoogleEvent(
+            accessToken,
+            syncToDelete.googleCalendarId,
+            syncToDelete.googleEventId,
+          );
+        } catch { /* best-effort */ }
+      }
     }
   }
 
