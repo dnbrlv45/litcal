@@ -14,7 +14,15 @@ function dateKey(d: Date): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
 }
 
+export async function GET() {
+  return cleanup();
+}
+
 export async function POST() {
+  return cleanup();
+}
+
+async function cleanup() {
   const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
