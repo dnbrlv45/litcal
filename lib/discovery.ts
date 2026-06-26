@@ -182,9 +182,10 @@ export async function createDiscoveryItem(input: CreateDiscoveryInput) {
     },
   });
 
+  const plaintiffName = caseRow.title.split(/\s+v\.?\s+/i)[0]?.trim() || caseRow.title;
   const title = direction === "RECEIVED"
-    ? `Our Discovery Responses Due — ${caseRow.title}`
-    : `Opposing Discovery Responses Due — ${caseRow.title}`;
+    ? `${plaintiffName} Discovery Due`
+    : `${plaintiffName} Opposing Discovery Due`;
 
   const attorney  = caseRow.staff.find((s) => s.role === "ATTORNEY");
   const paralegal = caseRow.staff.find((s) => s.role === "PARALEGAL");
@@ -410,9 +411,10 @@ export async function grantDiscoveryExtension(input: GrantExtensionInput) {
       status:               "EXTENSION_GRANTED",
     });
 
+    const plaintiffName = caseRow.title.split(/\s+v\.?\s+/i)[0]?.trim() || caseRow.title;
     const eventTitle = target.direction === "RECEIVED"
-      ? `Our Discovery Responses Due — ${caseRow.title}`
-      : `Opposing Discovery Responses Due — ${caseRow.title}`;
+      ? `${plaintiffName} Discovery Due`
+      : `${plaintiffName} Opposing Discovery Due`;
 
     // Google Calendar: update date + description
     if (target.linkedEventId) {
