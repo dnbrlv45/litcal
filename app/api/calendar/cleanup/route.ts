@@ -141,12 +141,36 @@ async function cleanup() {
     await prisma.task.deleteMany({ where: { id: { in: dupTaskIds } } });
   }
 
+  // 4. Strip [GCal-UID:...] tags from event and task descriptions
+  let uidTagsStripped = 0;
+  const eventsWithUid = await prisma.event.findMany({
+    where: { workspaceId: workspace.id, description: { contains: "[GCal-UID:" } },
+    select: { id: true, description: true },
+  });
+  for (const ev of eventsWithUid) {
+    const cleaned = (ev.description ?? "").replace(/\n?\n?\[GCal-UID:[^\]]+\]/g, "").trim() || null;
+    if (cleaned !== ev.description) {
+      await prisma.event.update({ where: { id: ev.id }, data: { description: cleaned } });
+      uidTagsStripped++;
+    }
+  }
+  const tasksWithUid = await prisma.task.findMany({
+    where: { workspaceId: workspace.id, description: { contains: "[GCal-UID:" } },
+    select: { id: true, description: true },
+  });
+  for (const t of tasksWithUid) {
+    const cleaned = (t.description ?? "").replace(/\n?\n?\[GCal-UID:[^\]]+\]/g, "").trim() || null;
+    if (cleaned !== t.description) {
+      await prisma.task.update({ where: { id: t.id }, data: { description: cleaned } });
+      uidTagsStripped++;
+    }
+  }
+
   return NextResponse.json({
     dateFixed,
     taskDateFixed,
     duplicateEventsRemoved: duplicateIds.length,
     duplicateTasksRemoved: dupTaskIds.length,
-    uidEventsChecked: uidEvents.length,
-    uidTasksChecked: uidTasks.length,
+    uidTagsStripped,
   });
 }
