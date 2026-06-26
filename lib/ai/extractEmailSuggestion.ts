@@ -299,17 +299,6 @@ ${attachments ? `Attachments:\n${attachments}` : ""}`;
     }
   }
 
-  // If we detected a cancellation, suppress any calendar event for the same case
-  // (the email might mention the old date which triggers a false positive)
-  const hasCancellation = results.some((r) => r.classification === "EVENT_CANCELLATION");
-  if (hasCancellation) {
-    for (let i = results.length - 1; i >= 0; i--) {
-      if (results[i].classification === "CALENDAR_EVENT") {
-        results.splice(i, 1);
-      }
-    }
-  }
-
   // Suppress redundant deadline calendar events when the email is really about
   // discovery: a DISCOVERY/DISCOVERY_EXTENSION already owns its response deadline
   // (the discovery flow creates the linked calendar entry on approval). The
