@@ -104,10 +104,29 @@ function memberLabel(m: WorkspaceMember) {
   return name || m.user.email;
 }
 
+function getInitialView(): CalView {
+  if (typeof window === "undefined") return "week";
+  const params = new URLSearchParams(window.location.search);
+  const v = params.get("view");
+  if (v === "month" || v === "week" || v === "day" || v === "team") return v;
+  return "week";
+}
+
+function getInitialDate(): Date {
+  if (typeof window === "undefined") return new Date();
+  const params = new URLSearchParams(window.location.search);
+  const d = params.get("date");
+  if (d) {
+    const parsed = new Date(d + "T12:00:00");
+    if (!isNaN(parsed.getTime())) return parsed;
+  }
+  return new Date();
+}
+
 export default function CalendarView() {
   const today = new Date();
-  const [view, setView] = useState<CalView>("week");
-  const [date, setDate] = useState(new Date(today));
+  const [view, setView] = useState<CalView>(getInitialView);
+  const [date, setDate] = useState(getInitialDate);
   const [events, setEvents] = useState<CalEvent[]>([]);
   const [googleConnected, setGoogleConnected] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -122,6 +141,15 @@ export default function CalendarView() {
   const [caseSearch, setCaseSearch] = useState("");
   const [caseDropdownOpen, setCaseDropdownOpen] = useState(false);
   const caseDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Persist view and date in URL for refresh
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    params.set("view", view);
+    params.set("date", date.toISOString().slice(0, 10));
+    const newUrl = `${window.location.pathname}?${params}`;
+    window.history.replaceState(null, "", newUrl);
+  }, [view, date]);
 
   // Reference data
   const [attorneys, setAttorneys] = useState<WorkspaceMember[]>([]);
