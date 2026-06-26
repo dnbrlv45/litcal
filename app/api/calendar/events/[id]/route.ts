@@ -69,7 +69,18 @@ export async function DELETE(
   }
 
   // Mirror deletion to Google Calendar
-  if (event.googleSync) {
+  const googleSyncInfo = event.googleSync;
+  // Also check UserGoogleCalendarSync for events synced via sync-all
+  const userSync = !googleSyncInfo
+    ? await prisma.$queryRaw<Array<{ googleEventId: string; googleCalendarId: string }>>`
+        SELECT "googleEventId", "googleCalendarId" FROM "UserGoogleCalendarSync"
+        WHERE "eventId" = ${id} AND "userId" = ${userId} AND "googleCalendarId" != 'ics-import'
+        LIMIT 1
+      `.then((rows) => rows[0] ?? null)
+    : null;
+
+  const syncToDelete = googleSyncInfo ?? userSync;
+  if (syncToDelete) {
     const connection = await prisma.userCalendarConnection.findFirst({
       where: { userId, provider: "GOOGLE", isActive: true },
     });
@@ -78,14 +89,16 @@ export async function DELETE(
         const accessToken = await getAccessToken(connection.refreshToken);
         await deleteGoogleEvent(
           accessToken,
-          event.googleSync.googleCalendarId,
-          event.googleSync.googleEventId
+          syncToDelete.googleCalendarId,
+          syncToDelete.googleEventId
         );
       } catch (err) {
         console.error("Google Calendar delete failed:", err);
       }
     }
   }
+  // Clean up UserGoogleCalendarSync record
+  await prisma.$executeRaw`DELETE FROM "UserGoogleCalendarSync" WHERE "eventId" = ${id}`;
 
   return NextResponse.json({ ok: true });
 }

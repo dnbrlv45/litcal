@@ -174,10 +174,6 @@ export async function createDiscoveryItem(input: CreateDiscoveryInput) {
   // Back-calculate servedOrReceivedDate if only due date was provided
   const servedOrReceivedDate = input.servedOrReceivedDate
     ?? new Date(dueDate.getTime() - 31 * 24 * 60 * 60 * 1000);
-  const title = direction === "RECEIVED"
-    ? "Our Discovery Responses Due"
-    : "Opposing Discovery Responses Due";
-
   // Load case to get name, number, and staff
   const caseRow = await prisma.case.findUniqueOrThrow({
     where: { id: caseId },
@@ -185,6 +181,10 @@ export async function createDiscoveryItem(input: CreateDiscoveryInput) {
       staff: { include: { user: true } },
     },
   });
+
+  const title = direction === "RECEIVED"
+    ? `Our Discovery Responses Due — ${caseRow.title}`
+    : `Opposing Discovery Responses Due — ${caseRow.title}`;
 
   const attorney  = caseRow.staff.find((s) => s.role === "ATTORNEY");
   const paralegal = caseRow.staff.find((s) => s.role === "PARALEGAL");
@@ -411,8 +411,8 @@ export async function grantDiscoveryExtension(input: GrantExtensionInput) {
     });
 
     const eventTitle = target.direction === "RECEIVED"
-      ? "Our Discovery Responses Due"
-      : "Opposing Discovery Responses Due";
+      ? `Our Discovery Responses Due — ${caseRow.title}`
+      : `Opposing Discovery Responses Due — ${caseRow.title}`;
 
     // Google Calendar: update date + description
     if (target.linkedEventId) {
