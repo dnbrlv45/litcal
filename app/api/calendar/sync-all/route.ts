@@ -204,5 +204,53 @@ export async function POST() {
     }
   }
 
-  return NextResponse.json({ synced, failed, total: events.length, deleted, deleteFailed });
+  // Sync tasks with due dates to Google Calendar
+  const unsyncedTasks = await prisma.task.findMany({
+    where: {
+      workspaceId: workspace.id,
+      dueDate: { not: null },
+      googleEventId: null,
+      status: { not: "DONE" },
+    },
+    include: {
+      caseRef: { select: { title: true } },
+    },
+  });
+
+  let tasksSynced = 0;
+  let tasksFailed = 0;
+
+  for (const task of unsyncedTasks) {
+    try {
+      const dateStr = task.dueDate!.toISOString().slice(0, 10);
+      const endDateStr = new Date(task.dueDate!.getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const summary = task.caseRef?.title
+        ? `${task.title} — ${task.caseRef.title}`
+        : task.title;
+
+      const gEvent = await createGoogleEvent(
+        accessToken,
+        {
+          summary,
+          colorId: getGoogleColorId("DEADLINE"),
+          start: dateStr,
+          end: endDateStr,
+          allDay: true,
+          timeZone: "America/Los_Angeles",
+        },
+        litCalId
+      );
+
+      await prisma.task.update({
+        where: { id: task.id },
+        data: { googleEventId: gEvent.id, googleCalendarId: litCalId },
+      });
+      tasksSynced++;
+    } catch (err) {
+      console.error(`Google push failed for task ${task.id}:`, err);
+      tasksFailed++;
+    }
+  }
+
+  return NextResponse.json({ synced, failed, total: events.length, deleted, deleteFailed, tasksSynced, tasksFailed });
 }
