@@ -19,6 +19,14 @@ function isSameDay(a: Date, b: Date) {
   return a.getDate() === b.getDate() && a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear();
 }
 
+function eventOverlapsDay(e: CalEvent, d: Date) {
+  const start = new Date(d);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(d);
+  end.setHours(23, 59, 59, 999);
+  return e.start <= end && e.end >= start;
+}
+
 function eventTop(e: CalEvent) {
   return (e.start.getHours() * 60 + e.start.getMinutes()) / 60 * ROW_HEIGHT;
 }
@@ -39,6 +47,7 @@ interface Props {
 export default function DayView({ date, today, events, onCellClick, onEventClick }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const isToday = isSameDay(date, today);
+  const allDayEvents = events.filter((e) => e.allDay && eventOverlapsDay(e, date));
   const dayEvents = layoutDayEvents(events.filter((e) => isSameDay(e.start, date) && !e.allDay));
 
   useEffect(() => {
@@ -74,6 +83,28 @@ export default function DayView({ date, today, events, onCellClick, onEventClick
             ? "Today"
             : date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
         </span>
+      </div>
+
+      <div className="flex shrink-0 border-b border-slate-200 bg-white">
+        <div className="w-16 shrink-0 border-r border-slate-100 px-2 py-2 text-right text-xs text-slate-500">all-day</div>
+        <div className="flex min-h-10 flex-1 flex-wrap gap-1.5 px-2 py-2">
+          {allDayEvents.length === 0 ? (
+            <span className="text-xs text-slate-400">No all-day events</span>
+          ) : allDayEvents.map((ev) => {
+            const colors = EVENT_TYPE_COLORS[ev.eventType ?? "OTHER"];
+            return (
+              <button
+                key={ev.id}
+                onClick={() => onEventClick(ev)}
+                title={ev.title}
+                className={`inline-flex h-6 max-w-full items-center gap-1.5 truncate rounded-md border px-2 text-xs font-semibold transition hover:brightness-95 ${colors.bg} ${colors.text} ${ev.hasConflict ? "border-amber-400" : colors.border}`}
+              >
+                <span className={`size-1.5 shrink-0 rounded-full ${ev.hasConflict ? "bg-amber-500" : colors.dot}`} />
+                <span className="truncate">{ev.title}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Scrollable body */}

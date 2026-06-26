@@ -5,6 +5,49 @@ import { getAccessToken, createGoogleEvent, createLitCalCalendar } from "@/lib/g
 import { buildGoogleEventPayload, getGoogleColorId } from "@/lib/google-calendar-payload";
 import { getCurrentWorkspace } from "@/lib/workspaces";
 
+function googleAllDayEnd(date: Date): string {
+  const end = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  end.setUTCDate(end.getUTCDate() + 1);
+  return end.toISOString().slice(0, 10);
+}
+
+async function syncedEventIdsForUser(userId: string): Promise<Set<string>> {
+  const rows = await prisma.$queryRaw<Array<{ eventId: string }>>`
+    SELECT "eventId" FROM "UserGoogleCalendarSync" WHERE "userId" = ${userId}
+  `;
+  return new Set(rows.map((row) => row.eventId));
+}
+
+async function recordUserGoogleSync(input: {
+  eventId: string;
+  userId: string;
+  googleEventId: string;
+  googleCalendarId: string;
+}) {
+  await prisma.$executeRaw`
+    INSERT INTO "UserGoogleCalendarSync" (
+      "id", "eventId", "userId", "googleEventId", "googleCalendarId", "updatedAt", "syncStatus", "lastError"
+    )
+    VALUES (
+      ${`ugcs_${input.eventId}_${input.userId}`},
+      ${input.eventId},
+      ${input.userId},
+      ${input.googleEventId},
+      ${input.googleCalendarId},
+      NOW(),
+      'SYNCED'::"SyncStatus",
+      NULL
+    )
+    ON CONFLICT ("eventId", "userId") DO UPDATE SET
+      "googleEventId" = EXCLUDED."googleEventId",
+      "googleCalendarId" = EXCLUDED."googleCalendarId",
+      "syncStatus" = 'SYNCED'::"SyncStatus",
+      "lastError" = NULL,
+      "syncedAt" = NOW(),
+      "updatedAt" = NOW()
+  `;
+}
+
 export async function POST() {
   const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -36,14 +79,15 @@ export async function POST() {
     });
   }
 
-  // Find all events not yet synced to Google
+  // Find all events not yet synced to this user's Google Calendar.
+  const syncedIds = await syncedEventIdsForUser(user.id);
   const events = await prisma.event.findMany({
     where: {
       OR: [
         { workspaceId: workspace.id },
         { userId: user.id, workspaceId: null },
       ],
-      googleSync: null,
+      ...(syncedIds.size > 0 ? { id: { notIn: [...syncedIds] } } : {}),
     },
     include: {
       caseRef: { select: { title: true, caseNumber: true, county: true, court: true } },
@@ -87,7 +131,7 @@ export async function POST() {
         ? event.startTime.toISOString().slice(0, 10)
         : event.startTime.toISOString();
       const endField = event.allDay
-        ? event.endTime.toISOString().slice(0, 10)
+        ? googleAllDayEnd(event.startTime)
         : event.endTime.toISOString();
 
       const gEvent = await createGoogleEvent(
@@ -105,13 +149,11 @@ export async function POST() {
         litCalId
       );
 
-      await prisma.googleCalendarSync.create({
-        data: {
-          eventId: event.id,
-          googleEventId: gEvent.id,
-          googleCalendarId: litCalId,
-          syncStatus: "SYNCED",
-        },
+      await recordUserGoogleSync({
+        eventId: event.id,
+        userId: user.id,
+        googleEventId: gEvent.id,
+        googleCalendarId: litCalId,
       });
       synced++;
     } catch (err) {

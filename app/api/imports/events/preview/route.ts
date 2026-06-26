@@ -20,6 +20,7 @@ type ParsedEvent = {
   caseTitle: string | null;
   caseNumber: string | null;
   matchMethod: string | null; // "caseNumber" | "titleFuzzy" | null
+  importAs: "event" | "task";
   warnings: string[];
 };
 
@@ -79,8 +80,8 @@ function parseIcsDateTime(raw: string, keyLine: string): { date: Date; allDay: b
     const y = parseInt(raw.slice(0, 4));
     const m = parseInt(raw.slice(4, 6)) - 1;
     const d = parseInt(raw.slice(6, 8));
-    // Store all-day events at midnight UTC of that date
-    const date = new Date(Date.UTC(y, m, d, 0, 0, 0));
+    // Match EventModal's all-day convention: noon UTC avoids local date drift.
+    const date = new Date(Date.UTC(y, m, d, 12, 0, 0));
     return { date, allDay: true };
   }
   // Full datetime: 20260728T153000Z
@@ -124,8 +125,10 @@ function classifyEvent(
     if (/OSC/i.test(typeField)) return { eventType: "HEARING", subtype: "OSC" };
     if (/TSC/i.test(typeField)) return { eventType: "HEARING", subtype: "TSC" };
     if (/TRC/i.test(typeField)) return { eventType: "HEARING", subtype: "TRC" };
-    if (/CMC/i.test(typeField)) return { eventType: "CASE_MANAGEMENT_CONFERENCE", subtype: null };
+    if (/CMC|Case Management/i.test(typeField)) return { eventType: "CASE_MANAGEMENT_CONFERENCE", subtype: null };
     if (/MSC/i.test(typeField)) return { eventType: "HEARING", subtype: "MSC" };
+    if (/FSC|Final Status/i.test(typeField)) return { eventType: "HEARING", subtype: "FSC" };
+    if (/Post[-\s]*Mediation|Status Conference|SC\b/i.test(typeField)) return { eventType: "HEARING", subtype: typeField };
     if (/Motion/i.test(typeField)) return { eventType: "HEARING", subtype: "Motion Hearing" };
   }
 
@@ -133,21 +136,38 @@ function classifyEvent(
   if (/\bTrial\b/i.test(s)) return { eventType: "TRIAL", subtype: null };
   if (/\bDepo(?:sition)?\b/i.test(s)) return { eventType: "DEPOSITION", subtype: null };
   if (/\bMediation\b/i.test(s)) return { eventType: "MEDIATION", subtype: null };
-  if (/\bCCP\s*998\b/i.test(s) || (desc && extractField(desc, "Deadline")))
-    return { eventType: "DEADLINE", subtype: extractField(desc ?? "", "Deadline") || "CCP 998" };
-  if (/^File CMS/i.test(s)) return { eventType: "DEADLINE", subtype: "File CMS" };
+  if (/\bCCP\s*998\b/i.test(s) || /\bExpert Designation Due\b/i.test(s) || /\bDiscovery Cutoff\b/i.test(s) || (desc && extractField(desc, "Deadline")))
+    return { eventType: "DEADLINE", subtype: extractField(desc ?? "", "Deadline") || "Trial Deadline" };
+  if (/^File CMS\b/i.test(s) || /\bCMC Statement\b/i.test(s)) return { eventType: "DEADLINE", subtype: "File CMS" };
   if (/\bDiscovery\b/i.test(s)) return { eventType: "DEADLINE", subtype: null };
+  if (/\bMediation Brief Due\b/i.test(s)) return { eventType: "DEADLINE", subtype: "Mediation Brief" };
+  if (/\bFSC Documents?\s+DUE\b/i.test(s)) return { eventType: "DEADLINE", subtype: "FSC Documents" };
+  if (/\bStatute of Limitations\b/i.test(s)) return { eventType: "DEADLINE", subtype: "Statute of Limitations" };
 
   // Check summary for type keywords too (structured summaries)
   if (/\bOSC\b/i.test(s)) return { eventType: "HEARING", subtype: "OSC" };
+  if (/\bOrder to Show Cause\b/i.test(s)) return { eventType: "HEARING", subtype: "OSC" };
   if (/\bTSC\b/i.test(s)) return { eventType: "HEARING", subtype: "TSC" };
   if (/\bTRC\b/i.test(s)) return { eventType: "HEARING", subtype: "TRC" };
-  if (/\bCMC\b/i.test(s)) return { eventType: "CASE_MANAGEMENT_CONFERENCE", subtype: null };
+  if (/\bCMC\b|\bCase Management Conference\b/i.test(s)) return { eventType: "CASE_MANAGEMENT_CONFERENCE", subtype: null };
   if (/\bMSC\b/i.test(s)) return { eventType: "HEARING", subtype: "MSC" };
+  if (/\bFSC\b|\bFinal Status Conference\b/i.test(s)) return { eventType: "HEARING", subtype: "FSC" };
+  if (/\bStatus Conference\b/i.test(s)) return { eventType: "HEARING", subtype: "Status Conference" };
   if (/\bMotion\b/i.test(s)) return { eventType: "HEARING", subtype: "Motion Hearing" };
   if (/\bRequest Remote Appearance\b/i.test(s)) return { eventType: "DEADLINE", subtype: "Request Remote Appearance" };
 
   return { eventType: "OTHER", subtype: null };
+}
+
+function shouldImportAsTask(title: string, eventType: string, subtype: string | null): boolean {
+  if (eventType !== "DEADLINE" && !/^Follow Up\b/i.test(title)) return false;
+  return (
+    subtype === "File CMS" ||
+    subtype === "Request Remote Appearance" ||
+    subtype === "Mediation Brief" ||
+    subtype === "FSC Documents" ||
+    /^Follow Up\b/i.test(title)
+  );
 }
 
 // ── Title extraction ────────────────────────────────────────
@@ -222,14 +242,18 @@ export async function POST(request: NextRequest) {
       if (c.caseNumber) casesByNumber.set(c.caseNumber.toLowerCase(), c);
     }
 
-    // Check existing events for UID dedup (stored in description with [GCal-UID:xxx])
+    // Check existing imports for UID dedup (stored in description with [GCal-UID:xxx])
     const existingEvents = await prisma.event.findMany({
       where: { workspaceId: workspace.id, description: { contains: "[GCal-UID:" } },
       select: { description: true },
     });
+    const existingTasks = await prisma.task.findMany({
+      where: { workspaceId: workspace.id, description: { contains: "[GCal-UID:" } },
+      select: { description: true },
+    });
     const existingUids = new Set<string>();
-    for (const e of existingEvents) {
-      const match = e.description?.match(/\[GCal-UID:(.+?)\]/);
+    for (const row of [...existingEvents, ...existingTasks]) {
+      const match = row.description?.match(/\[GCal-UID:(.+?)\]/);
       if (match) existingUids.add(match[1]);
     }
 
@@ -274,12 +298,12 @@ export async function POST(request: NextRequest) {
 
       const allDay = startParsed.allDay;
       if (allDay) {
-        // ICS DTEND for all-day is exclusive (next day). Set endTime to 23:59:59 of the start day.
+        // ICS DTEND for all-day is exclusive (next day). Keep imports as one-day rows.
         endDate = new Date(Date.UTC(
           startParsed.date.getUTCFullYear(),
           startParsed.date.getUTCMonth(),
           startParsed.date.getUTCDate(),
-          23, 59, 59,
+          23, 59, 59, 999,
         ));
       }
 
@@ -296,6 +320,7 @@ export async function POST(request: NextRequest) {
 
       // Build title
       const title = extractTitle(summary, desc);
+      const importAs = shouldImportAsTask(title, eventType, subtype) ? "task" : "event";
 
       // Match to case
       let caseId: string | null = null;
@@ -424,6 +449,7 @@ export async function POST(request: NextRequest) {
         caseTitle,
         caseNumber: matchedCaseNumber,
         matchMethod,
+        importAs,
         warnings,
       });
     }

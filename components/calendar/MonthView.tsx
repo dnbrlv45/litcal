@@ -75,7 +75,9 @@ export default function MonthView({ date, today, events, onCellClick, onSelectDa
     );
   }
 
-  const SPAN_ROW_H = 24; // px per stacking row in month view
+  const SPAN_ROW_H = 22; // px per stacking row in month view
+  const MAX_VISIBLE_SPAN_ROWS = 2;
+  const SPAN_TOP = 34;
 
   function eventsForDay(day: number): CalEvent[] {
     return events.filter((e) => {
@@ -112,10 +114,11 @@ export default function MonthView({ date, today, events, onCellClick, onSelectDa
           );
           const spanLayout  = layoutSpanningEvents(events, weekDaysFull);
           const spanRows    = spanLayout.length > 0 ? Math.max(...spanLayout.map((s) => s.row)) + 1 : 0;
-          const spanHeight  = spanRows * SPAN_ROW_H;
+          const visibleSpanRows = Math.min(spanRows, MAX_VISIBLE_SPAN_ROWS);
+          const spanHeight = visibleSpanRows * SPAN_ROW_H;
 
           return (
-            <div key={wi} className="relative grid grid-cols-7">
+            <div key={wi} className="relative grid grid-cols-7 overflow-hidden">
               {/* Day cells */}
               {week.map((day, di) => {
                 const dayEvents = day ? eventsForDay(day) : [];
@@ -126,12 +129,12 @@ export default function MonthView({ date, today, events, onCellClick, onSelectDa
                     className={`border-b border-r border-slate-100 last:border-r-0 flex flex-col gap-1 transition-colors ${
                       day === null ? "bg-slate-50/70" : "hover:bg-teal-50/30 cursor-pointer"
                     }`}
-                    style={{ paddingTop: spanHeight + 4, padding: `${spanHeight + 4}px 6px 6px 6px` }}
+                    style={{ padding: "6px" }}
                   >
                     {day !== null && (
                       <button
                         onClick={(e) => { e.stopPropagation(); onSelectDay(new Date(year, month, day)); }}
-                        className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm self-start transition-colors ${
+                        className={`relative z-20 inline-flex h-7 w-7 items-center justify-center rounded-full text-sm self-start transition-colors ${
                           isToday(day)
                             ? "bg-teal-700 text-white font-semibold shadow-sm"
                             : "text-slate-700 hover:bg-white hover:shadow-sm"
@@ -140,6 +143,7 @@ export default function MonthView({ date, today, events, onCellClick, onSelectDa
                         {day}
                       </button>
                     )}
+                    <div aria-hidden="true" className="shrink-0" style={{ height: spanHeight }} />
                     {dayEvents.slice(0, 2).map((ev) => {
                       const colors = EVENT_TYPE_COLORS[ev.eventType ?? "OTHER"];
                       return (
@@ -174,7 +178,7 @@ export default function MonthView({ date, today, events, onCellClick, onSelectDa
               })}
 
               {/* Spanning event bars — absolute, above day content */}
-              {spanLayout.map(({ event, colStart, colSpan, row, continuesLeft, continuesRight }) => {
+              {spanLayout.filter((item) => item.row < MAX_VISIBLE_SPAN_ROWS).map(({ event, colStart, colSpan, row, continuesLeft, continuesRight }) => {
                 const colors = EVENT_TYPE_COLORS[event.eventType ?? "OTHER"];
                 return (
                   <button
@@ -183,7 +187,7 @@ export default function MonthView({ date, today, events, onCellClick, onSelectDa
                     title={event.title}
                     style={{
                       position: "absolute",
-                      top: row * SPAN_ROW_H + 2,
+                      top: SPAN_TOP + row * SPAN_ROW_H,
                       left: `calc(${(colStart - 1) / 7 * 100}% + ${continuesLeft ? 0 : 2}px)`,
                       width: `calc(${colSpan / 7 * 100}% - ${(continuesLeft ? 0 : 2) + (continuesRight ? 0 : 2)}px)`,
                       height: SPAN_ROW_H - 4,

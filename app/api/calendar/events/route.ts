@@ -13,6 +13,42 @@ import { findCourtHearingRule, computeRemoteAppearanceDueDate } from "@/lib/cour
 import { upsertCoverageAlert } from "@/lib/court-coverage-alerts";
 import { sendTaskAssignedEmails } from "@/lib/email-notifications";
 
+function googleAllDayEnd(date: Date): string {
+  const end = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  end.setUTCDate(end.getUTCDate() + 1);
+  return end.toISOString().slice(0, 10);
+}
+
+async function recordUserGoogleSync(input: {
+  eventId: string;
+  userId: string;
+  googleEventId: string;
+  googleCalendarId: string;
+}) {
+  await prisma.$executeRaw`
+    INSERT INTO "UserGoogleCalendarSync" (
+      "id", "eventId", "userId", "googleEventId", "googleCalendarId", "updatedAt", "syncStatus", "lastError"
+    )
+    VALUES (
+      ${`ugcs_${input.eventId}_${input.userId}`},
+      ${input.eventId},
+      ${input.userId},
+      ${input.googleEventId},
+      ${input.googleCalendarId},
+      NOW(),
+      'SYNCED'::"SyncStatus",
+      NULL
+    )
+    ON CONFLICT ("eventId", "userId") DO UPDATE SET
+      "googleEventId" = EXCLUDED."googleEventId",
+      "googleCalendarId" = EXCLUDED."googleCalendarId",
+      "syncStatus" = 'SYNCED'::"SyncStatus",
+      "lastError" = NULL,
+      "syncedAt" = NOW(),
+      "updatedAt" = NOW()
+  `;
+}
+
 // GET /api/calendar/events?start=ISO&end=ISO
 export async function GET(request: NextRequest) {
   const currentUser = await requireUser();
@@ -470,8 +506,9 @@ export async function POST(request: NextRequest) {
           description: googlePayload.description,
           location: googlePayload.location,
           colorId: googlePayload.colorId,
-          start,
-          end,
+          start: event.allDay ? event.startTime.toISOString().slice(0, 10) : start,
+          end: event.allDay ? googleAllDayEnd(event.startTime) : end,
+          allDay: event.allDay,
           timeZone: timeZone ?? "UTC",
           reminderOverrides,
         },
@@ -484,6 +521,12 @@ export async function POST(request: NextRequest) {
           googleCalendarId: litCalId,
           syncStatus: "SYNCED",
         },
+      });
+      await recordUserGoogleSync({
+        eventId: event.id,
+        userId,
+        googleEventId: gEvent.id,
+        googleCalendarId: litCalId,
       });
       if (caseId) {
         void addTimelineEntry({
@@ -505,6 +548,7 @@ export async function POST(request: NextRequest) {
         for (const ge of generatedEvents) {
           try {
             const dayStr = ge.startTime.toISOString().slice(0, 10);
+            const endDayStr = googleAllDayEnd(ge.startTime);
             const ggEvent: GoogleCalEvent = await createGoogleEvent(
               accessToken,
               {
@@ -512,7 +556,7 @@ export async function POST(request: NextRequest) {
                 description: ge.description ?? undefined,
                 colorId: getGoogleColorId(ge.eventType),
                 start: dayStr,
-                end: dayStr,
+                end: endDayStr,
                 allDay: true,
                 timeZone: timeZone ?? "UTC",
                 reminderOverrides: [{ method: "popup", minutes: 1440 }],
@@ -526,6 +570,12 @@ export async function POST(request: NextRequest) {
                 googleCalendarId: litCalId,
                 syncStatus: "SYNCED",
               },
+            });
+            await recordUserGoogleSync({
+              eventId: ge.id,
+              userId,
+              googleEventId: ggEvent.id,
+              googleCalendarId: litCalId,
             });
           } catch (err) {
             console.error(`Google push failed for generated event ${ge.id}:`, err);

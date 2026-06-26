@@ -24,6 +24,7 @@ model User {
 
   events              Event[]
   calendarConnections UserCalendarConnection[]
+  userGoogleSyncs     UserGoogleCalendarSync[]
   cases               Case[]
   workspaceMemberships WorkspaceMember[]
   sessions            AuthSession[]
@@ -205,6 +206,7 @@ model Event {
   assignedAttorney User?               @relation("EventAttorney", fields: [assignedAttorneyId], references: [id], onDelete: SetNull)
   departmentRef    Department?         @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   googleSync         GoogleCalendarSync?
+  userGoogleSyncs    UserGoogleCalendarSync[]
   tasks              Task[]
   reminders          EventReminder[]
   notifications      Notification[]
@@ -262,6 +264,29 @@ model GoogleCalendarSync {
 
   event            Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
+  @@index([googleEventId])
+}
+
+// Per-user Google sync state. Allows the same workspace event to be mirrored
+// to each connected user's own LitCal calendar without blocking other users.
+model UserGoogleCalendarSync {
+  id               String     @id @default(cuid())
+  eventId          String
+  userId           String
+
+  googleEventId    String
+  googleCalendarId String
+
+  syncedAt         DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  syncStatus       SyncStatus @default(SYNCED)
+  lastError        String?
+
+  event            Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user             User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([userId])
   @@index([googleEventId])
 }
 
