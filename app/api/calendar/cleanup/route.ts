@@ -167,18 +167,26 @@ async function cleanup() {
     }
   }
 
-  // 5. Rename discovery events from "Our Discovery Responses Due" to "Plaintiff Discovery Due"
+  // 5. Rename discovery events to "Plaintiff Discovery Due" format
   let discoveryRenamed = 0;
   const discoveryEvents = await prisma.event.findMany({
     where: {
       workspaceId: workspace.id,
-      title: { in: ["Our Discovery Responses Due", "Opposing Discovery Responses Due"] },
+      eventType: "DEADLINE",
       caseId: { not: null },
+      OR: [
+        { title: { contains: "Discovery" } },
+      ],
     },
     select: { id: true, title: true, caseId: true },
   });
+  // Filter to only events that need renaming (have "v." or old format)
+  const discoveryToRename = discoveryEvents.filter((e) =>
+    e.title.includes(" v. ") || e.title.includes(" v ") || e.title.includes(" vs ") || e.title.includes(" vs. ") ||
+    e.title === "Our Discovery Responses Due" || e.title === "Opposing Discovery Responses Due"
+  );
 
-  const caseIds = [...new Set(discoveryEvents.map((e) => e.caseId!))];
+  const caseIds = [...new Set(discoveryToRename.map((e) => e.caseId!))];
   const cases = caseIds.length > 0
     ? await prisma.case.findMany({
         where: { id: { in: caseIds } },
@@ -196,13 +204,15 @@ async function cleanup() {
     try { accessToken = await getAccessToken(connection.refreshToken); } catch { /* ignore */ }
   }
 
-  for (const ev of discoveryEvents) {
+  for (const ev of discoveryToRename) {
     const caseTitle = caseMap.get(ev.caseId!);
     if (!caseTitle) continue;
     const plaintiffName = caseTitle.split(/\s+v\.?\s+/i)[0]?.trim() || caseTitle;
-    const newTitle = ev.title === "Our Discovery Responses Due"
-      ? `${plaintiffName} Discovery Due`
-      : `${plaintiffName} Opposing Discovery Due`;
+    const isOpposing = ev.title.toLowerCase().includes("opposing");
+    const newTitle = isOpposing
+      ? `${plaintiffName} Opposing Discovery Due`
+      : `${plaintiffName} Discovery Due`;
+    if (newTitle === ev.title) continue;
 
     await prisma.event.update({ where: { id: ev.id }, data: { title: newTitle } });
 

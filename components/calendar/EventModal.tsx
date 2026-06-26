@@ -518,7 +518,7 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
                   <svg className="w-3.5 h-3.5 shrink-0 opacity-50 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                 </button>
                 {caseDropdownOpen && (
-                  <div className="absolute left-0 top-full mt-1 z-50 w-full rounded-lg border border-slate-200 bg-white shadow-xl overflow-hidden">
+                  <div className="absolute left-0 bottom-full mb-1 z-50 w-full rounded-lg border border-slate-200 bg-white shadow-xl overflow-hidden">
                     <div className="p-2 border-b border-slate-100">
                       <input
                         autoFocus
