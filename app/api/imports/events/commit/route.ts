@@ -235,6 +235,25 @@ export async function POST(request: NextRequest) {
             })),
           });
         }
+        // Mark as already synced so sync-all doesn't push it back to Google
+        if (uid) {
+          await prisma.$executeRaw`
+            INSERT INTO "UserGoogleCalendarSync" (
+              "id", "eventId", "userId", "googleEventId", "googleCalendarId", "updatedAt", "syncStatus", "lastError"
+            )
+            VALUES (
+              ${`ugcs_${event.id}_${currentUser.id}`},
+              ${event.id},
+              ${currentUser.id},
+              ${`ics-import:${uid}`},
+              ${'ics-import'},
+              NOW(),
+              'SYNCED'::"SyncStatus",
+              NULL
+            )
+            ON CONFLICT ("eventId", "userId") DO NOTHING
+          `;
+        }
         createdEventCount++;
         existingEventSignatures.add(signature);
       }

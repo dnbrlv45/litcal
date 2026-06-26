@@ -97,7 +97,7 @@ export default function MonthView({ date, today, events, onCellClick, onSelectDa
         ))}
       </div>
 
-      <div className="flex-1 grid" style={{ gridTemplateRows: `repeat(${weeks.length}, 1fr)` }}>
+      <div className="flex-1 grid min-h-0" style={{ gridTemplateRows: `repeat(${weeks.length}, minmax(0, 1fr))` }}>
         {weeks.map((week, wi) => {
           // Build the 7 Date objects for this week row.
           // Null cells are padding from prev/next month — compute their actual dates

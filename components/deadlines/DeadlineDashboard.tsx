@@ -194,6 +194,7 @@ export default function DeadlineDashboard({ currentUserId, currentUserJobTitle, 
   const [selectedDeadline, setSelectedDeadline] = useState<DeadlineItem | null>(null);
   const [completing, setCompleting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [bulkCompleting, setBulkCompleting] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
 
   // Restore persisted state
@@ -327,6 +328,17 @@ export default function DeadlineDashboard({ currentUserId, currentUserJobTitle, 
       setSelectedDeadline(null);
     } finally {
       setCompleting(false);
+    }
+  }
+
+  async function handleBulkComplete() {
+    setBulkCompleting(true);
+    try {
+      await fetch("/api/deadlines/bulk-complete", { method: "POST" });
+      await fetchDeadlines();
+      setSelectedDeadline(null);
+    } finally {
+      setBulkCompleting(false);
     }
   }
 
@@ -485,11 +497,39 @@ export default function DeadlineDashboard({ currentUserId, currentUserJobTitle, 
             </div>
           ) : (
             <div className="flex flex-col gap-6">
-              {renderSection(
-                "overdue",
-                "Overdue",
-                sections.overdue,
-                <AlertTriangle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+              {sections.overdue.length > 0 && (
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <SectionHeader
+                        label="Overdue"
+                        count={sections.overdue.length}
+                        collapsed={collapsedSections.has("overdue")}
+                        onToggle={() => toggleSection("overdue")}
+                        icon={<AlertTriangle className="w-3.5 h-3.5 text-rose-500 shrink-0" />}
+                      />
+                    </div>
+                    <button
+                      onClick={handleBulkComplete}
+                      disabled={bulkCompleting}
+                      className="text-[11px] font-medium text-slate-500 hover:text-teal-700 hover:underline disabled:opacity-50 shrink-0 px-1"
+                    >
+                      {bulkCompleting ? "Completing…" : "Mark all complete"}
+                    </button>
+                  </div>
+                  {!collapsedSections.has("overdue") && (
+                    <div className="flex flex-col gap-0.5">
+                      {sections.overdue.map((item) => (
+                        <DeadlineRow
+                          key={item.id}
+                          item={item}
+                          selected={selectedDeadline?.id === item.id}
+                          onClick={() => setSelectedDeadline(item.id === selectedDeadline?.id ? null : item)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
               {renderSection(
                 "today",

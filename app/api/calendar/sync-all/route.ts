@@ -95,6 +95,48 @@ export async function POST() {
     },
   });
 
+  // Clean up Google events for LitCal events that are completed, cancelled, or deleted
+  let deleted = 0;
+  let deleteFailed = 0;
+  const allSyncRecords = await prisma.$queryRaw<
+    Array<{ id: string; eventId: string; googleEventId: string; googleCalendarId: string }>
+  >`
+    SELECT s."id", s."eventId", s."googleEventId", s."googleCalendarId"
+    FROM "UserGoogleCalendarSync" s
+    WHERE s."userId" = ${user.id}
+      AND s."googleCalendarId" != 'ics-import'
+  `;
+
+  for (const sync of allSyncRecords) {
+    const event = await prisma.event.findUnique({
+      where: { id: sync.eventId },
+      select: { status: true },
+    });
+    const shouldDelete = !event || event.status === "COMPLETED" || event.status === "CANCELLED";
+    if (!shouldDelete) continue;
+
+    try {
+      const delRes = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(sync.googleCalendarId)}/events/${encodeURIComponent(sync.googleEventId)}`,
+        { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      if (delRes.ok || delRes.status === 404 || delRes.status === 410) {
+        await prisma.$executeRaw`
+          DELETE FROM "UserGoogleCalendarSync" WHERE "id" = ${sync.id}
+        `;
+        // Also clean up GoogleCalendarSync if it exists
+        await prisma.googleCalendarSync.deleteMany({
+          where: { eventId: sync.eventId, googleEventId: sync.googleEventId },
+        });
+        deleted++;
+      } else {
+        deleteFailed++;
+      }
+    } catch {
+      deleteFailed++;
+    }
+  }
+
   let synced = 0;
   let failed = 0;
 
@@ -162,5 +204,5 @@ export async function POST() {
     }
   }
 
-  return NextResponse.json({ synced, failed, total: events.length });
+  return NextResponse.json({ synced, failed, total: events.length, deleted, deleteFailed });
 }
