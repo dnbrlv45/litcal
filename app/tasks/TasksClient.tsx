@@ -30,12 +30,14 @@ const PRIORITY_LABELS: Record<string, string> = {
 
 function formatDate(d: string | null) {
   if (!d) return null;
-  return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 }
 
 function isOverdue(dueDate: string | null, status: string) {
   if (!dueDate || status === "DONE") return false;
-  return new Date(dueDate) < new Date();
+  const due = new Date(dueDate);
+  const now = new Date();
+  return Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), due.getUTCDate()) < Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
 }
 
 function memberName(m: TaskMember) {

@@ -15,11 +15,11 @@ interface Props {
 }
 
 function daysLabel(dueDate: string) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const due = new Date(dueDate);
-  due.setHours(0, 0, 0, 0);
-  const diff = Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  const now = new Date();
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const d = new Date(dueDate);
+  const due = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  const diff = Math.round((due - today) / (1000 * 60 * 60 * 24));
   if (diff < 0) return { label: `${Math.abs(diff)} day${Math.abs(diff) !== 1 ? "s" : ""} overdue`, color: "text-rose-600" };
   if (diff === 0) return { label: "Due today", color: "text-orange-600" };
   return { label: `in ${diff} day${diff !== 1 ? "s" : ""}`, color: "text-slate-500" };
@@ -93,7 +93,7 @@ export default function DeadlineDetailPanel({ deadline, onClose, onMarkComplete,
         <div className="flex flex-col gap-1 border-b border-slate-200 pb-5">
           <div className="flex items-center gap-3 text-sm text-slate-700">
             <Calendar className="w-4 h-4 shrink-0 text-slate-500" />
-            <span>{new Date(deadline.dueDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</span>
+            <span>{new Date(deadline.dueDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "UTC" })}</span>
           </div>
           <div className={`flex items-center gap-3 text-sm font-semibold ${color}`}>
             <AlertTriangle className="w-4 h-4 shrink-0 opacity-60" />

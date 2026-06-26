@@ -53,8 +53,7 @@ const LS_FILTERS = "litcal_deadline_filters";
 
 function startOfDay(d: Date) {
   const c = new Date(d);
-  c.setHours(0, 0, 0, 0);
-  return c;
+  return new Date(Date.UTC(c.getUTCFullYear(), c.getUTCMonth(), c.getUTCDate()));
 }
 
 function daysDiff(a: Date, b: Date) {
@@ -140,7 +139,7 @@ function DeadlineRow({
       </div>
       <div className="flex flex-col items-end gap-1 shrink-0">
         <span className="text-xs text-slate-500">
-          {new Date(item.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+          {new Date(item.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}
         </span>
         <DaysBadge dueDate={item.dueDate} isCompleted={item.isCompleted} />
         {item.assignedAttorneyName && (
@@ -580,7 +579,7 @@ export default function DeadlineDashboard({ currentUserId, currentUserJobTitle, 
                               </div>
                               <div className="flex flex-col items-end gap-1 shrink-0">
                                 <span className="text-xs font-semibold text-slate-700">
-                                  {new Date(trial.startTime).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                                  {new Date(trial.startTime).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}
                                 </span>
                                 <span className={`text-xs font-semibold ${daysUntil <= 7 ? "text-rose-600" : daysUntil <= 30 ? "text-amber-600" : "text-slate-500"}`}>
                                   {daysUntil === 0 ? "Today" : `in ${daysUntil}d`}
