@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCurrentWorkspace } from "@/lib/workspaces";
+import { getAccessToken, patchGoogleEvent } from "@/lib/google-calendar";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -166,11 +167,63 @@ async function cleanup() {
     }
   }
 
+  // 5. Rename discovery events from "Our Discovery Responses Due" to "Plaintiff Discovery Due"
+  let discoveryRenamed = 0;
+  const discoveryEvents = await prisma.event.findMany({
+    where: {
+      workspaceId: workspace.id,
+      title: { in: ["Our Discovery Responses Due", "Opposing Discovery Responses Due"] },
+      caseId: { not: null },
+    },
+    select: { id: true, title: true, caseId: true },
+  });
+
+  const caseIds = [...new Set(discoveryEvents.map((e) => e.caseId!))];
+  const cases = caseIds.length > 0
+    ? await prisma.case.findMany({
+        where: { id: { in: caseIds } },
+        select: { id: true, title: true },
+      })
+    : [];
+  const caseMap = new Map(cases.map((c) => [c.id, c.title]));
+
+  // Get Google connection for syncing title changes
+  const connection = await prisma.userCalendarConnection.findFirst({
+    where: { userId: user.id, provider: "GOOGLE", isActive: true },
+  });
+  let accessToken: string | null = null;
+  if (connection) {
+    try { accessToken = await getAccessToken(connection.refreshToken); } catch { /* ignore */ }
+  }
+
+  for (const ev of discoveryEvents) {
+    const caseTitle = caseMap.get(ev.caseId!);
+    if (!caseTitle) continue;
+    const plaintiffName = caseTitle.split(/\s+v\.?\s+/i)[0]?.trim() || caseTitle;
+    const newTitle = ev.title === "Our Discovery Responses Due"
+      ? `${plaintiffName} Discovery Due`
+      : `${plaintiffName} Opposing Discovery Due`;
+
+    await prisma.event.update({ where: { id: ev.id }, data: { title: newTitle } });
+
+    // Update Google Calendar too
+    if (accessToken) {
+      const sync = await prisma.googleCalendarSync.findFirst({ where: { eventId: ev.id } });
+      if (sync) {
+        try {
+          await patchGoogleEvent(accessToken, sync.googleCalendarId, sync.googleEventId, { summary: newTitle });
+        } catch { /* ignore */ }
+      }
+    }
+    discoveryRenamed++;
+  }
+
   return NextResponse.json({
     dateFixed,
     taskDateFixed,
     duplicateEventsRemoved: duplicateIds.length,
     duplicateTasksRemoved: dupTaskIds.length,
     uidTagsStripped,
+    discoveryRenamed,
   });
 }

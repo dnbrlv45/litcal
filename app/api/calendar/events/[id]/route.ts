@@ -54,7 +54,17 @@ export async function DELETE(
     await prisma.task.deleteMany({ where: { id: { in: generatedTaskIds } } });
   }
 
-  // Delete from Supabase — cascades to GoogleCalendarSync and GeneratedDeadline rows
+  // Gather Google sync info BEFORE deleting (cascade will remove these rows)
+  const googleSyncInfo = event.googleSync;
+  const userSync = !googleSyncInfo
+    ? await prisma.$queryRaw<Array<{ googleEventId: string; googleCalendarId: string }>>`
+        SELECT "googleEventId", "googleCalendarId" FROM "UserGoogleCalendarSync"
+        WHERE "eventId" = ${id} AND "userId" = ${userId} AND "googleCalendarId" != 'ics-import'
+        LIMIT 1
+      `.then((rows) => rows[0] ?? null)
+    : null;
+
+  // Delete from Supabase — cascades to GoogleCalendarSync, UserGoogleCalendarSync, etc.
   await prisma.event.delete({ where: { id } });
 
   if (event.caseId && workspace) {
@@ -69,16 +79,6 @@ export async function DELETE(
   }
 
   // Mirror deletion to Google Calendar
-  const googleSyncInfo = event.googleSync;
-  // Also check UserGoogleCalendarSync for events synced via sync-all
-  const userSync = !googleSyncInfo
-    ? await prisma.$queryRaw<Array<{ googleEventId: string; googleCalendarId: string }>>`
-        SELECT "googleEventId", "googleCalendarId" FROM "UserGoogleCalendarSync"
-        WHERE "eventId" = ${id} AND "userId" = ${userId} AND "googleCalendarId" != 'ics-import'
-        LIMIT 1
-      `.then((rows) => rows[0] ?? null)
-    : null;
-
   const syncToDelete = googleSyncInfo ?? userSync;
   if (syncToDelete) {
     const connection = await prisma.userCalendarConnection.findFirst({
@@ -97,8 +97,6 @@ export async function DELETE(
       }
     }
   }
-  // Clean up UserGoogleCalendarSync record
-  await prisma.$executeRaw`DELETE FROM "UserGoogleCalendarSync" WHERE "eventId" = ${id}`;
 
   return NextResponse.json({ ok: true });
 }
