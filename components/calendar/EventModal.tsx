@@ -105,6 +105,7 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
   const [cases, setCases] = useState<CaseOption[]>([]);
   const [caseSearch, setCaseSearch] = useState("");
   const [caseDropdownOpen, setCaseDropdownOpen] = useState(false);
+  const [caseHighlight, setCaseHighlight] = useState(-1);
   const caseDropdownRef = useRef<HTMLDivElement>(null);
   const [allDay, setAllDay] = useState(false);
   const [endDate, setEndDate] = useState(toDateInputValue(defaultStart ?? new Date()));
@@ -214,10 +215,46 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
   const subtypeLabel = subtype
     ? (HEARING_SUBTYPES.find((s) => s.value === subtype)?.label.replace(/ \([A-Z/ ]+\)$/, "") ?? subtype)
     : null;
-  const autoTitle = linkedCase
-    ? `${linkedCase.title} — ${subtypeLabel ?? eventTypeLabel}`
+  const caseName = linkedCase
+    ? (eventType === "DISCOVERY"
+      ? linkedCase.title.split(/\s+v\.?\s+/i)[0]?.trim() || linkedCase.title
+      : linkedCase.title)
+    : null;
+  const autoTitle = caseName
+    ? (eventType === "DISCOVERY"
+      ? `${caseName} Discovery Due`
+      : `${caseName} — ${subtypeLabel ?? eventTypeLabel}`)
     : subtypeLabel ?? eventTypeLabel;
   const effectiveTitle = titleManuallySet ? title : autoTitle;
+
+  const filteredCases = cases
+    .filter((c) => c.status !== "ARCHIVED" && c.status !== "CLOSED")
+    .filter((c) => {
+      const q = caseSearch.toLowerCase();
+      return !q || c.title.toLowerCase().includes(q) || (c.caseNumber ?? "").toLowerCase().includes(q);
+    });
+
+  function selectCase(id: string) {
+    setCaseId(id); setCaseSearch(""); setCaseDropdownOpen(false);
+    setSelectedCountyId(""); setSelectedCourtId(""); setSelectedDeptId("");
+  }
+
+  function handleCaseKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setCaseHighlight((h) => Math.min(h + 1, filteredCases.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setCaseHighlight((h) => Math.max(h - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (caseHighlight >= 0 && caseHighlight < filteredCases.length) {
+        selectCase(filteredCases[caseHighlight].id);
+      }
+    } else if (e.key === "Escape") {
+      setCaseDropdownOpen(false);
+    }
+  }
 
   // ── look up rule whenever county/court/dept changes ─────────────────────────
   useEffect(() => {
@@ -373,7 +410,7 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-md w-full max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>New Event</DialogTitle>
         </DialogHeader>
@@ -504,7 +541,7 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
                   {eventType === "DISCOVERY" ? "(required)" : "(optional)"}
                 </span>
               </Label>
-              <div ref={caseDropdownRef} className="relative">
+              <div ref={caseDropdownRef} className="relative min-w-0">
                 <button
                   type="button"
                   onClick={() => { setCaseDropdownOpen((o) => !o); setCaseSearch(""); }}
@@ -523,7 +560,8 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
                       <input
                         autoFocus
                         value={caseSearch}
-                        onChange={(e) => setCaseSearch(e.target.value)}
+                        onChange={(e) => { setCaseSearch(e.target.value); setCaseHighlight(0); }}
+                        onKeyDown={handleCaseKeyDown}
                         placeholder="Search cases..."
                         className="w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-sm outline-none focus:border-teal-300 focus:ring-1 focus:ring-teal-200"
                       />
@@ -532,28 +570,22 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
                       {eventType !== "DISCOVERY" && (
                         <button
                           type="button"
-                          onClick={() => { setCaseId(""); setCaseSearch(""); setCaseDropdownOpen(false); setSelectedCountyId(""); setSelectedCourtId(""); setSelectedDeptId(""); }}
+                          onClick={() => selectCase("")}
                           className={`w-full px-3 py-2 text-left text-sm hover:bg-slate-50 ${!caseId ? "font-semibold text-teal-700" : "text-slate-700"}`}
                         >
                           — No case —
                         </button>
                       )}
-                      {cases
-                        .filter((c) => c.status !== "ARCHIVED" && c.status !== "CLOSED")
-                        .filter((c) => {
-                          const q = caseSearch.toLowerCase();
-                          return c.title.toLowerCase().includes(q) || (c.caseNumber ?? "").toLowerCase().includes(q);
-                        })
-                        .map((c) => (
-                          <button
-                            type="button"
-                            key={c.id}
-                            onClick={() => { setCaseId(c.id); setCaseSearch(""); setCaseDropdownOpen(false); setSelectedCountyId(""); setSelectedCourtId(""); setSelectedDeptId(""); }}
-                            className={`w-full px-3 py-2 text-left text-sm hover:bg-slate-50 ${caseId === c.id ? "font-semibold text-teal-700" : "text-slate-700"}`}
-                          >
-                            {c.title}{c.caseNumber ? ` (#${c.caseNumber})` : ""}
-                          </button>
-                        ))}
+                      {filteredCases.map((c, i) => (
+                        <button
+                          type="button"
+                          key={c.id}
+                          onClick={() => selectCase(c.id)}
+                          className={`w-full px-3 py-2 text-left text-sm ${caseHighlight === i ? "bg-teal-50 text-teal-800" : "hover:bg-slate-50"} ${caseId === c.id ? "font-semibold text-teal-700" : "text-slate-700"}`}
+                        >
+                          {c.title}{c.caseNumber ? ` (#${c.caseNumber})` : ""}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 )}
