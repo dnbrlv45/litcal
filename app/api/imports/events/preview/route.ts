@@ -171,13 +171,24 @@ function extractTitle(summary: string, desc: string | null): string {
 
 // ── Case matching helpers ───────────────────────────────────
 
-function extractCaseNames(summary: string): string[] {
-  // Match "X v. Y", "X vs Y", "X vs. Y" patterns
-  const vsMatch = summary.match(/(.+?)\s+v\.?\s+(.+)/i);
-  if (vsMatch) {
-    return [vsMatch[1].trim(), vsMatch[2].trim()];
-  }
-  return [];
+function extractVsParties(text: string): { plaintiff: string; defendant: string } | null {
+  const vsMatch = text.match(/(.+?)\s+(?:vs?\.?|VS\.?)\s+(.+)/i);
+  if (!vsMatch) return null;
+  return { plaintiff: vsMatch[1].trim(), defendant: vsMatch[2].trim() };
+}
+
+function extractLastName(name: string): string {
+  const cleaned = name
+    .replace(/,?\s*et\s+al\.?/gi, "")
+    .replace(/,?\s*(?:Jr\.?|Sr\.?|III|II|IV)$/i, "")
+    .replace(/\bDOES?\s+\d+.*$/i, "")
+    .trim();
+  // "LAST, FIRST" format
+  const commaMatch = cleaned.match(/^([A-Za-z'-]+),/);
+  if (commaMatch) return commaMatch[1].toLowerCase();
+  // "FIRST ... LAST" format — take last word
+  const parts = cleaned.split(/\s+/).filter(Boolean);
+  return (parts[parts.length - 1] || "").toLowerCase();
 }
 
 function normalizeForMatch(s: string): string {
@@ -292,6 +303,7 @@ export async function POST(request: NextRequest) {
       let matchedCaseNumber: string | null = caseNumberFromDesc;
       let matchMethod: string | null = null;
 
+      // 1. Case number match (exact)
       if (caseNumberFromDesc) {
         const matched = casesByNumber.get(caseNumberFromDesc.toLowerCase());
         if (matched) {
@@ -301,50 +313,85 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Fuzzy title match if no case number match
+      // 2. Last-name matching — handles all name variations
       if (!caseId) {
         const caseField = desc ? extractField(desc, "Case") : null;
-        const matchSource = caseField || summary;
-        const names = extractCaseNames(matchSource);
-        if (names.length === 2) {
-          // Require BOTH plaintiff and defendant sides to match
-          const [plaintiffNorm, defendantNorm] = names.map(normalizeForMatch);
-          for (const c of cases) {
-            const cNorm = normalizeForMatch(c.title);
-            if (plaintiffNorm.length > 3 && defendantNorm.length > 3 &&
-                cNorm.includes(plaintiffNorm) && cNorm.includes(defendantNorm)) {
-              caseId = c.id;
-              caseTitle = c.title;
-              matchedCaseNumber = c.caseNumber;
-              matchMethod = "titleFuzzy";
-              break;
-            }
-          }
-        }
-      }
+        // Clean the summary to extract name content
+        const cleanedSummary = summary
+          .replace(/^(?:File\s*CMS\s*[-–—]\s*|Request\s*Remote\s*Appearance\s*[-–—]\s*)/i, "")
+          .replace(/\s*\(.*?\)\s*$/, "") // remove trailing (case number)
+          .split("\\n")[0].trim();
 
-      // Name-based match: for events like "ARTUR HAKOBYAN Trial" with no "v." pattern
-      if (!caseId) {
-        const searchText = summary;
-        const nameOnly = searchText
-          .replace(/\b(Trial|Discovery\s*Due|Deposition|Depo|Mediation|CCP\s*998\s*Due|Discovery\s*responses?\s*due.*|File\s*CMS\s*[-–—]\s*)\b/i, "")
-          .replace(/[-–—]/g, " ")
-          .trim();
-        if (nameOnly.length > 5) {
-          const nameNorm = normalizeForMatch(nameOnly);
-          // Only match against party names (full name match, not substring)
-          for (const c of cases) {
-            for (const p of c.parties) {
-              const pNorm = normalizeForMatch(p.name);
-              if (pNorm.length > 3 && (pNorm === nameNorm || nameNorm.includes(pNorm))) {
-                caseId = c.id;
-                caseTitle = c.title;
-                matchedCaseNumber = c.caseNumber;
-                matchMethod = "partyName";
-                break;
+        // Try the Case: field from description first, then cleaned summary
+        const matchSources = [caseField, cleanedSummary].filter(Boolean) as string[];
+
+        for (const source of matchSources) {
+          if (caseId) break;
+
+          const vsParties = extractVsParties(source);
+          if (vsParties) {
+            // Has "v." pattern — match by plaintiff last name + defendant last name
+            const pLast = extractLastName(vsParties.plaintiff);
+            const dLast = extractLastName(vsParties.defendant);
+
+            if (pLast.length >= 3) {
+              for (const c of cases) {
+                const titleLower = c.title.toLowerCase();
+                const hasPlaintiff = titleLower.includes(pLast) ||
+                  c.parties.some((p) => p.name.toLowerCase().includes(pLast));
+                const hasDefendant = dLast.length >= 3 && titleLower.includes(dLast);
+
+                if (hasPlaintiff && (hasDefendant || dLast.length < 3)) {
+                  caseId = c.id;
+                  caseTitle = c.title;
+                  matchedCaseNumber = c.caseNumber;
+                  matchMethod = "lastNameBoth";
+                  break;
+                }
+              }
+
+              // If no both-side match, try plaintiff-only but require it matches
+              // exactly one case to avoid ambiguity
+              if (!caseId) {
+                const candidates = cases.filter((c) => {
+                  const tl = c.title.toLowerCase();
+                  return tl.includes(pLast) ||
+                    c.parties.some((p) => p.name.toLowerCase().includes(pLast));
+                });
+                if (candidates.length === 1) {
+                  caseId = candidates[0].id;
+                  caseTitle = candidates[0].title;
+                  matchedCaseNumber = candidates[0].caseNumber;
+                  matchMethod = "lastNameUnique";
+                }
               }
             }
-            if (caseId) break;
+          } else {
+            // No "v." pattern — single name like "Karen Murillo Discovery Due"
+            const nameOnly = source
+              .replace(/\b(Trial|Discovery\s*(?:Due|Cutoff|responses?\s*due.*)|Deposition|Depo|Mediation|CCP\s*998\s*Due|Expert\s*Designation\s*Due|IME)\b.*$/i, "")
+              .trim();
+            if (nameOnly.length >= 3) {
+              const lastName = extractLastName(nameOnly);
+              const fullNorm = normalizeForMatch(nameOnly);
+              // Require match on last name + first name (or full normalized name)
+              const candidates = cases.filter((c) => {
+                if (c.parties.some((p) => {
+                  const pNorm = normalizeForMatch(p.name);
+                  return pNorm.includes(fullNorm) || fullNorm.includes(pNorm);
+                })) return true;
+                // Also check by last name against party names
+                return lastName.length >= 4 && c.parties.some((p) =>
+                  p.name.toLowerCase().includes(lastName)
+                );
+              });
+              if (candidates.length === 1) {
+                caseId = candidates[0].id;
+                caseTitle = candidates[0].title;
+                matchedCaseNumber = candidates[0].caseNumber;
+                matchMethod = "nameUnique";
+              }
+            }
           }
         }
       }
