@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-export type AIClassification = "CALENDAR_EVENT" | "DISCOVERY" | "DISCOVERY_EXTENSION" | "NEW_CASE" | "IGNORE";
+export type AIClassification = "CALENDAR_EVENT" | "EVENT_CANCELLATION" | "DISCOVERY" | "DISCOVERY_EXTENSION" | "NEW_CASE" | "IGNORE";
 
 export interface EmailSuggestionResult {
   classification: AIClassification;
@@ -35,6 +35,12 @@ export interface EmailSuggestionResult {
     newDate: string | null;
     mutual: boolean | null;
     appliesTo: "OUR_DEADLINE" | "OPPOSING_DEADLINE" | "BOTH" | null;
+  };
+  cancellation: {
+    eventType: string | null;
+    originalDate: string | null;
+    reason: string | null;
+    newDate: string | null;
   };
   missingFields: string[];
   dedupeKey: string;
@@ -129,15 +135,40 @@ If none of the above apply (e.g. it's a calendar event or discovery — those ar
 
 Return JSON only. No explanation.`;
 
+const CANCELLATION_PROMPT = `You are a California litigation assistant. Determine if this email is about a continuance, postponement, or cancellation of a scheduled court event.
+
+Look for: trial continued, hearing continued, CMC continued, deposition canceled, event vacated, event rescheduled, off calendar, taken off calendar, continued to a new date.
+
+If a continuance or cancellation is found, return this JSON object:
+{
+  "found": true,
+  "classification": "EVENT_CANCELLATION",
+  "confidence": 0.9,
+  ${CASE_SCHEMA},
+  "cancellation": {
+    "eventType": null,   // TRIAL, HEARING, DEPOSITION, CASE_MANAGEMENT_CONFERENCE, MEDIATION, OTHER
+    "originalDate": null, // YYYY-MM-DD — the date that was canceled/continued FROM
+    "reason": null,       // brief reason: "continued by court", "stipulation", "party request", etc.
+    "newDate": null        // YYYY-MM-DD — the new date if rescheduled, null if just canceled with no new date
+  },
+  "missingFields": [],
+  "dedupeKey": ""   // caseNumber|CANCEL|originalDate
+}
+
+If NO continuance or cancellation is found, return: {"found": false}
+
+Return JSON only. No explanation.`;
+
 const EMPTY_RESULT: Omit<EmailSuggestionResult, "classification" | "confidence" | "dedupeKey"> = {
   case: { plaintiff: null, defendant: null, caseNumber: null, county: null, court: null, caseType: null, defenseFirm: null, defenseAttorney: null, dateFiled: null },
   event: { eventType: null, title: null, date: null, startTime: null, endTime: null, description: null, location: null },
   discovery: { discoveryType: null, direction: null, servedOrReceivedDate: null, responseDueDate: null },
   discoveryExtension: { newDate: null, mutual: null, appliesTo: null },
+  cancellation: { eventType: null, originalDate: null, reason: null, newDate: null },
   missingFields: [],
 };
 
-const VALID_CLASSIFICATIONS: AIClassification[] = ["CALENDAR_EVENT", "DISCOVERY", "DISCOVERY_EXTENSION", "NEW_CASE", "IGNORE"];
+const VALID_CLASSIFICATIONS: AIClassification[] = ["CALENDAR_EVENT", "EVENT_CANCELLATION", "DISCOVERY", "DISCOVERY_EXTENSION", "NEW_CASE", "IGNORE"];
 
 const MAX_BODY_CHARS = 12_000;
 const MAX_PDF_CHARS = 10_000;
@@ -187,11 +218,12 @@ ${body}
 
 ${attachments ? `Attachments:\n${attachments}` : ""}`;
 
-  // Run all three focused calls in parallel
-  const [calendarRaw, discoveryRaw, generalRaw] = await Promise.all([
+  // Run all four focused calls in parallel
+  const [calendarRaw, discoveryRaw, generalRaw, cancellationRaw] = await Promise.all([
     callGemini(genai, CALENDAR_PROMPT, userContent),
     callGemini(genai, DISCOVERY_PROMPT, userContent),
     callGemini(genai, GENERAL_PROMPT, userContent),
+    callGemini(genai, CANCELLATION_PROMPT, userContent),
   ]);
 
   const results: EmailSuggestionResult[] = [];
@@ -235,6 +267,30 @@ ${attachments ? `Attachments:\n${attachments}` : ""}`;
         discoveryExtension: (generalRaw.discoveryExtension as EmailSuggestionResult["discoveryExtension"]) ?? EMPTY_RESULT.discoveryExtension,
         missingFields: (generalRaw.missingFields as string[]) ?? [],
       });
+    }
+  }
+
+  if (cancellationRaw?.found) {
+    results.push({
+      ...EMPTY_RESULT,
+      ...(cancellationRaw as Partial<EmailSuggestionResult>),
+      classification: "EVENT_CANCELLATION",
+      confidence: (cancellationRaw.confidence as number) ?? 0.9,
+      dedupeKey: (cancellationRaw.dedupeKey as string) ?? "",
+      case: (cancellationRaw.case as EmailSuggestionResult["case"]) ?? EMPTY_RESULT.case,
+      cancellation: (cancellationRaw.cancellation as EmailSuggestionResult["cancellation"]) ?? EMPTY_RESULT.cancellation,
+      missingFields: (cancellationRaw.missingFields as string[]) ?? [],
+    });
+  }
+
+  // If we detected a cancellation, suppress any calendar event for the same case
+  // (the email might mention the old date which triggers a false positive)
+  const hasCancellation = results.some((r) => r.classification === "EVENT_CANCELLATION");
+  if (hasCancellation) {
+    for (let i = results.length - 1; i >= 0; i--) {
+      if (results[i].classification === "CALENDAR_EVENT") {
+        results.splice(i, 1);
+      }
     }
   }
 

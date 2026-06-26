@@ -294,6 +294,81 @@ export async function PATCH(
       }
     }
 
+    if (classification === "EVENT_CANCELLATION") {
+      const caseData = data.case ?? {};
+      const cancellation = (data as Record<string, unknown>).cancellation as {
+        eventType?: string | null;
+        originalDate?: string | null;
+        reason?: string | null;
+        newDate?: string | null;
+      } | undefined;
+
+      if (cancellation?.originalDate) {
+        // Find the matching case
+        let matchingCase = caseData.caseNumber
+          ? await prisma.case.findFirst({
+              where: { workspaceId: workspace.id, caseNumber: caseData.caseNumber },
+            })
+          : null;
+
+        if (!matchingCase && (caseData.plaintiff || caseData.defendant)) {
+          const candidates = await prisma.case.findMany({
+            where: { workspaceId: workspace.id },
+            include: { parties: true },
+          });
+          for (const c of candidates) {
+            const pMatch = !caseData.plaintiff || c.title.toLowerCase().includes(caseData.plaintiff.toLowerCase());
+            const dMatch = !caseData.defendant || c.title.toLowerCase().includes(caseData.defendant.toLowerCase());
+            if (pMatch && dMatch) { matchingCase = c; break; }
+          }
+        }
+
+        if (matchingCase) {
+          const originalDate = new Date(cancellation.originalDate);
+          const dayStart = new Date(Date.UTC(originalDate.getUTCFullYear(), originalDate.getUTCMonth(), originalDate.getUTCDate()));
+          const dayEnd = new Date(Date.UTC(originalDate.getUTCFullYear(), originalDate.getUTCMonth(), originalDate.getUTCDate(), 23, 59, 59, 999));
+
+          const matchingEvents = await prisma.event.findMany({
+            where: {
+              workspaceId: workspace.id,
+              caseId: matchingCase.id,
+              startTime: { gte: dayStart, lte: dayEnd },
+              status: { notIn: ["CANCELLED", "COMPLETED"] },
+            },
+          });
+
+          for (const ev of matchingEvents) {
+            await prisma.event.update({
+              where: { id: ev.id },
+              data: { status: "CANCELLED" },
+            });
+          }
+
+          // If a new date was provided, create the rescheduled event
+          if (cancellation.newDate) {
+            const newStart = new Date(`${cancellation.newDate}T09:00:00`);
+            const newEnd = new Date(newStart.getTime() + 60 * 60 * 1000);
+            const eventType = cancellation.eventType
+              ? mapEventType(cancellation.eventType)
+              : (matchingEvents[0]?.eventType ?? "OTHER");
+
+            await prisma.event.create({
+              data: {
+                userId: user.id,
+                workspaceId: workspace.id,
+                caseId: matchingCase.id,
+                title: matchingEvents[0]?.title ?? `${eventType} — ${matchingCase.title}`,
+                startTime: newStart,
+                endTime: newEnd,
+                eventType,
+                status: "SCHEDULED",
+              },
+            });
+          }
+        }
+      }
+    }
+
     if (classification === "NEW_CASE") {
       const caseData = data.case ?? {};
       await prisma.case.create({

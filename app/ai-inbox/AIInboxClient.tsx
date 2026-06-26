@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   Briefcase,
   CalendarPlus,
+  CalendarX2,
   ChevronDown,
   ChevronUp,
   FileText,
@@ -63,6 +64,7 @@ interface AIInboxMetrics {
 
 const CLASSIFICATION_COLORS: Record<string, string> = {
   CALENDAR_EVENT:       "bg-blue-50 text-blue-700 ring-blue-200",
+  EVENT_CANCELLATION:   "bg-rose-50 text-rose-700 ring-rose-200",
   DISCOVERY:            "bg-cyan-50 text-cyan-700 ring-cyan-200",
   DISCOVERY_EXTENSION:  "bg-amber-50 text-amber-700 ring-amber-200",
   NEW_CASE:             "bg-green-50 text-green-700 ring-green-200",
@@ -71,6 +73,7 @@ const CLASSIFICATION_COLORS: Record<string, string> = {
 
 const CLASSIFICATION_LABELS: Record<string, string> = {
   CALENDAR_EVENT:      "Calendar Event",
+  EVENT_CANCELLATION:  "Event Cancellation",
   DISCOVERY:           "Discovery",
   DISCOVERY_EXTENSION: "Discovery Extension",
   NEW_CASE:            "New Case",
@@ -120,6 +123,7 @@ function formatReceivedAt(value: string | null) {
 function suggestionVerb(classification: string, duplicate: boolean) {
   if (duplicate) return "Review duplicate";
   if (classification === "CALENDAR_EVENT") return "Create calendar event";
+  if (classification === "EVENT_CANCELLATION") return "Cancel event";
   if (classification === "DISCOVERY") return "Create discovery deadline";
   if (classification === "DISCOVERY_EXTENSION") return "Apply discovery extension";
   if (classification === "NEW_CASE") return "Create case";
@@ -128,6 +132,7 @@ function suggestionVerb(classification: string, duplicate: boolean) {
 
 function suggestionIcon(classification: string) {
   if (classification === "CALENDAR_EVENT") return CalendarPlus;
+  if (classification === "EVENT_CANCELLATION") return CalendarX2;
   if (classification === "DISCOVERY" || classification === "DISCOVERY_EXTENSION") return FileText;
   if (classification === "NEW_CASE") return Briefcase;
   return ShieldCheck;
@@ -164,6 +169,7 @@ function SuggestionCard({
     event?: Record<string, string | null>;
     discovery?: Record<string, string | null>;
     discoveryExtension?: Record<string, string | null>;
+    cancellation?: Record<string, string | null>;
     existingEventWarning?: string;
   };
 
@@ -189,11 +195,13 @@ function SuggestionCard({
   const actionLabel = suggestionVerb(s.classification, isDuplicate);
   const caseTitle = [data.case?.plaintiff, "v.", data.case?.defendant].filter(Boolean).join(" ");
   const primaryDate =
+    data.cancellation?.originalDate ??
     data.event?.date ??
     data.discovery?.servedOrReceivedDate ??
     data.discoveryExtension?.newDate ??
     data.case?.dateFiled;
   const primaryDetail =
+    data.cancellation?.eventType ??
     data.event?.eventType ??
     data.discovery?.discoveryType ??
     data.discoveryExtension?.appliesTo ??
@@ -248,6 +256,8 @@ function SuggestionCard({
             <SummaryField label="Date" value={primaryDate} />
             <SummaryField label="Type" value={primaryDetail} />
             <SummaryField label="Court" value={data.case?.court ?? data.case?.county} />
+            {data.cancellation?.reason && <SummaryField label="Reason" value={data.cancellation.reason} />}
+            {data.cancellation?.newDate && <SummaryField label="New date" value={data.cancellation.newDate} />}
             <SummaryField label="Attorney" value={data.event?.attorney ?? data.discoveryExtension?.requestedBy} />
           </div>
         </div>
