@@ -545,7 +545,7 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
                 <button
                   type="button"
                   onClick={() => { setCaseDropdownOpen((o) => !o); setCaseSearch(""); }}
-                  className="flex h-9 w-full items-center rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring text-left"
+                  className="flex h-9 w-full items-center rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring text-left overflow-hidden"
                 >
                   <span className="truncate flex-1">
                     {caseId
