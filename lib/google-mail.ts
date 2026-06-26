@@ -1,6 +1,20 @@
 import crypto from "crypto";
+import nodemailer from "nodemailer";
 import { getAccessToken } from "@/lib/google-calendar";
 import { getInboxRefreshToken } from "@/lib/ai/processGmailMessages";
+
+const FROM_EMAIL = "litcalai@gmail.com";
+const FROM_NAME = "LitCal Notifications";
+
+function getSmtpTransport() {
+  const user = process.env.GMAIL_SMTP_USER;
+  const pass = process.env.GMAIL_SMTP_PASSWORD;
+  if (!user || !pass) return null;
+  return nodemailer.createTransport({
+    service: "gmail",
+    auth: { user, pass },
+  });
+}
 
 interface InviteEmailOptions {
   inviterName: string;
@@ -164,13 +178,44 @@ function buildLitCalEmail({ recipientEmail, subject, text, html }: LitCalEmailOp
   ].join("\r\n");
 }
 
+async function sendViaSmtp(options: {
+  to: string;
+  subject: string;
+  text: string;
+  html: string;
+  attachments?: Array<{ filename: string; content: Buffer; contentType: string }>;
+}): Promise<{ ok: boolean; reason: string; detail?: string }> {
+  const transport = getSmtpTransport();
+  if (!transport) {
+    return { ok: false, reason: "smtp_not_configured" };
+  }
+  try {
+    await transport.sendMail({
+      from: `${FROM_NAME} <${FROM_EMAIL}>`,
+      to: options.to,
+      subject: options.subject,
+      text: options.text,
+      html: options.html,
+      attachments: options.attachments,
+    });
+    return { ok: true, reason: "sent" };
+  } catch (err) {
+    return { ok: false, reason: "send_failed", detail: String(err) };
+  }
+}
+
 async function sendRawLitCalMessage(rawMessage: string) {
   const refreshToken = await getInboxRefreshToken() ?? process.env.GMAIL_REFRESH_TOKEN;
   if (!refreshToken) {
     return { ok: false, reason: "gmail_not_connected" as const };
   }
 
-  const accessToken = await getAccessToken(refreshToken);
+  let accessToken: string;
+  try {
+    accessToken = await getAccessToken(refreshToken);
+  } catch {
+    return { ok: false, reason: "token_expired" as const, detail: "Gmail refresh token expired or revoked" };
+  }
   const raw = base64Url(rawMessage);
   const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
     method: "POST",
@@ -189,10 +234,26 @@ async function sendRawLitCalMessage(rawMessage: string) {
 }
 
 export async function sendWorkspaceInviteEmail(_userId: string, options: InviteEmailOptions) {
+  if (getSmtpTransport()) {
+    return sendViaSmtp({
+      to: options.recipientEmail,
+      subject: `You're invited to ${options.workspaceName} on LitCal`,
+      text: buildInviteEmail(options),
+      html: buildInviteEmail(options),
+    });
+  }
   return sendRawLitCalMessage(buildInviteEmail(options));
 }
 
 export async function sendLitCalEmail(options: LitCalEmailOptions) {
+  if (getSmtpTransport()) {
+    return sendViaSmtp({
+      to: options.recipientEmail,
+      subject: options.subject,
+      text: options.text,
+      html: options.html,
+    });
+  }
   return sendRawLitCalMessage(buildLitCalEmail(options));
 }
 
@@ -200,6 +261,23 @@ interface LitCalEmailWithAttachmentOptions extends LitCalEmailOptions {
   attachment: Buffer;
   attachmentFilename: string;
   attachmentMimeType: string;
+}
+
+export async function sendLitCalEmailWithAttachment(options: LitCalEmailWithAttachmentOptions) {
+  if (getSmtpTransport()) {
+    return sendViaSmtp({
+      to: options.recipientEmail,
+      subject: options.subject,
+      text: options.text,
+      html: options.html,
+      attachments: [{
+        filename: options.attachmentFilename,
+        content: options.attachment,
+        contentType: options.attachmentMimeType,
+      }],
+    });
+  }
+  return sendRawLitCalMessage(buildLitCalEmailWithAttachment(options));
 }
 
 function buildLitCalEmailWithAttachment({
@@ -249,8 +327,4 @@ function buildLitCalEmailWithAttachment({
     "",
     `--${outerBoundary}--`,
   ].join("\r\n");
-}
-
-export async function sendLitCalEmailWithAttachment(options: LitCalEmailWithAttachmentOptions) {
-  return sendRawLitCalMessage(buildLitCalEmailWithAttachment(options));
 }
