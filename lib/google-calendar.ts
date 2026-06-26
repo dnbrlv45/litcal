@@ -231,8 +231,8 @@ export async function deleteGoogleEvent(
       headers: { Authorization: `Bearer ${accessToken}` },
     }
   );
-  // 204 = deleted, 410 = already gone — both are fine
-  if (!res.ok && res.status !== 410) {
+  // 204 = deleted, 404/410 = already gone — all fine
+  if (!res.ok && res.status !== 410 && res.status !== 404) {
     const body = await res.text();
     throw new Error(`Failed to delete Google event: ${body}`);
   }
