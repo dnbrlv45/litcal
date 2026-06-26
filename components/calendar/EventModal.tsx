@@ -103,6 +103,9 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
   const [description, setDescription] = useState("");
   const [caseId, setCaseId] = useState("");
   const [cases, setCases] = useState<CaseOption[]>([]);
+  const [caseSearch, setCaseSearch] = useState("");
+  const [caseDropdownOpen, setCaseDropdownOpen] = useState(false);
+  const caseDropdownRef = useRef<HTMLDivElement>(null);
   const [allDay, setAllDay] = useState(false);
   const [endDate, setEndDate] = useState(toDateInputValue(defaultStart ?? new Date()));
   const [autoTrialEnd, setAutoTrialEnd] = useState(false);
@@ -140,6 +143,16 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
       fetch("/api/cases").then((r) => r.json()).then((d) => setCases(d.cases ?? [])).catch(() => {});
       fetch("/api/counties").then((r) => r.json()).then((d) => setCounties(d.counties ?? [])).catch(() => {});
     }
+  }, []);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (caseDropdownRef.current && !caseDropdownRef.current.contains(e.target as Node)) {
+        setCaseDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
   // ── reset on open ───────────────────────────────────────────────────────────
@@ -491,19 +504,60 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
                   {eventType === "DISCOVERY" ? "(required)" : "(optional)"}
                 </span>
               </Label>
-              <select
-                id="event-case"
-                value={caseId}
-                onChange={(e) => { setCaseId(e.target.value); setSelectedCountyId(""); setSelectedCourtId(""); setSelectedDeptId(""); }}
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              >
-                <option value="">— {eventType === "DISCOVERY" ? "Select a case" : "No case"} —</option>
-                {cases.filter((c) => c.status !== "ARCHIVED" && c.status !== "CLOSED").map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.title}{c.caseNumber ? ` (#${c.caseNumber})` : ""}
-                  </option>
-                ))}
-              </select>
+              <div ref={caseDropdownRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => { setCaseDropdownOpen((o) => !o); setCaseSearch(""); }}
+                  className="flex h-9 w-full items-center rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring text-left"
+                >
+                  <span className="truncate flex-1">
+                    {caseId
+                      ? (() => { const c = cases.find((c) => c.id === caseId); return c ? `${c.title}${c.caseNumber ? ` (#${c.caseNumber})` : ""}` : "Select..."; })()
+                      : `— ${eventType === "DISCOVERY" ? "Select a case" : "No case"} —`}
+                  </span>
+                  <svg className="w-3.5 h-3.5 shrink-0 opacity-50 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                </button>
+                {caseDropdownOpen && (
+                  <div className="absolute left-0 top-full mt-1 z-50 w-full rounded-lg border border-slate-200 bg-white shadow-xl overflow-hidden">
+                    <div className="p-2 border-b border-slate-100">
+                      <input
+                        autoFocus
+                        value={caseSearch}
+                        onChange={(e) => setCaseSearch(e.target.value)}
+                        placeholder="Search cases..."
+                        className="w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-sm outline-none focus:border-teal-300 focus:ring-1 focus:ring-teal-200"
+                      />
+                    </div>
+                    <div className="max-h-52 overflow-y-auto">
+                      {eventType !== "DISCOVERY" && (
+                        <button
+                          type="button"
+                          onClick={() => { setCaseId(""); setCaseSearch(""); setCaseDropdownOpen(false); setSelectedCountyId(""); setSelectedCourtId(""); setSelectedDeptId(""); }}
+                          className={`w-full px-3 py-2 text-left text-sm hover:bg-slate-50 ${!caseId ? "font-semibold text-teal-700" : "text-slate-700"}`}
+                        >
+                          — No case —
+                        </button>
+                      )}
+                      {cases
+                        .filter((c) => c.status !== "ARCHIVED" && c.status !== "CLOSED")
+                        .filter((c) => {
+                          const q = caseSearch.toLowerCase();
+                          return c.title.toLowerCase().includes(q) || (c.caseNumber ?? "").toLowerCase().includes(q);
+                        })
+                        .map((c) => (
+                          <button
+                            type="button"
+                            key={c.id}
+                            onClick={() => { setCaseId(c.id); setCaseSearch(""); setCaseDropdownOpen(false); setSelectedCountyId(""); setSelectedCourtId(""); setSelectedDeptId(""); }}
+                            className={`w-full px-3 py-2 text-left text-sm hover:bg-slate-50 ${caseId === c.id ? "font-semibold text-teal-700" : "text-slate-700"}`}
+                          >
+                            {c.title}{c.caseNumber ? ` (#${c.caseNumber})` : ""}
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
