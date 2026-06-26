@@ -34,7 +34,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
     },
     include: {
       parties: true,
-      events: { orderBy: { startTime: "asc" } },
+      events: { where: { status: { notIn: ["CANCELLED", "COMPLETED"] } }, orderBy: { startTime: "asc" } },
       staff: STAFF_INCLUDE,
       countyRef: LOCATION_INCLUDE,
       courtRef:  LOCATION_INCLUDE,
