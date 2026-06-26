@@ -31,6 +31,41 @@ function uidFromDescription(description: string | null | undefined): string | nu
   return description?.match(/\[GCal-UID:(.+?)\]/)?.[1] ?? null;
 }
 
+function normalizeSignatureValue(value: string | null | undefined): string {
+  return (value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function eventSignature(input: {
+  title: string;
+  startTime: string | Date;
+  endTime: string | Date;
+  eventType: string;
+  caseId: string | null;
+}): string {
+  const startTime = input.startTime instanceof Date ? input.startTime.toISOString() : new Date(input.startTime).toISOString();
+  const endTime = input.endTime instanceof Date ? input.endTime.toISOString() : new Date(input.endTime).toISOString();
+  return [
+    normalizeSignatureValue(input.title),
+    startTime,
+    endTime,
+    input.eventType,
+    input.caseId ?? "",
+  ].join("|");
+}
+
+function taskSignature(input: {
+  title: string;
+  dueDate: string | Date | null;
+  caseId: string | null;
+}): string {
+  const dueDate = input.dueDate ? (input.dueDate instanceof Date ? input.dueDate.toISOString() : new Date(input.dueDate).toISOString()) : "";
+  return [
+    normalizeSignatureValue(input.title),
+    dueDate,
+    input.caseId ?? "",
+  ].join("|");
+}
+
 function shouldImportAsTask(ev: ImportEvent): boolean {
   if (ev.importAs) return ev.importAs === "task";
   const title = ev.title.trim();
@@ -84,18 +119,24 @@ export async function POST(request: NextRequest) {
   let createdCount = 0;
 
   const existingEvents = await prisma.event.findMany({
-    where: { workspaceId: workspace.id, description: { contains: "[GCal-UID:" } },
-    select: { description: true },
+    where: { workspaceId: workspace.id, status: { not: "CANCELLED" } },
+    select: { description: true, title: true, startTime: true, endTime: true, eventType: true, caseId: true },
   });
   const existingTasks = await prisma.task.findMany({
-    where: { workspaceId: workspace.id, description: { contains: "[GCal-UID:" } },
-    select: { description: true },
+    where: { workspaceId: workspace.id },
+    select: { description: true, title: true, dueDate: true, caseId: true },
   });
   const existingUids = new Set<string>();
   for (const row of [...existingEvents, ...existingTasks]) {
     const uid = uidFromDescription(row.description);
     if (uid) existingUids.add(uid);
   }
+  const existingEventSignatures = new Set(
+    existingEvents.map((event) => eventSignature(event)),
+  );
+  const existingTaskSignatures = new Set(
+    existingTasks.map((task) => taskSignature(task)),
+  );
 
   for (const ev of events) {
     try {
@@ -115,6 +156,12 @@ export async function POST(request: NextRequest) {
       }
 
       if (shouldImportAsTask(ev)) {
+        const signature = taskSignature({ title: ev.title, dueDate: ev.startTime, caseId });
+        if (existingTaskSignatures.has(signature)) {
+          skippedDuplicates++;
+          continue;
+        }
+
         const assigneeIds = await caseStaffMemberIds(workspace.id, caseId);
         await prisma.task.create({
           data: {
@@ -131,8 +178,21 @@ export async function POST(request: NextRequest) {
           },
         });
         createdTaskCount++;
+        existingTaskSignatures.add(signature);
       } else {
         const safeType = VALID_EVENT_TYPES.has(ev.eventType) ? ev.eventType : "OTHER";
+        const signature = eventSignature({
+          title: ev.title,
+          startTime: ev.startTime,
+          endTime: ev.endTime,
+          eventType: safeType,
+          caseId,
+        });
+        if (existingEventSignatures.has(signature)) {
+          skippedDuplicates++;
+          continue;
+        }
+
         const linkedCase = caseId
           ? await prisma.case.findUnique({
               where: { id: caseId },
@@ -176,6 +236,7 @@ export async function POST(request: NextRequest) {
           });
         }
         createdEventCount++;
+        existingEventSignatures.add(signature);
       }
       if (uid) existingUids.add(uid);
       createdCount++;
