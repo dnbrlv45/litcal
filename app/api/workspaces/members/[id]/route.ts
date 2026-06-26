@@ -19,7 +19,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   }
 
   const { id } = await params;
-  const body = await request.json() as { jobTitle?: string | null };
+  const body = await request.json() as { jobTitle?: string | null; role?: string };
 
   const target = await prisma.workspaceMember.findFirst({ where: { id, workspaceId: workspace.id } });
   if (!target) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -28,9 +28,24 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     ? (body.jobTitle as never ?? null)
     : null;
 
+  const data: Record<string, unknown> = { jobTitle };
+
+  if (body.role !== undefined) {
+    if (membership.role !== "OWNER") {
+      return NextResponse.json({ error: "Only the owner can change roles" }, { status: 403 });
+    }
+    if (target.role === "OWNER") {
+      return NextResponse.json({ error: "Cannot change the owner's role" }, { status: 422 });
+    }
+    const validRoles = ["ADMIN", "MEMBER"];
+    if (validRoles.includes(body.role)) {
+      data.role = body.role;
+    }
+  }
+
   const updated = await prisma.workspaceMember.update({
     where: { id },
-    data: { jobTitle },
+    data,
     include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
   });
 

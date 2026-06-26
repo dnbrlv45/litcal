@@ -146,6 +146,23 @@ export default function TeamClient({ initialWorkspace, initialMembers, initialIn
     }
   }
 
+  async function updateRole(memberId: string, role: Role) {
+    setSavingTitleId(memberId);
+    try {
+      const res = await fetch(`/api/workspaces/members/${memberId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
+      setMembers((current) => current.map((m) => m.id === memberId ? { ...m, role } : m));
+    } catch (err) {
+      flash(err instanceof Error ? err.message : "Failed to update role.", true);
+    } finally {
+      setSavingTitleId(null);
+    }
+  }
+
   async function removeMember(memberId: string) {
     setRemovingId(memberId);
     try {
@@ -283,10 +300,22 @@ export default function TeamClient({ initialWorkspace, initialMembers, initialIn
                     <option key={value ?? ""} value={value ?? ""}>{label}</option>
                   ))}
                 </select>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700 shrink-0">
-                  <ShieldCheck className="size-3.5" />
-                  {member.role.toLowerCase()}
-                </span>
+                {currentRole === "OWNER" && member.role !== "OWNER" ? (
+                  <select
+                    value={member.role}
+                    onChange={(e) => updateRole(member.id, e.target.value as Role)}
+                    disabled={savingTitleId === member.id}
+                    className="h-8 rounded-md border border-input bg-background px-2 py-0 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 w-24"
+                  >
+                    <option value="MEMBER">Member</option>
+                    <option value="ADMIN">Admin</option>
+                  </select>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700 shrink-0">
+                    <ShieldCheck className="size-3.5" />
+                    {member.role.toLowerCase()}
+                  </span>
+                )}
                 {member.role !== "OWNER" && member.user.id !== currentUserId && (
                   <button
                     onClick={() => removeMember(member.id)}
