@@ -219,9 +219,11 @@ export default function MonthView({ date, today, events, onCellClick, onSelectDa
       {popover && (() => {
         const popoverEvents = eventsForDay(popover.day);
         const r = popover.rect;
-        // Position below the button, clamped so it doesn't overflow the right edge
         const left = Math.min(r.left, window.innerWidth - 280);
-        const top = r.bottom + 6;
+        const spaceBelow = window.innerHeight - r.bottom;
+        const popoverHeight = Math.min(popoverEvents.length * 36 + 44, 300);
+        const openAbove = spaceBelow < popoverHeight + 10;
+        const top = openAbove ? r.top - popoverHeight - 6 : r.bottom + 6;
         return (
           <div
             ref={popoverRef}
