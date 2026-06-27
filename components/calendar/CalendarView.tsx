@@ -179,7 +179,22 @@ export default function CalendarView() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  const MAX_CACHE_SIZE = 5;
   const eventCacheRef = useRef<Map<string, CalEvent[]>>(new Map());
+  const cacheOrderRef = useRef<string[]>([]);
+
+  function cacheSet(key: string, value: CalEvent[]) {
+    const cache = eventCacheRef.current;
+    const order = cacheOrderRef.current;
+    if (cache.has(key)) {
+      order.splice(order.indexOf(key), 1);
+    }
+    cache.set(key, value);
+    order.push(key);
+    while (order.length > MAX_CACHE_SIZE) {
+      cache.delete(order.shift()!);
+    }
+  }
 
   function parseEventList(rawEvents: CalEvent[]): CalEvent[] {
     return rawEvents.map((e) => ({
@@ -218,7 +233,7 @@ export default function CalendarView() {
       const data = await res.json();
       setGoogleConnected(data.connected ?? false);
       const parsed = parseEventList(data.events as CalEvent[]);
-      eventCacheRef.current.set(cacheKey, parsed);
+      cacheSet(cacheKey, parsed);
       return parsed;
     } catch { return null; }
   }
