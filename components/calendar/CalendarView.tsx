@@ -179,8 +179,43 @@ export default function CalendarView() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  const eventCacheRef = useRef<Map<string, CalEvent[]>>(new Map());
+
+  function parseEventList(rawEvents: CalEvent[]): CalEvent[] {
+    return rawEvents.map((e) => ({
+      ...e,
+      start: e.allDay ? parseLocalDate(e.start as unknown as string) : new Date(e.start),
+      end: e.allDay ? parseLocalDate(e.end as unknown as string) : new Date(e.end),
+      eventType: e.eventType ?? "OTHER",
+      caseId: e.caseId ?? undefined,
+      caseTitle: e.caseTitle ?? undefined,
+      caseStatus: e.caseStatus ?? undefined,
+      department: e.department ?? undefined,
+      assignedAttorneyId: e.assignedAttorneyId ?? undefined,
+      assignedAttorneyName: e.assignedAttorneyName ?? undefined,
+      hasConflict: e.hasConflict ?? false,
+      caseCounty: e.caseCounty ?? null,
+      caseCourt:  e.caseCourt  ?? null,
+      inPerson: e.inPerson ?? false,
+      appearanceType: e.appearanceType ?? null,
+      remoteLink: e.remoteLink ?? null,
+      phoneNumber: e.phoneNumber ?? null,
+      bridge: e.bridge ?? null,
+      remotePassword: e.remotePassword ?? null,
+      requestRequired: e.requestRequired ?? null,
+      requestContactEmail: e.requestContactEmail ?? null,
+      requestNotes: e.requestNotes ?? null,
+    }));
+  }
+
   const fetchEvents = useCallback(async () => {
     const { start, end } = getDateRange(view, date);
+    const cacheKey = `${start.toISOString()}|${end.toISOString()}`;
+
+    // Show cached data instantly while fetching fresh data
+    const cached = eventCacheRef.current.get(cacheKey);
+    if (cached) setEvents(cached);
+
     try {
       const res = await fetch(
         `/api/calendar/events?start=${start.toISOString()}&end=${end.toISOString()}`
@@ -188,32 +223,9 @@ export default function CalendarView() {
       if (!res.ok) return;
       const data = await res.json();
       setGoogleConnected(data.connected ?? false);
-      setEvents(
-        (data.events as CalEvent[]).map((e) => ({
-          ...e,
-          start: e.allDay ? parseLocalDate(e.start as unknown as string) : new Date(e.start),
-          end: e.allDay ? parseLocalDate(e.end as unknown as string) : new Date(e.end),
-          eventType: e.eventType ?? "OTHER",
-          caseId: e.caseId ?? undefined,
-          caseTitle: e.caseTitle ?? undefined,
-          caseStatus: e.caseStatus ?? undefined,
-          department: e.department ?? undefined,
-          assignedAttorneyId: e.assignedAttorneyId ?? undefined,
-          assignedAttorneyName: e.assignedAttorneyName ?? undefined,
-          hasConflict: e.hasConflict ?? false,
-          caseCounty: e.caseCounty ?? null,
-          caseCourt:  e.caseCourt  ?? null,
-          inPerson: e.inPerson ?? false,
-          appearanceType: e.appearanceType ?? null,
-          remoteLink: e.remoteLink ?? null,
-          phoneNumber: e.phoneNumber ?? null,
-          bridge: e.bridge ?? null,
-          remotePassword: e.remotePassword ?? null,
-          requestRequired: e.requestRequired ?? null,
-          requestContactEmail: e.requestContactEmail ?? null,
-          requestNotes: e.requestNotes ?? null,
-        }))
-      );
+      const parsed = parseEventList(data.events as CalEvent[]);
+      eventCacheRef.current.set(cacheKey, parsed);
+      setEvents(parsed);
     } catch { /* silently fail */ }
   }, [view, date]);
 
