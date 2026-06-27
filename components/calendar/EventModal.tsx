@@ -410,7 +410,7 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-md sm:w-[28rem] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="!max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>New Event</DialogTitle>
         </DialogHeader>
