@@ -208,25 +208,63 @@ export default function CalendarView() {
     }));
   }
 
-  const fetchEvents = useCallback(async () => {
-    const { start, end } = getDateRange(view, date);
+  async function fetchRange(start: Date, end: Date): Promise<CalEvent[] | null> {
     const cacheKey = `${start.toISOString()}|${end.toISOString()}`;
-
-    // Show cached data instantly while fetching fresh data
-    const cached = eventCacheRef.current.get(cacheKey);
-    if (cached) setEvents(cached);
-
     try {
       const res = await fetch(
         `/api/calendar/events?start=${start.toISOString()}&end=${end.toISOString()}`
       );
-      if (!res.ok) return;
+      if (!res.ok) return null;
       const data = await res.json();
       setGoogleConnected(data.connected ?? false);
       const parsed = parseEventList(data.events as CalEvent[]);
       eventCacheRef.current.set(cacheKey, parsed);
-      setEvents(parsed);
-    } catch { /* silently fail */ }
+      return parsed;
+    } catch { return null; }
+  }
+
+  function getAdjacentRanges(v: CalView, d: Date): { prev: { start: Date; end: Date }; next: { start: Date; end: Date } } {
+    const prevDate = new Date(d);
+    const nextDate = new Date(d);
+    if (v === "month") {
+      prevDate.setMonth(d.getMonth() - 1);
+      nextDate.setMonth(d.getMonth() + 1);
+    } else if (v === "week" || v === "team") {
+      prevDate.setDate(d.getDate() - 7);
+      nextDate.setDate(d.getDate() + 7);
+    } else {
+      prevDate.setDate(d.getDate() - 1);
+      nextDate.setDate(d.getDate() + 1);
+    }
+    return {
+      prev: getDateRange(v, prevDate),
+      next: getDateRange(v, nextDate),
+    };
+  }
+
+  function prefetchAdjacent(v: CalView, d: Date) {
+    const { prev, next } = getAdjacentRanges(v, d);
+    const prevKey = `${prev.start.toISOString()}|${prev.end.toISOString()}`;
+    const nextKey = `${next.start.toISOString()}|${next.end.toISOString()}`;
+    if (!eventCacheRef.current.has(prevKey)) void fetchRange(prev.start, prev.end);
+    if (!eventCacheRef.current.has(nextKey)) void fetchRange(next.start, next.end);
+  }
+
+  const fetchEvents = useCallback(async () => {
+    const { start, end } = getDateRange(view, date);
+    const cacheKey = `${start.toISOString()}|${end.toISOString()}`;
+
+    const cached = eventCacheRef.current.get(cacheKey);
+    if (cached) {
+      setEvents(cached);
+      prefetchAdjacent(view, date);
+      return;
+    }
+
+    const result = await fetchRange(start, end);
+    if (result) setEvents(result);
+    prefetchAdjacent(view, date);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, date]);
 
   useEffect(() => {
