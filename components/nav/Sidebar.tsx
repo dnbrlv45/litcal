@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -8,47 +8,31 @@ import {
   CalendarDays,
   Briefcase,
   CheckSquare,
-  FileText,
   FileUp,
-  Users,
   BarChart2,
   Settings,
-  Building2,
-  Plus,
   LogOut,
   PanelLeftClose,
   PanelLeftOpen,
   ShieldAlert,
-  Scale,
   Inbox,
   Sparkles,
 } from "lucide-react";
 import InboxNavItem from "./InboxNavItem";
 import DeadlinesNavItem from "./DeadlinesNavItem";
 import { useAskLitCal } from "@/components/ask-litcal/AskLitCalContext";
-import { EVENT_TYPE_COLORS, EventType } from "@/lib/google-calendar";
 
-const NAV_ITEMS = [
+const PRIMARY_NAV_ITEMS = [
   { label: "Calendar",  href: "/",            icon: CalendarDays },
   { label: "Cases",     href: "/cases",        icon: Briefcase },
   { label: "Tasks",     href: "/tasks",        icon: CheckSquare },
   { label: "AI Inbox",  href: "/ai-inbox",     icon: Inbox },
-  { label: "Imports",   href: "/imports/cases",icon: FileUp },
-  { label: "Documents", href: "/documents",    icon: FileText },
-  { label: "Contacts",  href: "/contacts",     icon: Users },
-  { label: "Reports",   href: "/reports",      icon: BarChart2 },
-  { label: "Team",      href: "/settings/team",icon: Building2 },
-  { label: "Settings",  href: "/settings",     icon: Settings },
 ];
 
-const MY_CALENDARS: { label: string; type: EventType }[] = [
-  { label: "My Events",   type: "OTHER" },
-  { label: "Hearings",    type: "HEARING" },
-  { label: "Depositions", type: "DEPOSITION" },
-  { label: "Mediations",  type: "CONFERENCE" },
-  { label: "Trials",      type: "TRIAL" },
-  { label: "Deadlines",   type: "DEADLINE" },
-  { label: "Reminders",   type: "REMINDER" },
+const WORKSPACE_NAV_ITEMS = [
+  { label: "Reports",   href: "/reports",      icon: BarChart2 },
+  { label: "Imports",   href: "/imports/cases",icon: FileUp },
+  { label: "Settings",  href: "/settings",     icon: Settings },
 ];
 
 export default function Sidebar({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
@@ -72,6 +56,9 @@ export default function Sidebar({ isSuperAdmin = false }: { isSuperAdmin?: boole
 
   function isNavItemActive(href: string) {
     if (href === "/") return pathname === "/";
+    if (href.startsWith("/imports")) {
+      return pathname === href || pathname.startsWith("/imports/");
+    }
     if (href === "/settings") {
       return pathname === "/settings" || pathname.startsWith("/settings/");
     }
@@ -79,11 +66,11 @@ export default function Sidebar({ isSuperAdmin = false }: { isSuperAdmin?: boole
   }
 
   return (
-    <aside className={`hidden md:flex shrink-0 flex-col bg-sidebar text-sidebar-foreground h-full border-r border-sidebar-border transition-[width] duration-200 ${
-      collapsed ? "w-[76px]" : "w-[256px]"
+    <aside className={`hidden md:flex h-full shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200 ${
+      collapsed ? "w-[76px]" : "w-[240px]"
     }`}>
       {/* Logo */}
-      <div className={`flex items-center gap-3 py-5 shrink-0 ${collapsed ? "justify-center px-3" : "px-5"}`}>
+      <div className={`flex shrink-0 items-center gap-3 py-5 ${collapsed ? "justify-center px-3" : "px-5"}`}>
         <Image src="/litcal-logo.svg" alt="LitCal" width={36} height={36} className="size-9 shrink-0 rounded-lg shadow-sm ring-1 ring-black/5" priority />
         {!collapsed && (
           <div className="min-w-0 leading-tight">
@@ -93,7 +80,19 @@ export default function Sidebar({ isSuperAdmin = false }: { isSuperAdmin?: boole
         )}
       </div>
 
-      <div className={`shrink-0 ${collapsed ? "px-3 pb-3" : "px-4 pb-3"}`}>
+      <div className={`shrink-0 ${collapsed ? "px-3 pb-2" : "px-4 pb-3"}`}>
+        {!collapsed && (
+          <button
+            type="button"
+            onClick={() => openAskLitCal()}
+            className="group mb-3 flex h-10 w-full items-center gap-3 rounded-lg bg-slate-950 px-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-800"
+          >
+            <span className="grid size-7 place-items-center rounded-md bg-white/10 text-teal-100">
+              <Sparkles className="size-4 shrink-0" />
+            </span>
+            <span className="flex-1 text-left">Ask LitCal</span>
+          </button>
+        )}
         <button
           type="button"
           onClick={toggleCollapsed}
@@ -108,82 +107,45 @@ export default function Sidebar({ isSuperAdmin = false }: { isSuperAdmin?: boole
         </button>
       </div>
 
-      {!collapsed && (
-        <div className="px-4 pb-4 shrink-0">
-          <Link
-            href="/settings/team"
-            className="flex w-full items-center gap-2 rounded-lg border border-sidebar-border bg-white/70 px-3 py-2.5 text-sm text-slate-700 shadow-sm transition-colors hover:bg-white"
-          >
-            <Building2 className="size-4 text-slate-500" />
-            <span className="truncate">LitCal Team</span>
-          </Link>
-        </div>
-      )}
-
       {/* Nav */}
-      <nav className={`flex flex-col gap-1 flex-1 min-h-0 ${collapsed ? "overflow-visible px-3" : "overflow-y-auto px-4"}`}>
-        {NAV_ITEMS.map(({ label, href, icon: Icon }) => {
-          const isActive = isNavItemActive(href);
-          return (
-            <>
-              <Link
+      <nav className={`flex min-h-0 flex-1 flex-col gap-1 ${collapsed ? "overflow-visible px-3" : "overflow-y-auto px-4"}`}>
+        {PRIMARY_NAV_ITEMS.map(({ label, href, icon: Icon }) => (
+          <NavLink
+            key={href}
+            href={href}
+            label={label}
+            icon={Icon}
+            active={isNavItemActive(href)}
+            collapsed={collapsed}
+          />
+        ))}
+        <InboxNavItem collapsed={collapsed} />
+        <DeadlinesNavItem collapsed={collapsed} />
+
+        {collapsed ? (
+          <button
+            onClick={() => openAskLitCal()}
+            aria-label="Ask LitCal"
+            className="group relative mt-3 flex items-center justify-center rounded-lg px-2 py-2.5 text-sm text-slate-600 transition-all hover:bg-white/65 hover:text-slate-950"
+          >
+            <span className="grid size-7 place-items-center rounded-md text-slate-500 transition-colors group-hover:bg-teal-50 group-hover:text-teal-700">
+              <Sparkles className="size-4 shrink-0" />
+            </span>
+            <CollapsedTooltip label="Ask LitCal" />
+          </button>
+        ) : (
+          <>
+            <SectionLabel>Workspace</SectionLabel>
+            {WORKSPACE_NAV_ITEMS.map(({ label, href, icon: Icon }) => (
+              <NavLink
                 key={href}
                 href={href}
-                aria-label={label}
-                className={`group relative flex items-center rounded-lg text-sm transition-all ${
-                  collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5"
-                } ${
-                  isActive
-                    ? "bg-white text-slate-950 shadow-sm ring-1 ring-sidebar-border"
-                    : "text-slate-600 hover:text-slate-950 hover:bg-white/65"
-                }`}
-              >
-                <span className={`grid size-7 place-items-center rounded-md transition-colors ${
-                  isActive ? "bg-teal-50 text-teal-700" : "text-slate-500 group-hover:bg-slate-100 group-hover:text-slate-800"
-                }`}>
-                  <Icon className="w-4 h-4 shrink-0" />
-                </span>
-                {!collapsed && <span className="flex-1 font-medium">{label}</span>}
-                {collapsed && <CollapsedTooltip label={label} />}
-              </Link>
-              {href === "/tasks" && <InboxNavItem key="inbox" collapsed={collapsed} />}
-              {href === "/tasks" && <DeadlinesNavItem key="deadlines" collapsed={collapsed} />}
-            </>
-          );
-        })}
-
-        {/* Ask LitCal */}
-        <button
-          onClick={() => openAskLitCal()}
-          className={`group relative flex items-center rounded-lg text-sm transition-all text-slate-600 hover:text-slate-950 hover:bg-white/65 ${
-            collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5"
-          }`}
-        >
-          <span className="grid size-7 place-items-center rounded-md text-slate-500 group-hover:bg-teal-50 group-hover:text-teal-700 transition-colors">
-            <Sparkles className="w-4 h-4 shrink-0" />
-          </span>
-          {!collapsed && <span className="flex-1 font-medium text-left">Ask LitCal</span>}
-          {collapsed && <CollapsedTooltip label="Ask LitCal" />}
-        </button>
-
-        {/* MY CALENDARS */}
-        {!collapsed && (
-          <>
-            <div className="mt-6 mb-1 px-3">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                My Calendars
-              </span>
-            </div>
-            {MY_CALENDARS.map(({ label, type }) => (
-              <div key={label} className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-slate-600 hover:text-slate-950 hover:bg-white/65 cursor-pointer transition-colors">
-                <span className={`w-4 h-4 rounded-[5px] shrink-0 ${EVENT_TYPE_COLORS[type].dot} shadow-sm`} />
-                {label}
-              </div>
+                label={label}
+                icon={Icon}
+                active={isNavItemActive(href)}
+                collapsed={collapsed}
+              />
             ))}
-            <div className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-slate-500 hover:text-slate-800 cursor-pointer transition-colors">
-              <Plus className="w-4 h-4 shrink-0" />
-              Add Calendar
-            </div>
           </>
         )}
       </nav>
@@ -204,7 +166,7 @@ export default function Sidebar({ isSuperAdmin = false }: { isSuperAdmin?: boole
               }`}
             >
               <ShieldAlert className="size-4 shrink-0" />
-              {!collapsed && <span className="font-medium">Court Coverage</span>}
+              {!collapsed && <span className="font-medium">Coverage</span>}
               {collapsed && <CollapsedTooltip label="Court Coverage" />}
             </Link>
             <Link
@@ -218,7 +180,7 @@ export default function Sidebar({ isSuperAdmin = false }: { isSuperAdmin?: boole
                   : "text-slate-600 hover:text-slate-950 hover:bg-white/65"
               }`}
             >
-              <Building2 className="size-4 shrink-0" />
+              <Settings className="size-4 shrink-0" />
               {!collapsed && <span className="font-medium">Court Rules</span>}
               {collapsed && <CollapsedTooltip label="Court Rules" />}
             </Link>
@@ -238,6 +200,48 @@ export default function Sidebar({ isSuperAdmin = false }: { isSuperAdmin?: boole
         </form>
       </div>
     </aside>
+  );
+}
+
+type NavLinkProps = {
+  href: string;
+  label: string;
+  icon: ComponentType<{ className?: string }>;
+  active: boolean;
+  collapsed: boolean;
+};
+
+function NavLink({ href, label, icon: Icon, active, collapsed }: NavLinkProps) {
+  return (
+    <Link
+      href={href}
+      aria-label={label}
+      className={`group relative flex items-center rounded-lg text-sm transition-all ${
+        collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5"
+      } ${
+        active
+          ? "bg-white text-slate-950 shadow-sm ring-1 ring-sidebar-border"
+          : "text-slate-600 hover:bg-white/65 hover:text-slate-950"
+      }`}
+    >
+      <span className={`grid size-7 place-items-center rounded-md transition-colors ${
+        active ? "bg-teal-50 text-teal-700" : "text-slate-500 group-hover:bg-slate-100 group-hover:text-slate-800"
+      }`}>
+        <Icon className="size-4 shrink-0" />
+      </span>
+      {!collapsed && <span className="flex-1 font-medium">{label}</span>}
+      {collapsed && <CollapsedTooltip label={label} />}
+    </Link>
+  );
+}
+
+function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <div className="mb-1 mt-5 px-3">
+      <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+        {children}
+      </span>
+    </div>
   );
 }
 
