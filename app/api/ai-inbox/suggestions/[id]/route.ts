@@ -91,12 +91,33 @@ export async function PATCH(
       // Find or create the case so the event can be linked to it
       let caseId: string | undefined;
       if (caseData.caseNumber || caseData.plaintiff || caseData.defendant) {
-        let matchingCase = await prisma.case.findFirst({
-          where: {
-            workspaceId: workspace.id,
-            ...(caseData.caseNumber ? { caseNumber: caseData.caseNumber } : {}),
-          },
-        });
+        // 1. Try exact case number match
+        let matchingCase = caseData.caseNumber
+          ? await prisma.case.findFirst({
+              where: { workspaceId: workspace.id, caseNumber: caseData.caseNumber },
+            })
+          : null;
+
+        // 2. Try plaintiff/defendant name match against case titles and parties
+        if (!matchingCase && (caseData.plaintiff || caseData.defendant)) {
+          const allCases = await prisma.case.findMany({
+            where: { workspaceId: workspace.id, status: { notIn: ["ARCHIVED", "CLOSED"] } },
+            include: { parties: { select: { name: true, role: true } } },
+          });
+          for (const c of allCases) {
+            const titleLower = c.title.toLowerCase();
+            const plaintiffMatch = caseData.plaintiff &&
+              (titleLower.includes(caseData.plaintiff.toLowerCase()) ||
+               c.parties.some((p) => p.name.toLowerCase().includes(caseData.plaintiff!.toLowerCase())));
+            const defendantMatch = caseData.defendant &&
+              (titleLower.includes(caseData.defendant.toLowerCase()) ||
+               c.parties.some((p) => p.name.toLowerCase().includes(caseData.defendant!.toLowerCase())));
+            if (plaintiffMatch || defendantMatch) {
+              matchingCase = c;
+              break;
+            }
+          }
+        }
 
         if (!matchingCase) {
           matchingCase = await prisma.case.create({
