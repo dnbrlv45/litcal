@@ -99,19 +99,36 @@ export async function PATCH(
           : null;
 
         // 2. Try plaintiff/defendant name match against case titles and parties
+        //    Handles: "Lugo Bernal", "Barsisa", "Martinez, Vidal", "VIDAL MARTINEZ"
         if (!matchingCase && (caseData.plaintiff || caseData.defendant)) {
           const allCases = await prisma.case.findMany({
             where: { workspaceId: workspace.id, status: { notIn: ["ARCHIVED", "CLOSED"] } },
             include: { parties: { select: { name: true, role: true } } },
           });
+
+          function extractNameParts(raw: string): string[] {
+            const cleaned = raw.replace(/,\s*/g, " ").trim().toLowerCase();
+            return cleaned.split(/\s+/).filter((p) => p.length >= 2);
+          }
+
+          function nameMatches(searchName: string, target: string): boolean {
+            const searchParts = extractNameParts(searchName);
+            const targetLower = target.toLowerCase();
+            // All name parts must appear in the target
+            if (searchParts.length > 0 && searchParts.every((p) => targetLower.includes(p))) return true;
+            // Or just the last name (first part for "Last, First" or last part for "First Last")
+            const lastName = searchName.includes(",")
+              ? searchName.split(",")[0].trim().toLowerCase()
+              : searchParts[searchParts.length - 1];
+            return !!lastName && lastName.length >= 3 && targetLower.includes(lastName);
+          }
+
           for (const c of allCases) {
-            const titleLower = c.title.toLowerCase();
+            const searchTargets = [c.title, ...c.parties.map((p) => p.name)];
             const plaintiffMatch = caseData.plaintiff &&
-              (titleLower.includes(caseData.plaintiff.toLowerCase()) ||
-               c.parties.some((p) => p.name.toLowerCase().includes(caseData.plaintiff!.toLowerCase())));
+              searchTargets.some((t) => nameMatches(caseData.plaintiff!, t));
             const defendantMatch = caseData.defendant &&
-              (titleLower.includes(caseData.defendant.toLowerCase()) ||
-               c.parties.some((p) => p.name.toLowerCase().includes(caseData.defendant!.toLowerCase())));
+              searchTargets.some((t) => nameMatches(caseData.defendant!, t));
             if (plaintiffMatch || defendantMatch) {
               matchingCase = c;
               break;
