@@ -169,26 +169,51 @@ export async function searchCases(query: string, workspaceId: string): Promise<{
     include: { parties: { select: { name: true } } },
   });
 
-  const q = query.toLowerCase().trim();
+  const q = query.toLowerCase().trim().replace(/['']/g, "'");
   const qParts = q.split(/\s+/).filter((p) => p.length >= 2);
 
-  return allCases.filter((c) => {
-    if (c.caseNumber?.toLowerCase().includes(q)) return true;
+  type ScoredCase = { id: string; title: string; caseNumber: string | null; score: number };
+  const scored: ScoredCase[] = [];
+
+  for (const c of allCases) {
+    let score = 0;
     const titleLower = c.title.toLowerCase();
-    if (titleLower.includes(q)) return true;
-    if (qParts.length > 0 && qParts.every((p) => titleLower.includes(p))) return true;
-    if (c.parties.some((p) => {
-      const pLower = p.name.toLowerCase();
-      return pLower.includes(q) || qParts.every((part) => pLower.includes(part));
-    })) return true;
-    // Last name match
-    const lastName = qParts[qParts.length - 1];
-    if (lastName && lastName.length >= 3) {
-      if (titleLower.includes(lastName)) return true;
-      if (c.parties.some((p) => p.name.toLowerCase().includes(lastName))) return true;
+    const allNames = [titleLower, ...c.parties.map((p) => p.name.toLowerCase())];
+
+    // Exact case number match
+    if (c.caseNumber && c.caseNumber.toLowerCase() === q) { score = 100; }
+    // Partial case number match
+    else if (c.caseNumber?.toLowerCase().includes(q)) { score = 90; }
+    // Full query in title
+    else if (titleLower.includes(q)) { score = 80; }
+    // Full query matches a party name
+    else if (c.parties.some((p) => p.name.toLowerCase().includes(q))) { score = 75; }
+    // All query parts found in title
+    else if (qParts.length > 1 && qParts.every((p) => titleLower.includes(p))) { score = 70; }
+    // All query parts found across party names
+    else if (qParts.length > 1 && qParts.every((p) => allNames.some((n) => n.includes(p)))) { score = 65; }
+    else {
+      // Single word: match against individual first/last names in parties and title
+      for (const name of allNames) {
+        const nameParts = name.split(/[\s,]+/).filter((p) => p.length >= 2);
+        for (const part of qParts.length > 0 ? qParts : [q]) {
+          if (part.length < 3) continue;
+          // Exact word match (first name or last name)
+          if (nameParts.some((np) => np === part)) { score = Math.max(score, 60); }
+          // Starts-with match (e.g. "soh" matches "sohyla")
+          else if (nameParts.some((np) => np.startsWith(part))) { score = Math.max(score, 50); }
+          // Contains match (e.g. "jose" in "jose maria")
+          else if (name.includes(part)) { score = Math.max(score, 40); }
+        }
+      }
     }
-    return false;
-  }).map((c) => ({ id: c.id, title: c.title, caseNumber: c.caseNumber }));
+
+    if (score > 0) scored.push({ id: c.id, title: c.title, caseNumber: c.caseNumber, score });
+  }
+
+  return scored
+    .sort((a, b) => b.score - a.score)
+    .map((c) => ({ id: c.id, title: c.title, caseNumber: c.caseNumber }));
 }
 
 export async function getWorkspaceDeadlines(workspaceId: string, range: "today" | "week" | "month"): Promise<string> {

@@ -58,23 +58,46 @@ export async function POST(request: NextRequest) {
   let finalActiveCaseId = activeCaseId;
   let finalAnswer = result.answer;
 
-  if (result.searchQuery) {
+  // Check if user is selecting from a previous multi-match list (e.g. "1", "2", or a case number)
+  const trimmedQ = question.trim();
+  const isNumberSelection = /^\d{1,2}$/.test(trimmedQ);
+  const lastAssistantMsg = history?.filter((m) => m.role === "assistant").slice(-1)[0];
+  const hadCaseMatches = lastAssistantMsg?.content.includes("Which one did you mean?");
+
+  if (hadCaseMatches && (isNumberSelection || trimmedQ.length < 30)) {
+    // Try to resolve the selection against workspace cases
+    const selectionMatches = await searchCases(trimmedQ, workspace.id);
+    if (selectionMatches.length === 1) {
+      finalActiveCaseId = selectionMatches[0].id;
+      const caseContext = await getFullCaseContext(selectionMatches[0].id, workspace.id);
+      const retryResult = await askLitCal({
+        question: `Tell me about this case.`,
+        contextText: caseContext,
+        history,
+      });
+      finalAnswer = retryResult.answer;
+      finalActiveCaseId = retryResult.activeCaseId ?? selectionMatches[0].id;
+    }
+  }
+
+  if (finalAnswer === result.answer && result.searchQuery) {
     const matches = await searchCases(result.searchQuery, workspace.id);
     if (matches.length === 1) {
-      // Single match — fetch case context and re-ask
       finalActiveCaseId = matches[0].id;
       const caseContext = await getFullCaseContext(matches[0].id, workspace.id);
       const retryResult = await askLitCal({ question, contextText: caseContext, history });
       finalAnswer = retryResult.answer;
       finalActiveCaseId = retryResult.activeCaseId ?? matches[0].id;
     } else if (matches.length > 1) {
-      caseMatches = matches.slice(0, 5);
-      finalAnswer = `I found ${matches.length} cases matching "${result.searchQuery}". Which one did you mean?\n\n` +
-        matches.slice(0, 5).map((m) => `- **${m.title}**${m.caseNumber ? ` (#${m.caseNumber})` : ""}`).join("\n");
+      caseMatches = matches.slice(0, 8);
+      const numbered = matches.slice(0, 8).map((m, i) =>
+        `${i + 1}. **${m.title}**${m.caseNumber ? ` (#${m.caseNumber})` : ""}`
+      ).join("\n");
+      finalAnswer = `I found ${matches.length} cases matching "${result.searchQuery}". Which one did you mean?\n\n${numbered}\n\nYou can type the number, case name, or case number.`;
     } else {
-      finalAnswer = `I couldn't find a case matching "${result.searchQuery}" in your workspace. Try using the full case name, case number, or a party name.`;
+      finalAnswer = `I couldn't find a case matching "${result.searchQuery}" in LitCal. Try the full case name, case number, plaintiff name, or defendant name.`;
     }
-  } else if (result.activeCaseId) {
+  } else if (finalAnswer === result.answer && result.activeCaseId) {
     finalActiveCaseId = result.activeCaseId;
   }
 
