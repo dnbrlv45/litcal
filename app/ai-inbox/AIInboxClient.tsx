@@ -178,6 +178,9 @@ function SuggestionCard({
     existingEventWarning?: string;
     matchedEventId?: string;
     matchedEventDetails?: { id: string; title: string; date: string; eventType: string; caseTitle: string | null; caseNumber: string | null };
+    matchedCaseId?: string;
+    matchedCaseTitle?: string;
+    matchedCaseNumber?: string;
   };
   const [noteText, setNoteText] = useState("");
 
@@ -262,8 +265,11 @@ function SuggestionCard({
             </span>
           </div>
           <div className="mt-3 grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
-            <SummaryField label="Case" value={caseTitle || data.case?.caseNumber} />
-            <SummaryField label="Case number" value={data.case?.caseNumber} />
+            <SummaryField label="Case" value={data.matchedCaseTitle ?? (caseTitle || data.case?.caseNumber)} />
+            <SummaryField label="Case number" value={data.matchedCaseNumber ?? data.case?.caseNumber} />
+            {data.matchedCaseId && (
+              <span className="col-span-2 text-xs text-teal-700 font-medium">✓ Matched to existing case</span>
+            )}
             <SummaryField label="Date" value={primaryDate} />
             <SummaryField label="Type" value={primaryDetail} />
             <SummaryField label="Court" value={data.case?.court ?? data.case?.county} />

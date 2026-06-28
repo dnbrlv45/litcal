@@ -90,7 +90,13 @@ export async function PATCH(
 
       // Find or create the case so the event can be linked to it
       let caseId: string | undefined;
-      if (caseData.caseNumber || caseData.plaintiff || caseData.defendant) {
+      // Use pre-matched case from ingestion if available
+      const preMatchedCaseId = (data as Record<string, unknown>).matchedCaseId as string | undefined;
+      if (preMatchedCaseId) {
+        const preMatched = await prisma.case.findFirst({ where: { id: preMatchedCaseId, workspaceId: workspace.id } });
+        if (preMatched) caseId = preMatched.id;
+      }
+      if (!caseId && (caseData.caseNumber || caseData.plaintiff || caseData.defendant)) {
         // 1. Try exact case number match
         let matchingCase = caseData.caseNumber
           ? await prisma.case.findFirst({

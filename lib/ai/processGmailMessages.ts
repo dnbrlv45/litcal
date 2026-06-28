@@ -254,6 +254,53 @@ export async function processGmailMessages(
           }
         }
 
+        // Try to match the suggestion to an existing case by case number or name
+        if (!extractedWithWarning.matchedCaseId) {
+          const caseNum = extracted.case?.caseNumber;
+          const casePlaintiff = extracted.case?.plaintiff;
+          const caseDefendant = extracted.case?.defendant;
+
+          if (caseNum) {
+            const byNumber = await prisma.case.findFirst({
+              where: { workspaceId: targetWorkspaceId, caseNumber: caseNum },
+              select: { id: true, title: true, caseNumber: true },
+            });
+            if (byNumber) {
+              extractedWithWarning.matchedCaseId = byNumber.id;
+              extractedWithWarning.matchedCaseTitle = byNumber.title;
+              extractedWithWarning.matchedCaseNumber = byNumber.caseNumber;
+            }
+          }
+
+          if (!extractedWithWarning.matchedCaseId && (casePlaintiff || caseDefendant)) {
+            function namePartsMatch(searchName: string, target: string): boolean {
+              const parts = searchName.replace(/,\s*/g, " ").trim().toLowerCase().split(/\s+/).filter((p) => p.length >= 2);
+              const tLower = target.toLowerCase();
+              if (parts.length > 0 && parts.every((p) => tLower.includes(p))) return true;
+              const lastName = searchName.includes(",")
+                ? searchName.split(",")[0].trim().toLowerCase()
+                : parts[parts.length - 1];
+              return !!lastName && lastName.length >= 3 && tLower.includes(lastName);
+            }
+
+            const allCases = await prisma.case.findMany({
+              where: { workspaceId: targetWorkspaceId, status: { notIn: ["ARCHIVED", "CLOSED"] } },
+              include: { parties: { select: { name: true } } },
+            });
+            for (const c of allCases) {
+              const targets = [c.title, ...c.parties.map((p) => p.name)];
+              const pMatch = casePlaintiff && targets.some((t) => namePartsMatch(casePlaintiff, t));
+              const dMatch = caseDefendant && targets.some((t) => namePartsMatch(caseDefendant, t));
+              if (pMatch || dMatch) {
+                extractedWithWarning.matchedCaseId = c.id;
+                extractedWithWarning.matchedCaseTitle = c.title;
+                extractedWithWarning.matchedCaseNumber = c.caseNumber;
+                break;
+              }
+            }
+          }
+        }
+
         const status = duplicateOfId ? "DUPLICATE" : "PENDING";
 
         // Use findFirst + create to avoid conflict — include dedupeKey to allow
