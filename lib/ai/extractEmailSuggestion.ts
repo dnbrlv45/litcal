@@ -62,6 +62,22 @@ const CALENDAR_PROMPT = `You are a California litigation assistant. Extract ALL 
 
 Look for: depositions, hearings, trials, CMC, MSC, IME, mediations, or any scheduled court date. There may be MULTIPLE events — extract every single one.
 
+IMPORTANT: The content may be a simple list of dates and names, like:
+  "8/10/26 – Frost"
+  "2/8/27 – Marquez"
+  "9/28/26 – Farr Colbert"
+This is a valid trial date list. Each line is a separate TRIAL event. Extract every single one.
+
+Date formats you may see:
+- "8/10/26" means 2026-08-10 (MM/DD/YY)
+- "2/8/27" means 2027-02-08 (MM/DD/YY)
+- "2026-08-10" (ISO format)
+- "August 10, 2026" (full format)
+
+For simple name-only entries (e.g. "Frost", "Marquez, Ashley"), use the name as the plaintiff. You may not have the defendant, case number, or court — that's OK, leave those null.
+
+Notes like "RESCHEDULED", "Subed out", "File NOS", or "Trial Call" should go in the event description field, not the title. If an entry says RESCHEDULED or OFF CALENDAR, still include it but note it in the description.
+
 If one or more scheduled events are found, return this JSON object:
 {
   "found": true,
@@ -72,20 +88,20 @@ If one or more scheduled events are found, return this JSON object:
       ${CASE_SCHEMA},
       "event": {
         "eventType": null,   // DEPOSITION, HEARING, TRIAL, CONFERENCE, MEDIATION, DEADLINE, OTHER
-        "title": null,
+        "title": null,       // e.g. "Frost Trial", "Marquez Trial"
         "date": null,        // YYYY-MM-DD
-        "startTime": null,   // HH:MM 24-hour (convert "10:00 a.m." → "10:00", "2:30 p.m." → "14:30")
+        "startTime": null,   // HH:MM 24-hour (convert "10:00 a.m." → "10:00", "2:30 p.m." → "14:30"). null if not specified.
         "endTime": null,
-        "description": null,
+        "description": null, // include any notes like "RESCHEDULED", "File NOS", "Trial Call – San Diego"
         "location": null
       },
       "missingFields": [],
-      "dedupeKey": ""        // caseNumber|eventType|date|startTime
+      "dedupeKey": ""        // caseNumber|eventType|date|startTime — use plaintiff name if no case number
     }
   ]
 }
 
-Return one entry per event. If the document lists 10 trials, return 10 entries. Each entry must have its own case and event data.
+Return one entry per event. If the document lists 23 trials, return 23 entries. Each entry must have its own case and event data.
 
 If NO scheduled events are found, return: {"found": false}
 
