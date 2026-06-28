@@ -203,40 +203,26 @@ export async function processGmailMessages(
             const dayStart = new Date(`${eventDate}T00:00:00`);
             const dayEnd   = new Date(`${eventDate}T23:59:59`);
 
-            // Build query: match by case number, or by case name if no number
+            // Use pre-matched case ID if available, otherwise try case number
+            const matchedCaseId = extractedWithWarning.matchedCaseId as string | undefined;
             const eventWhere: Record<string, unknown> = {
               workspaceId: targetWorkspaceId,
               startTime: { gte: dayStart, lte: dayEnd },
               status: { notIn: ["CANCELLED", "COMPLETED"] },
             };
-            if (caseNum) {
+            if (matchedCaseId) {
+              eventWhere.caseId = matchedCaseId;
+            } else if (caseNum) {
               eventWhere.caseRef = { caseNumber: caseNum };
             }
 
-            const matchingEvent = await prisma.event.findFirst({
-              where: eventWhere as never,
-              include: { caseRef: { select: { id: true, title: true, caseNumber: true } } },
-            });
-
-            // If no match by case number, try matching by plaintiff/defendant name in case title
-            let finalMatch = matchingEvent;
-            if (!finalMatch && !caseNum && (casePlaintiff || caseDefendant)) {
-              const allDayEvents = await prisma.event.findMany({
-                where: {
-                  workspaceId: targetWorkspaceId,
-                  startTime: { gte: dayStart, lte: dayEnd },
-                  status: { notIn: ["CANCELLED", "COMPLETED"] },
-                  caseId: { not: null },
-                } as never,
-                include: { caseRef: { select: { id: true, title: true, caseNumber: true } } },
-              });
-              finalMatch = allDayEvents.find((ev) => {
-                const title = ev.caseRef?.title?.toLowerCase() ?? "";
-                if (casePlaintiff && title.includes(casePlaintiff.toLowerCase())) return true;
-                if (caseDefendant && title.includes(caseDefendant.toLowerCase())) return true;
-                return false;
-              }) ?? null;
-            }
+            // Only match events that belong to the same case
+            const finalMatch = (matchedCaseId || caseNum)
+              ? await prisma.event.findFirst({
+                  where: eventWhere as never,
+                  include: { caseRef: { select: { id: true, title: true, caseNumber: true } } },
+                })
+              : null;
 
             if (finalMatch) {
               extractedWithWarning.existingEventWarning =
