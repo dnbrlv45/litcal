@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
       status: { not: "CANCELLED" },
       startTime: { gte: startDate, lte: endDate },
       caseRef: {
-        status: { in: ["ACTIVE", "PENDING"] },
+        status: { notIn: ["CLOSED", "ARCHIVED"] },
         ...(requestedAttorneyId
           ? { staff: { some: { userId: requestedAttorneyId, role: "ATTORNEY" } } }
           : {}),
