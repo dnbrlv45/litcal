@@ -38,6 +38,7 @@ model User {
   caseTimeline         CaseTimeline[]
   createdDiscovery     DiscoveryItem[] @relation("DiscoveryCreator")
   assignedDiscovery    DiscoveryItem[] @relation("DiscoveryAssignee")
+  askLitCalLogs        AskLitCalLog[]
 }
 
 model AuthSession {
@@ -71,6 +72,7 @@ model Workspace {
   notifications        Notification[]
   generatedDeadlines   GeneratedDeadline[]
   courtCoverageAlerts  CourtCoverageAlert[]
+  askLitCalLogs        AskLitCalLog[]
   courtRuleRequests    CourtRuleRequest[]
   caseTimeline         CaseTimeline[]
   discoveryItems       DiscoveryItem[]
@@ -894,6 +896,26 @@ model AISuggestion {
   @@index([workspaceId, classification])
   @@index([userAction])
   @@index([reviewedAt])
+}
+
+// ─── ASK LITCAL ───────────────────────────────────────────────────────────────
+
+model AskLitCalLog {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String
+  caseId      String?
+  question    String
+  answer      String
+  model       String?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([userId])
+  @@index([createdAt])
 }
 
 // ─── CASE TIMELINE ────────────────────────────────────────────────────────────

@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import Sidebar from "@/components/nav/Sidebar";
 import MobileNav from "@/components/nav/MobileNav";
+import { AskLitCalProvider } from "@/components/ask-litcal/AskLitCalContext";
+import AskLitCalPanel from "@/components/ask-litcal/AskLitCalPanel";
 import { getCurrentUser } from "@/lib/auth";
 import "./globals.css";
 
@@ -30,9 +32,12 @@ export default async function RootLayout({
       className={`${jakarta.variable} h-full antialiased`}
     >
       <body className="h-full flex bg-background text-foreground overflow-hidden">
-        <Sidebar isSuperAdmin={isSuperAdmin} />
-        <main className="flex-1 flex flex-col min-w-0 overflow-hidden pb-16 md:pb-0">{children}</main>
-        <MobileNav />
+        <AskLitCalProvider>
+          <Sidebar isSuperAdmin={isSuperAdmin} />
+          <main className="flex-1 flex flex-col min-w-0 overflow-hidden pb-16 md:pb-0">{children}</main>
+          <MobileNav />
+          <AskLitCalPanel />
+        </AskLitCalProvider>
       </body>
     </html>
   );

@@ -21,9 +21,11 @@ import {
   ShieldAlert,
   Scale,
   Inbox,
+  Sparkles,
 } from "lucide-react";
 import InboxNavItem from "./InboxNavItem";
 import DeadlinesNavItem from "./DeadlinesNavItem";
+import { useAskLitCal } from "@/components/ask-litcal/AskLitCalContext";
 import { EVENT_TYPE_COLORS, EventType } from "@/lib/google-calendar";
 
 const NAV_ITEMS = [
@@ -52,6 +54,7 @@ const MY_CALENDARS: { label: string; type: EventType }[] = [
 export default function Sidebar({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const { openPanel: openAskLitCal } = useAskLitCal();
 
   useEffect(() => {
     void Promise.resolve().then(() => {
@@ -148,6 +151,20 @@ export default function Sidebar({ isSuperAdmin = false }: { isSuperAdmin?: boole
             </>
           );
         })}
+
+        {/* Ask LitCal */}
+        <button
+          onClick={() => openAskLitCal()}
+          className={`group relative flex items-center rounded-lg text-sm transition-all text-slate-600 hover:text-slate-950 hover:bg-white/65 ${
+            collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5"
+          }`}
+        >
+          <span className="grid size-7 place-items-center rounded-md text-slate-500 group-hover:bg-teal-50 group-hover:text-teal-700 transition-colors">
+            <Sparkles className="w-4 h-4 shrink-0" />
+          </span>
+          {!collapsed && <span className="flex-1 font-medium text-left">Ask LitCal</span>}
+          {collapsed && <CollapsedTooltip label="Ask LitCal" />}
+        </button>
 
         {/* MY CALENDARS */}
         {!collapsed && (
