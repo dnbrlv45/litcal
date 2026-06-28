@@ -16,6 +16,8 @@ export async function GET() {
       duplicateOfId: true,
       correctedFields: true,
       finalApprovedJson: true,
+      classification: true,
+      confidence: true,
     },
   } as never) as {
     status: string;
@@ -23,6 +25,8 @@ export async function GET() {
     duplicateOfId: string | null;
     correctedFields: unknown;
     finalApprovedJson: unknown;
+    classification: string;
+    confidence: number | null;
   }[];
 
   const total = suggestions.length;
@@ -45,6 +49,34 @@ export async function GET() {
     .sort((a, b) => b.count - a.count || a.field.localeCompare(b.field))
     .slice(0, 10);
 
+  // Per-classification breakdown
+  const classificationBreakdown: Record<string, { total: number; approved: number; ignored: number; duplicates: number }> = {};
+  const confidenceSums: Record<string, { sum: number; count: number }> = {};
+
+  for (const s of suggestions) {
+    const cls = s.classification;
+    if (!classificationBreakdown[cls]) classificationBreakdown[cls] = { total: 0, approved: 0, ignored: 0, duplicates: 0 };
+    classificationBreakdown[cls].total++;
+    if (s.status === "APPROVED") classificationBreakdown[cls].approved++;
+    if (s.status === "IGNORED") classificationBreakdown[cls].ignored++;
+    if (s.status === "DUPLICATE") classificationBreakdown[cls].duplicates++;
+
+    if (s.confidence != null) {
+      if (!confidenceSums[cls]) confidenceSums[cls] = { sum: 0, count: 0 };
+      confidenceSums[cls].sum += s.confidence;
+      confidenceSums[cls].count++;
+    }
+  }
+
+  const avgConfidenceByClassification: Record<string, number> = {};
+  for (const [cls, { sum, count }] of Object.entries(confidenceSums)) {
+    avgConfidenceByClassification[cls] = count > 0 ? sum / count : 0;
+  }
+
+  const rescanCount = suggestions.filter((s) => s.userAction === "RESCANNED").length;
+  const updateCount = suggestions.filter((s) => s.userAction === "UPDATED_EXISTING_RECORD").length;
+  const cancelCount = suggestions.filter((s) => s.userAction === "CANCELLED_EXISTING_RECORD").length;
+
   return NextResponse.json({
     totalSuggestions: total,
     approvalRate: rate(approved, total),
@@ -56,7 +88,12 @@ export async function GET() {
       ignored,
       duplicates,
       editedBeforeApproval,
+      rescans: rescanCount,
+      updates: updateCount,
+      cancellations: cancelCount,
     },
+    classificationBreakdown,
+    avgConfidenceByClassification,
     mostCommonlyCorrectedFields,
   });
 }

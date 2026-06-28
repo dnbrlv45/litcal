@@ -58,7 +58,12 @@ interface AIInboxMetrics {
     ignored: number;
     duplicates: number;
     editedBeforeApproval: number;
+    rescans: number;
+    updates: number;
+    cancellations: number;
   };
+  classificationBreakdown: Record<string, { total: number; approved: number; ignored: number; duplicates: number }>;
+  avgConfidenceByClassification: Record<string, number>;
   mostCommonlyCorrectedFields: { field: string; count: number }[];
 }
 
@@ -145,7 +150,7 @@ function SuggestionCard({
   onBusyChange,
 }: {
   s: AISuggestion;
-  onAction: (id: string, action: string, extractedData?: Record<string, unknown>) => Promise<void>;
+  onAction: (id: string, action: string, extractedData?: Record<string, unknown>, extra?: { notes?: string; matchedEventId?: string }) => Promise<void>;
   onRescan: (messageId: string, suggestionId: string) => Promise<{ created: { classification: string; status: string }[]; error?: string } | null>;
   onBusyChange?: (id: string, busy: boolean) => void;
 }) {
@@ -171,7 +176,10 @@ function SuggestionCard({
     discoveryExtension?: Record<string, string | null>;
     cancellation?: Record<string, string | null>;
     existingEventWarning?: string;
+    matchedEventId?: string;
+    matchedEventDetails?: { id: string; title: string; date: string; eventType: string; caseTitle: string | null; caseNumber: string | null };
   };
+  const [noteText, setNoteText] = useState("");
 
   async function act(action: string) {
     setActing(true);
@@ -186,7 +194,10 @@ function SuggestionCard({
         return;
       }
     }
-    await onAction(s.id, action, parsed);
+    await onAction(s.id, action, parsed, {
+      notes: noteText || undefined,
+      matchedEventId: data.matchedEventId,
+    });
     setActing(false);
   }
 
@@ -262,11 +273,21 @@ function SuggestionCard({
           </div>
         </div>
 
-        {data.existingEventWarning && (
+        {data.matchedEventDetails ? (
+          <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50/70 p-3">
+            <p className="text-xs font-bold text-amber-800 mb-1.5">Possible Match Found</p>
+            <div className="grid gap-1 text-xs text-amber-900 sm:grid-cols-2">
+              <SummaryField label="Existing event" value={data.matchedEventDetails.title} />
+              <SummaryField label="Date" value={data.matchedEventDetails.date} />
+              <SummaryField label="Type" value={data.matchedEventDetails.eventType} />
+              <SummaryField label="Case" value={data.matchedEventDetails.caseTitle} />
+            </div>
+          </div>
+        ) : data.existingEventWarning ? (
           <p className="mt-2 text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-1.5">
             ⚠ {data.existingEventWarning}
           </p>
-        )}
+        ) : null}
 
         {Array.isArray(s.missingFields) && s.missingFields.length > 0 && (
           <p className="mt-2 text-xs text-slate-500">
@@ -309,9 +330,44 @@ function SuggestionCard({
         </div>
       )}
 
-      <div className="flex gap-2 border-t border-slate-100 p-3">
+      {/* Notes */}
+      {(s.status === "PENDING" || s.status === "DUPLICATE") && (
+        <div className="border-t border-slate-100 px-3 pt-2">
+          <textarea
+            value={noteText}
+            onChange={(e) => setNoteText(e.target.value)}
+            placeholder="Add a note (optional)..."
+            className="w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-xs outline-none focus:border-teal-300 focus:ring-1 focus:ring-teal-200 resize-none"
+            rows={1}
+          />
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-2 border-t border-slate-100 p-3">
         {(s.status === "PENDING" || s.status === "DUPLICATE") && (
           <>
+            {/* Update Existing — shown when a matching event was found */}
+            {data.matchedEventId && s.classification === "CALENDAR_EVENT" && (
+              <button
+                onClick={() => act("update_existing")}
+                disabled={acting}
+                className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {acting ? <Loader2 className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />}
+                Update Existing
+              </button>
+            )}
+            {/* Cancel Existing — shown for cancellation suggestions with a matched event */}
+            {data.matchedEventId && s.classification === "EVENT_CANCELLATION" && (
+              <button
+                onClick={() => act("cancel_existing")}
+                disabled={acting}
+                className="flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-50 transition-colors"
+              >
+                {acting ? <Loader2 className="size-3.5 animate-spin" /> : <CalendarX2 className="size-3.5" />}
+                Cancel Existing
+              </button>
+            )}
             {s.status === "DUPLICATE" ? (
               <button
                 onClick={() => act("create_anyway")}
@@ -421,6 +477,32 @@ function AdminMetricsPanel({ metrics }: { metrics: AIInboxMetrics | null }) {
           <MetricChip label="Edited" value={formatRate(metrics.editBeforeApprovalRate)} />
         </div>
       </div>
+      {/* Classification breakdown */}
+      {metrics.classificationBreakdown && Object.keys(metrics.classificationBreakdown).length > 0 && (
+        <div className="mt-3 border-t border-slate-200 pt-3">
+          <p className="text-xs font-semibold text-slate-700 mb-2">By Classification</p>
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+            {Object.entries(metrics.classificationBreakdown).map(([cls, data]) => (
+              <div key={cls} className="rounded-md bg-white px-2.5 py-1.5 ring-1 ring-slate-200">
+                <div className="text-[10px] font-bold text-slate-500 uppercase">{CLASSIFICATION_LABELS[cls] ?? cls}</div>
+                <div className="text-xs text-slate-700 mt-0.5">
+                  {data.total} total · {data.approved} approved
+                  {metrics.avgConfidenceByClassification?.[cls] != null && (
+                    <span className="text-slate-400"> · {Math.round(metrics.avgConfidenceByClassification[cls] * 100)}% conf</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {/* Action counts */}
+      <div className="mt-3 border-t border-slate-200 pt-3 flex flex-wrap gap-2">
+        <MetricChip label="Rescans" value={String(metrics.counts.rescans ?? 0)} />
+        <MetricChip label="Updates" value={String(metrics.counts.updates ?? 0)} />
+        <MetricChip label="Cancellations" value={String(metrics.counts.cancellations ?? 0)} />
+      </div>
+      {/* Corrected fields */}
       <div className="mt-3 border-t border-slate-200 pt-3">
         <p className="text-xs font-semibold text-slate-700">Most commonly corrected fields</p>
         {metrics.mostCommonlyCorrectedFields.length === 0 ? (
@@ -668,16 +750,22 @@ export default function AIInboxClient({ isSuperAdmin = false }: { isSuperAdmin?:
     return { created: json.created ?? [] };
   }
 
-  async function handleAction(id: string, action: string, extractedData?: Record<string, unknown>) {
+  async function handleAction(id: string, action: string, extractedData?: Record<string, unknown>, extra?: { notes?: string; matchedEventId?: string }) {
     setActionNotice(null);
     const res  = await fetch(`/api/ai-inbox/suggestions/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, extractedData }),
+      body: JSON.stringify({ action, extractedData, ...extra }),
     });
     const json = await res.json() as { error?: string };
     if (!res.ok) { alert(json.error ?? "Action failed"); return; }
-    setActionNotice(action === "ignore" ? "Suggestion ignored." : "Suggestion approved and applied.");
+    const notices: Record<string, string> = {
+      ignore: "Suggestion ignored.",
+      update_existing: "Existing event updated.",
+      cancel_existing: "Existing event cancelled.",
+      rescan: "Suggestion rescanned.",
+    };
+    setActionNotice(notices[action] ?? "Suggestion approved and applied.");
     await fetchSuggestions();
     if (isSuperAdmin) {
       fetch("/api/ai-inbox/metrics")

@@ -879,6 +879,9 @@ model AISuggestion {
   originalExtractedJson Json?
   finalApprovedJson     Json?
   correctedFields       Json?
+  correctionCount       Int      @default(0)
+  notes                 String?
+  matchedEventId        String?
   userAction            String?
   reviewedBy            String?
   reviewedAt            DateTime?

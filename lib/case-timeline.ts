@@ -18,6 +18,8 @@ export type TimelineType =
   | "event.rule_backfilled"
   | "event.remote_task_generated"
   | "event.google_synced"
+  | "event.ai_updated"
+  | "event.ai_cancelled"
   | "task.created"
   | "task.completed"
   | "discovery.created"
@@ -45,6 +47,8 @@ const TYPE_IMPORTANCE: Record<TimelineType, TimelineImportance> = {
   "task.created":                   "NORMAL",
   "event.edited":                   "LOW",
   "event.google_synced":            "LOW",
+  "event.ai_updated":               "HIGH",
+  "event.ai_cancelled":             "HIGH",
   "discovery.created":              "HIGH",
   "discovery.deadline_generated":   "HIGH",
   "discovery.extension_granted":    "HIGH",

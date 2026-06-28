@@ -6,7 +6,10 @@ import { Prisma } from "@prisma/client";
 import { google } from "googleapis";
 import { createDiscoveryItem, grantDiscoveryExtension } from "@/lib/discovery";
 import { getInboxRefreshToken, makeOAuth2Client } from "@/lib/ai/processGmailMessages";
+import { extractEmailSuggestion } from "@/lib/ai/extractEmailSuggestion";
 import { toTitleCaseName } from "@/lib/utils";
+import { getAccessToken, patchGoogleEvent, deleteGoogleEvent } from "@/lib/google-calendar";
+import { addTimelineEntry } from "@/lib/case-timeline";
 
 export async function PATCH(
   request: NextRequest,
@@ -28,8 +31,8 @@ export async function PATCH(
     originalExtractedJson?: Prisma.JsonValue | null;
   };
 
-  const body = await request.json() as { action: string; extractedData?: Record<string, unknown> };
-  const { action, extractedData } = body;
+  const body = await request.json() as { action: string; extractedData?: Record<string, unknown>; notes?: string; matchedEventId?: string };
+  const { action, extractedData, notes } = body;
   const reviewedAt = new Date();
 
 
@@ -41,6 +44,7 @@ export async function PATCH(
         userAction: "IGNORED",
         reviewedBy: user.id,
         reviewedAt,
+        notes: notes ?? null,
       } as Prisma.AISuggestionUncheckedUpdateInput,
     });
     return NextResponse.json({ suggestion: updated });
@@ -409,6 +413,8 @@ export async function PATCH(
         originalExtractedJson: originalJson as Prisma.InputJsonValue,
         finalApprovedJson:     finalJson,
         correctedFields:       correctedFields as unknown as Prisma.InputJsonValue,
+        correctionCount:       correctedFields.length,
+        notes:                 notes ?? null,
         userAction,
         reviewedBy:            user.id,
         reviewedAt,
@@ -434,6 +440,226 @@ export async function PATCH(
     }
 
     return NextResponse.json({ suggestion: updated });
+  }
+
+  // ── update_existing: update a matched LitCal event with new extracted data ──
+  if (action === "update_existing") {
+    const data = (extractedData ?? suggestion.extractedData) as Record<string, Record<string, string | null>>;
+    const eventId = body.matchedEventId ?? (suggestion.extractedData as Record<string, unknown>)?.matchedEventId as string | undefined;
+    if (!eventId) return NextResponse.json({ error: "No matched event ID" }, { status: 400 });
+
+    const existingEvent = await prisma.event.findFirst({
+      where: { id: eventId, workspaceId: workspace.id },
+      include: { googleSync: true, caseRef: { select: { id: true, title: true } } },
+    });
+    if (!existingEvent) return NextResponse.json({ error: "Matched event not found" }, { status: 404 });
+
+    const eventData = data.event ?? {};
+    const updateFields: Record<string, unknown> = {};
+    if (eventData.date) {
+      const newStart = eventData.startTime
+        ? new Date(`${eventData.date}T${eventData.startTime}`)
+        : new Date(`${eventData.date}T09:00:00`);
+      const newEnd = eventData.endTime
+        ? new Date(`${eventData.date}T${eventData.endTime}`)
+        : new Date(newStart.getTime() + 60 * 60 * 1000);
+      updateFields.startTime = newStart;
+      updateFields.endTime = newEnd;
+    }
+    if (eventData.eventType) updateFields.eventType = mapEventType(eventData.eventType);
+    if (eventData.title) updateFields.title = eventData.title;
+    if (eventData.location) updateFields.location = eventData.location;
+    if (eventData.description) updateFields.description = eventData.description;
+
+    const updatedEvent = await prisma.event.update({
+      where: { id: eventId },
+      data: updateFields,
+      include: { googleSync: true },
+    });
+
+    // Mirror to Google Calendar
+    if (updatedEvent.googleSync) {
+      const connection = await prisma.userCalendarConnection.findFirst({
+        where: { userId: user.id, provider: "GOOGLE", isActive: true },
+      });
+      if (connection) {
+        try {
+          const accessToken = await getAccessToken(connection.refreshToken);
+          const patchPayload: Record<string, unknown> = {};
+          if (updateFields.title) patchPayload.summary = updateFields.title;
+          if (updateFields.startTime) {
+            const tz = "America/Los_Angeles";
+            patchPayload.start = { dateTime: (updateFields.startTime as Date).toISOString(), timeZone: tz };
+            patchPayload.end = { dateTime: (updateFields.endTime as Date).toISOString(), timeZone: tz };
+          }
+          await patchGoogleEvent(accessToken, updatedEvent.googleSync.googleCalendarId, updatedEvent.googleSync.googleEventId, patchPayload);
+        } catch { /* best-effort */ }
+      }
+    }
+
+    if (existingEvent.caseRef) {
+      void addTimelineEntry({
+        caseId: existingEvent.caseRef.id,
+        workspaceId: workspace.id,
+        actorUserId: user.id,
+        type: "event.ai_updated",
+        title: `Event updated from AI Inbox: ${existingEvent.title}`,
+        metadata: { eventId, suggestionId: id },
+      });
+    }
+
+    const originalJson = suggestion.extractedData as Prisma.InputJsonValue;
+    const correctedFields = extractedData ? changedJsonFields(originalJson, data) : [];
+    await prisma.aISuggestion.update({
+      where: { id },
+      data: {
+        status: "APPROVED",
+        extractedData: data as Prisma.InputJsonValue,
+        originalExtractedJson: originalJson,
+        finalApprovedJson: data as Prisma.InputJsonValue,
+        correctedFields: correctedFields as unknown as Prisma.InputJsonValue,
+        correctionCount: correctedFields.length,
+        notes: notes ?? null,
+        userAction: "UPDATED_EXISTING_RECORD",
+        reviewedBy: user.id,
+        reviewedAt,
+        matchedEventId: eventId,
+      } as Prisma.AISuggestionUncheckedUpdateInput,
+    });
+
+    return NextResponse.json({ ok: true, action: "updated_existing", eventId });
+  }
+
+  // ── cancel_existing: cancel a matched LitCal event ──
+  if (action === "cancel_existing") {
+    const data = (extractedData ?? suggestion.extractedData) as Record<string, Record<string, string | null>>;
+    const eventId = body.matchedEventId ?? (suggestion.extractedData as Record<string, unknown>)?.matchedEventId as string | undefined;
+    if (!eventId) return NextResponse.json({ error: "No matched event ID" }, { status: 400 });
+
+    const existingEvent = await prisma.event.findFirst({
+      where: { id: eventId, workspaceId: workspace.id },
+      include: { googleSync: true, caseRef: { select: { id: true, title: true } } },
+    });
+    if (!existingEvent) return NextResponse.json({ error: "Matched event not found" }, { status: 404 });
+
+    await prisma.event.update({ where: { id: eventId }, data: { status: "CANCELLED" } });
+
+    // Delete from Google Calendar
+    const syncInfo = existingEvent.googleSync;
+    const userSync = !syncInfo
+      ? await prisma.$queryRaw<Array<{ googleEventId: string; googleCalendarId: string }>>`
+          SELECT "googleEventId", "googleCalendarId" FROM "UserGoogleCalendarSync"
+          WHERE "eventId" = ${eventId} AND "googleCalendarId" != 'ics-import' LIMIT 1
+        `.then((rows) => rows[0] ?? null)
+      : null;
+    const syncToDelete = userSync ?? syncInfo;
+    if (syncToDelete) {
+      const connection = await prisma.userCalendarConnection.findFirst({
+        where: { userId: user.id, provider: "GOOGLE", isActive: true },
+      });
+      if (connection) {
+        try {
+          const accessToken = await getAccessToken(connection.refreshToken);
+          await deleteGoogleEvent(accessToken, syncToDelete.googleCalendarId, syncToDelete.googleEventId);
+        } catch { /* best-effort */ }
+      }
+    }
+
+    // Create rescheduled event if new date provided
+    const cancellation = (data as Record<string, unknown>).cancellation as Record<string, string | null> | undefined;
+    if (cancellation?.newDate) {
+      const newStart = new Date(`${cancellation.newDate}T09:00:00`);
+      const newEnd = new Date(newStart.getTime() + 60 * 60 * 1000);
+      await prisma.event.create({
+        data: {
+          userId: user.id,
+          workspaceId: workspace.id,
+          caseId: existingEvent.caseId,
+          title: existingEvent.title,
+          startTime: newStart,
+          endTime: newEnd,
+          eventType: existingEvent.eventType,
+          status: "SCHEDULED",
+        },
+      });
+    }
+
+    if (existingEvent.caseRef) {
+      void addTimelineEntry({
+        caseId: existingEvent.caseRef.id,
+        workspaceId: workspace.id,
+        actorUserId: user.id,
+        type: "event.ai_cancelled",
+        title: `Event cancelled from AI Inbox: ${existingEvent.title}`,
+        metadata: { eventId, suggestionId: id, newDate: cancellation?.newDate ?? null },
+      });
+    }
+
+    await prisma.aISuggestion.update({
+      where: { id },
+      data: {
+        status: "APPROVED",
+        userAction: "CANCELLED_EXISTING_RECORD",
+        notes: notes ?? null,
+        reviewedBy: user.id,
+        reviewedAt,
+        matchedEventId: eventId,
+      } as Prisma.AISuggestionUncheckedUpdateInput,
+    });
+
+    return NextResponse.json({ ok: true, action: "cancelled_existing", eventId });
+  }
+
+  // ── rescan: re-extract from original email ──
+  if (action === "rescan") {
+    if (!suggestion.gmailMessageId) {
+      return NextResponse.json({ error: "No Gmail message to rescan" }, { status: 400 });
+    }
+
+    try {
+      const refreshToken = await getInboxRefreshToken();
+      if (!refreshToken) return NextResponse.json({ error: "Gmail not connected" }, { status: 400 });
+
+      const gmail = google.gmail({ version: "v1", auth: makeOAuth2Client(refreshToken) });
+      const msg = await gmail.users.messages.get({ userId: "me", id: suggestion.gmailMessageId, format: "full" });
+      const headers = msg.data.payload?.headers ?? [];
+      const subject = headers.find((h) => h.name?.toLowerCase() === "subject")?.value ?? "";
+      const sender = headers.find((h) => h.name?.toLowerCase() === "from")?.value ?? "";
+
+      // Extract body text
+      function getBodyText(payload: typeof msg.data.payload): string {
+        if (payload?.body?.data) {
+          return Buffer.from(payload.body.data, "base64url").toString("utf-8");
+        }
+        for (const part of payload?.parts ?? []) {
+          if (part.mimeType === "text/plain" && part.body?.data) {
+            return Buffer.from(part.body.data, "base64url").toString("utf-8");
+          }
+        }
+        return "";
+      }
+      const bodyText = getBodyText(msg.data.payload);
+
+      const results = await extractEmailSuggestion({ subject, sender, bodyText, attachmentTexts: [] });
+      const newExtraction = results.find((r) => r.classification !== "IGNORE") ?? results[0];
+
+      await prisma.aISuggestion.update({
+        where: { id },
+        data: {
+          extractedData: newExtraction as unknown as Prisma.InputJsonValue,
+          originalExtractedJson: suggestion.extractedData as Prisma.InputJsonValue,
+          classification: newExtraction.classification,
+          confidence: newExtraction.confidence,
+          userAction: "RESCANNED",
+          status: "PENDING",
+        } as Prisma.AISuggestionUncheckedUpdateInput,
+      });
+
+      return NextResponse.json({ ok: true, action: "rescanned" });
+    } catch (err) {
+      console.error("Rescan failed:", err);
+      return NextResponse.json({ error: "Rescan failed" }, { status: 500 });
+    }
   }
 
   return NextResponse.json({ error: "Invalid action" }, { status: 400 });

@@ -192,18 +192,64 @@ export async function processGmailMessages(
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const extractedWithWarning: any = { ...extracted };
-        if (extracted.classification === "CALENDAR_EVENT" && !duplicateOfId) {
-          const eventDate = extracted.event?.date;
-          const caseNum   = extracted.case?.caseNumber;
-          if (eventDate && caseNum) {
+        if ((extracted.classification === "CALENDAR_EVENT" || extracted.classification === "EVENT_CANCELLATION") && !duplicateOfId) {
+          const cancellationData = (extracted as unknown as Record<string, unknown>).cancellation as Record<string, string | null> | undefined;
+          const eventDate = extracted.event?.date ?? cancellationData?.originalDate ?? null;
+          const caseNum = extracted.case?.caseNumber;
+          const casePlaintiff = extracted.case?.plaintiff;
+          const caseDefendant = extracted.case?.defendant;
+
+          if (eventDate) {
             const dayStart = new Date(`${eventDate}T00:00:00`);
             const dayEnd   = new Date(`${eventDate}T23:59:59`);
+
+            // Build query: match by case number, or by case name if no number
+            const eventWhere: Record<string, unknown> = {
+              workspaceId: targetWorkspaceId,
+              startTime: { gte: dayStart, lte: dayEnd },
+              status: { notIn: ["CANCELLED", "COMPLETED"] },
+            };
+            if (caseNum) {
+              eventWhere.caseRef = { caseNumber: caseNum };
+            }
+
             const matchingEvent = await prisma.event.findFirst({
-              where: { workspaceId: targetWorkspaceId, startTime: { gte: dayStart, lte: dayEnd }, caseRef: { caseNumber: caseNum } },
+              where: eventWhere as never,
+              include: { caseRef: { select: { id: true, title: true, caseNumber: true } } },
             });
-            if (matchingEvent) {
+
+            // If no match by case number, try matching by plaintiff/defendant name in case title
+            let finalMatch = matchingEvent;
+            if (!finalMatch && !caseNum && (casePlaintiff || caseDefendant)) {
+              const allDayEvents = await prisma.event.findMany({
+                where: {
+                  workspaceId: targetWorkspaceId,
+                  startTime: { gte: dayStart, lte: dayEnd },
+                  status: { notIn: ["CANCELLED", "COMPLETED"] },
+                  caseId: { not: null },
+                } as never,
+                include: { caseRef: { select: { id: true, title: true, caseNumber: true } } },
+              });
+              finalMatch = allDayEvents.find((ev) => {
+                const title = ev.caseRef?.title?.toLowerCase() ?? "";
+                if (casePlaintiff && title.includes(casePlaintiff.toLowerCase())) return true;
+                if (caseDefendant && title.includes(caseDefendant.toLowerCase())) return true;
+                return false;
+              }) ?? null;
+            }
+
+            if (finalMatch) {
               extractedWithWarning.existingEventWarning =
-                `Matches existing event: "${matchingEvent.title}" on ${eventDate}`;
+                `Matches existing event: "${finalMatch.title}" on ${eventDate}`;
+              extractedWithWarning.matchedEventId = finalMatch.id;
+              extractedWithWarning.matchedEventDetails = {
+                id: finalMatch.id,
+                title: finalMatch.title,
+                date: eventDate,
+                eventType: finalMatch.eventType,
+                caseTitle: finalMatch.caseRef?.title ?? null,
+                caseNumber: finalMatch.caseRef?.caseNumber ?? null,
+              };
             }
           }
         }
@@ -241,6 +287,7 @@ export async function processGmailMessages(
               originalExtractedJson: extractedWithWarning as unknown as Prisma.InputJsonValue,
               missingFields:  extracted.missingFields as unknown as Prisma.InputJsonValue,
               duplicateOfId,
+              matchedEventId: extractedWithWarning.matchedEventId ?? null,
               status,
               userAction: duplicateOfId ? "DUPLICATE" : undefined,
             } as Prisma.AISuggestionUncheckedCreateInput,
