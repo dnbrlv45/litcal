@@ -245,13 +245,20 @@ export default function AskLitCalPanel() {
         startISO = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0)).toISOString();
         endISO = new Date(`${proposed.date}T23:59:59`).toISOString();
       } else {
-        startISO = new Date(`${proposed.date}T${proposed.startTime}`).toISOString();
-        // Default end to 1 hour after start if not specified
+        // Append :00 seconds for cross-browser ISO 8601 compatibility
+        const startStr = `${proposed.date}T${proposed.startTime}:00`;
+        startISO = new Date(startStr).toISOString();
         const endTimeStr = proposed.endTime ?? (() => {
           const [h, m] = (proposed.startTime ?? "09:00").split(":").map(Number);
           return `${String((h + 1) % 24).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
         })();
-        endISO = new Date(`${proposed.date}T${endTimeStr}`).toISOString();
+        const endStr = `${proposed.date}T${endTimeStr}:00`;
+        endISO = new Date(endStr).toISOString();
+      }
+      if (!startISO || !endISO || startISO === "Invalid Date" || endISO === "Invalid Date") {
+        setMessages((prev) => [...prev, { role: "assistant", content: `Failed to create event: could not parse date/time (${proposed.date} ${proposed.startTime}).` }]);
+        setCreatingEvent(false);
+        return;
       }
       const res = await fetch("/api/calendar/events", {
         method: "POST",
@@ -277,7 +284,8 @@ export default function AskLitCalPanel() {
       const data = await res.json() as { event?: { id: string }; error?: string };
 
       if (!res.ok) {
-        setMessages((prev) => [...prev, { role: "assistant", content: `Failed to create event: ${data.error ?? "Unknown error"}` }]);
+        const debug = `title="${proposed.title}" start="${startISO}" end="${endISO}"`;
+        setMessages((prev) => [...prev, { role: "assistant", content: `Failed to create event: ${data.error ?? "Unknown error"}\n\n(Debug: ${debug})` }]);
         return;
       }
 
