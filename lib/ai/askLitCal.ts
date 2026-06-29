@@ -128,6 +128,26 @@ If the system provides PENDING CASE fields, the user is continuing to fill in de
 
 After the prefix, write a brief response. If required fields are missing, ask for all of them in one message. If all required fields are present, say something like "Here are the details I have — please review."
 
+DRAFT EDITING:
+If the system provides an ACTIVE DRAFT (an event proposal awaiting confirmation), the user may want to modify it before creating. If their message clearly refers to the draft (changing time, date, type, department, case, notes, remote/in-person, title, etc.), output [EDIT_DRAFT:{json}] with ONLY the fields being changed.
+
+Examples:
+- "Move it to 1 PM" → [EDIT_DRAFT:{"startTime":"13:00"}]
+- "Actually next Tuesday" → [EDIT_DRAFT:{"date":"2026-07-07"}]
+- "Make it a CMC" → [EDIT_DRAFT:{"eventType":"CONFERENCE","subtype":"CMC"}]
+- "Department 32" → [EDIT_DRAFT:{"department":"32"}]
+- "Make it remote" → [EDIT_DRAFT:{"inPerson":false}]
+- "Actually in person" → [EDIT_DRAFT:{"inPerson":true}]
+- "Add notes that expert will attend" → [EDIT_DRAFT:{"description":"Expert will attend"}]
+- "Put this on Jacob's case" → [EDIT_DRAFT:{"caseQuery":"Jacob"}]
+- "Call it Plaintiff Deposition" → [EDIT_DRAFT:{"title":"Plaintiff Deposition"}]
+
+Use [EDIT_DRAFT] ONLY when an active draft exists AND the user's message is modifying it. Do NOT use [CREATE_EVENT] when editing an existing draft.
+
+If the user's message is a completely different request (creating a case, asking a question, etc.) while a draft exists, use the appropriate prefix ([CREATE_CASE], [GLOBAL], etc.) — the system will handle the draft conflict.
+
+After the [EDIT_DRAFT:{json}] prefix, write a brief confirmation like "Updated — moved to 1 PM." or "Changed to CMC in Department 32."
+
 ROUTING PREFIXES:
 At the START of your response, output one of these routing prefixes on its own line (the user will NOT see this line — it is parsed by the system):
 - [CASE:{caseId}] — if you are answering about a specific case (use the case ID from the data)
@@ -135,6 +155,7 @@ At the START of your response, output one of these routing prefixes on its own l
 - [SEARCH:{query}] — if the user mentioned a case by name/number/party but it's not in the provided data. Extract just the name or number they used as the query (e.g. "Sohyla", "Jose", "26SMCV01221").
 - [CREATE_EVENT:{json}] — if the user wants to create/add/schedule an event (see EVENT CREATION above)
 - [CREATE_CASE:{json}] — if the user wants to create/add a new case (see CASE CREATION above)
+- [EDIT_DRAFT:{json}] — if the user wants to modify an existing event draft (see DRAFT EDITING above)
 
 After the prefix, write your answer.
 
@@ -182,6 +203,8 @@ export interface CaseIntent {
   preLitigation?: boolean;
 }
 
+export type EditDraftIntent = Partial<EventIntent> & { title?: string };
+
 export interface AskLitCalResult {
   answer: string;
   model: string;
@@ -190,6 +213,7 @@ export interface AskLitCalResult {
   searchQuery?: string;
   eventIntent?: EventIntent;
   caseIntent?: CaseIntent;
+  editDraftIntent?: EditDraftIntent;
 }
 
 export async function askLitCal(input: AskLitCalInput): Promise<AskLitCalResult> {
@@ -231,6 +255,7 @@ export async function askLitCal(input: AskLitCalInput): Promise<AskLitCalResult>
         searchQuery: extractSearchQuery(prefix),
         eventIntent: extractEventIntent(prefix),
         caseIntent: extractCaseIntent(prefix),
+        editDraftIntent: extractEditDraftIntent(prefix),
       };
     } catch (err) {
       const msg = String(err);
@@ -248,6 +273,11 @@ export async function askLitCal(input: AskLitCalInput): Promise<AskLitCalResult>
 }
 
 function parseResponse(raw: string): { prefix: string; body: string } {
+  // EDIT_DRAFT prefix
+  const editMatch = raw.match(/^\[EDIT_DRAFT:(\{[\s\S]*?\})\]\s*/);
+  if (editMatch) {
+    return { prefix: `EDIT_DRAFT:${editMatch[1]}`, body: raw.slice(editMatch[0].length).trim() };
+  }
   // CREATE_CASE prefix
   const caseMatch = raw.match(/^\[CREATE_CASE:(\{[\s\S]*?\})\]\s*/);
   if (caseMatch) {
@@ -290,6 +320,16 @@ function extractCaseIntent(prefix: string): CaseIntent | undefined {
   if (!match) return undefined;
   try {
     return JSON.parse(match[1]) as CaseIntent;
+  } catch {
+    return undefined;
+  }
+}
+
+function extractEditDraftIntent(prefix: string): EditDraftIntent | undefined {
+  const match = prefix.match(/^EDIT_DRAFT:(\{[\s\S]*\})$/);
+  if (!match) return undefined;
+  try {
+    return JSON.parse(match[1]) as EditDraftIntent;
   } catch {
     return undefined;
   }

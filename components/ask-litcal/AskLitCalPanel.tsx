@@ -138,6 +138,7 @@ export default function AskLitCalPanel() {
   const [activeCaseId, setActiveCaseId] = useState<string | null>(null);
   const [pendingEvent, setPendingEvent] = useState<EventIntent | null>(null);
   const [pendingCase, setPendingCase] = useState<CaseIntent | null>(null);
+  const [activeDraft, setActiveDraft] = useState<ProposedEvent | null>(null);
   const [creatingEvent, setCreatingEvent] = useState(false);
   const [creatingCase, setCreatingCase] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -151,6 +152,7 @@ export default function AskLitCalPanel() {
       setInput("");
       setPendingEvent(null);
       setPendingCase(null);
+      setActiveDraft(null);
       setTimeout(() => inputRef.current?.focus(), 100);
     }
     prevOpenRef.current = open;
@@ -179,6 +181,21 @@ export default function AskLitCalPanel() {
           history,
           pendingEvent: pendingEvent ?? undefined,
           pendingCase: pendingCase ?? undefined,
+          activeDraft: activeDraft ? {
+            title: activeDraft.title,
+            eventType: activeDraft.eventType,
+            subtype: activeDraft.subtype,
+            date: activeDraft.date,
+            startTime: activeDraft.startTime,
+            endTime: activeDraft.endTime,
+            allDay: activeDraft.allDay,
+            department: activeDraft.department,
+            location: activeDraft.location,
+            description: activeDraft.description,
+            inPerson: activeDraft.inPerson,
+            caseId: activeDraft.caseId,
+            caseName: activeDraft.caseName,
+          } : undefined,
         }),
       });
       const data = await res.json() as {
@@ -189,6 +206,7 @@ export default function AskLitCalPanel() {
         pendingCase?: CaseIntent | null;
         proposedEvent?: ProposedEvent | null;
         proposedCase?: ProposedCase | null;
+        draftEdits?: Partial<ProposedEvent> & { caseQuery?: string; title?: string };
         error?: string;
       };
 
@@ -199,34 +217,93 @@ export default function AskLitCalPanel() {
 
       if (data.activeCaseId) setActiveCaseId(data.activeCaseId);
 
-      // Track pending state for multi-turn collection
-      if (data.pendingEvent) {
-        setPendingEvent(data.pendingEvent);
-        setPendingCase(null);
-      } else if (data.proposedEvent) {
-        setPendingEvent(null);
-      }
+      // Handle draft edits — update the active draft in place
+      if (data.draftEdits && activeDraft) {
+        const edits = data.draftEdits;
+        const updated = { ...activeDraft };
 
-      if (data.pendingCase) {
-        setPendingCase(data.pendingCase);
-        setPendingEvent(null);
-      } else if (data.proposedCase) {
-        setPendingCase(null);
-      }
+        if (edits.date) updated.date = edits.date;
+        if (edits.startTime) updated.startTime = edits.startTime;
+        if (edits.endTime) updated.endTime = edits.endTime;
+        if (edits.department !== undefined) updated.department = edits.department ?? null;
+        if (edits.location !== undefined) updated.location = edits.location ?? null;
+        if (edits.description !== undefined) updated.description = edits.description ?? null;
+        if (edits.inPerson !== undefined) updated.inPerson = edits.inPerson as boolean;
+        if (edits.allDay !== undefined) updated.allDay = edits.allDay as boolean;
+        if (edits.title) updated.title = edits.title;
 
-      setMessages((prev) => [...prev, {
-        role: "assistant",
-        content: data.answer ?? "No response.",
-        caseMatches: data.caseMatches ?? undefined,
-        proposedEvent: data.proposedEvent ?? undefined,
-        proposedCase: data.proposedCase ?? undefined,
-      }]);
+        // Handle event type changes
+        if (edits.eventType) {
+          let newType = edits.eventType as string;
+          const newSubtype = edits.subtype as string | undefined;
+          if (newType === "CONFERENCE" && (newSubtype === "CMC" || newSubtype === "Further CMC")) {
+            newType = "CASE_MANAGEMENT_CONFERENCE";
+          }
+          updated.eventType = newType;
+          updated.subtype = newSubtype ?? null;
+          // Re-generate title if not explicitly set
+          if (!edits.title && updated.caseName) {
+            const typeLabels: Record<string, string> = {
+              CONFERENCE: "Conference", DEPOSITION: "Deposition", TRIAL: "Trial",
+              MEDIATION: "Mediation", DEADLINE: "Deadline", MEETING: "Meeting",
+              CASE_MANAGEMENT_CONFERENCE: "Case Management Conference",
+            };
+            const label = newSubtype ?? typeLabels[newType] ?? newType;
+            updated.title = `${updated.caseName} — ${label}`;
+          }
+        } else if (edits.subtype !== undefined) {
+          updated.subtype = edits.subtype as string | null;
+        }
+
+        // Update display time
+        if (updated.allDay) {
+          updated.displayTime = "All Day";
+        } else if (updated.startTime) {
+          const fmt = (t: string) => {
+            const [h, m] = t.split(":").map(Number);
+            const ampm = h >= 12 ? "PM" : "AM";
+            const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+            return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
+          };
+          updated.displayTime = `${fmt(updated.startTime)}${updated.endTime ? ` – ${fmt(updated.endTime)}` : ""}`;
+        }
+
+        setActiveDraft(updated);
+        setMessages((prev) => [...prev, {
+          role: "assistant",
+          content: data.answer ?? "Draft updated.",
+        }]);
+      } else {
+        // Track pending state for multi-turn collection
+        if (data.pendingEvent) {
+          setPendingEvent(data.pendingEvent);
+          setPendingCase(null);
+        } else if (data.proposedEvent) {
+          setPendingEvent(null);
+          setActiveDraft(data.proposedEvent);
+        }
+
+        if (data.pendingCase) {
+          setPendingCase(data.pendingCase);
+          setPendingEvent(null);
+        } else if (data.proposedCase) {
+          setPendingCase(null);
+        }
+
+        setMessages((prev) => [...prev, {
+          role: "assistant",
+          content: data.answer ?? "No response.",
+          caseMatches: data.caseMatches ?? undefined,
+          proposedEvent: !activeDraft ? (data.proposedEvent ?? undefined) : undefined,
+          proposedCase: data.proposedCase ?? undefined,
+        }]);
+      }
     } catch {
       setMessages((prev) => [...prev, { role: "assistant", content: "Failed to connect. Please try again." }]);
     } finally {
       setLoading(false);
     }
-  }, [loading, messages, activeCaseId, pendingEvent, pendingCase]);
+  }, [loading, messages, activeCaseId, pendingEvent, pendingCase, activeDraft]);
 
   const dismissProposalCards = useCallback(() => {
     setMessages((prev) => prev.map((m) =>
@@ -290,6 +367,7 @@ export default function AskLitCalPanel() {
       }
 
       setPendingEvent(null);
+      setActiveDraft(null);
       dismissProposalCards();
       setMessages((prev) => [...prev, {
         role: "assistant",
@@ -358,6 +436,7 @@ export default function AskLitCalPanel() {
 
   const cancelEvent = useCallback(() => {
     setPendingEvent(null);
+    setActiveDraft(null);
     dismissProposalCards();
     setMessages((prev) => [...prev, { role: "assistant", content: "Event creation cancelled." }]);
   }, [dismissProposalCards]);
@@ -499,6 +578,20 @@ export default function AskLitCalPanel() {
             </div>
           </div>
         ))}
+
+        {/* Persistent active draft card */}
+        {activeDraft && (
+          <div className="flex justify-start">
+            <div className="max-w-[85%]">
+              <EventPreviewCard
+                event={activeDraft}
+                onConfirm={() => confirmEvent(activeDraft)}
+                onCancel={cancelEvent}
+                creating={creatingEvent}
+              />
+            </div>
+          </div>
+        )}
 
         {loading && (
           <div className="flex justify-start">

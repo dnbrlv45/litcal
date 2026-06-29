@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCurrentWorkspace } from "@/lib/workspaces";
 import { askLitCal } from "@/lib/ai/askLitCal";
-import type { EventIntent, CaseIntent } from "@/lib/ai/askLitCal";
+import type { EventIntent, CaseIntent, EditDraftIntent } from "@/lib/ai/askLitCal";
 import { getFullCaseContext, getGlobalContext, searchCases } from "@/lib/ai/askLitCalData";
 import { detectConflicts } from "@/lib/conflicts";
 import { findCourtHearingRule } from "@/lib/court-hearing-rules";
@@ -24,9 +24,25 @@ export async function POST(request: NextRequest) {
     history?: { role: "user" | "assistant"; content: string }[];
     pendingEvent?: EventIntent;
     pendingCase?: CaseIntent;
+    activeDraft?: {
+      title: string;
+      eventType: string;
+      subtype?: string | null;
+      date: string;
+      startTime?: string | null;
+      endTime?: string | null;
+      allDay: boolean;
+      department?: string | null;
+      location?: string | null;
+      description?: string | null;
+      inPerson: boolean;
+      caseId?: string | null;
+      caseName?: string | null;
+    };
   };
 
   const { question, activeCaseId, history, pendingEvent, pendingCase } = body;
+  const activeDraft = body.activeDraft;
   if (!question?.trim()) return NextResponse.json({ error: "Question is required" }, { status: 400 });
   if (question.length > 1000) return NextResponse.json({ error: "Question too long (max 1000 characters)" }, { status: 400 });
 
@@ -76,6 +92,25 @@ export async function POST(request: NextRequest) {
     contextText += `\n\nPENDING CASE (user is filling in details — merge new info with these):\n${fields}`;
   }
 
+  // Include active draft context so the AI knows there's a pending proposal
+  if (activeDraft) {
+    const draftFields = [
+      `Title: ${activeDraft.title}`,
+      `Event Type: ${activeDraft.eventType}`,
+      activeDraft.subtype ? `Subtype: ${activeDraft.subtype}` : null,
+      `Date: ${activeDraft.date}`,
+      activeDraft.startTime ? `Start: ${activeDraft.startTime}` : null,
+      activeDraft.endTime ? `End: ${activeDraft.endTime}` : null,
+      activeDraft.allDay ? `All Day: yes` : null,
+      activeDraft.department ? `Department: ${activeDraft.department}` : null,
+      activeDraft.location ? `Location: ${activeDraft.location}` : null,
+      activeDraft.inPerson ? `In Person: yes` : `In Person: no`,
+      activeDraft.caseName ? `Case: ${activeDraft.caseName}` : null,
+      activeDraft.description ? `Notes: ${activeDraft.description}` : null,
+    ].filter(Boolean).join("\n");
+    contextText += `\n\nACTIVE DRAFT (event proposal awaiting confirmation — user may want to edit this):\n${draftFields}`;
+  }
+
   // Include workspace members so the AI can reference staff by name
   const workspaceMembers = await prisma.workspaceMember.findMany({
     where: { workspaceId: workspace.id },
@@ -90,6 +125,28 @@ export async function POST(request: NextRequest) {
 
   // Call Gemini
   const result = await askLitCal({ question, contextText, history });
+
+  // Handle draft edit intent
+  if (result.editDraftIntent && activeDraft) {
+    const edits = result.editDraftIntent;
+
+    await prisma.askLitCalLog.create({
+      data: {
+        id: `alc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        workspaceId: workspace.id, userId: user.id,
+        caseId: activeDraft.caseId ?? activeCaseId ?? null,
+        question: question.slice(0, 1000),
+        answer: `Draft edit: ${JSON.stringify(edits)}. ${result.answer}`,
+        model: result.model,
+      },
+    });
+
+    return NextResponse.json({
+      answer: result.answer,
+      activeCaseId: activeCaseId ?? null,
+      draftEdits: edits,
+    });
+  }
 
   // Handle event creation intent
   if (result.eventIntent) {
