@@ -36,6 +36,8 @@ interface CaseIntent {
   paralegalName?: string;
   assistantName?: string;
   description?: string;
+  preLitigation?: boolean;
+  optionalFieldsAsked?: boolean;
 }
 
 interface ProposedEvent {
@@ -93,6 +95,8 @@ interface Message {
   caseMatches?: { id: string; title: string; caseNumber: string | null }[];
   proposedEvent?: ProposedEvent;
   proposedCase?: ProposedCase;
+  quickActions?: { label: string; prompt: string }[];
+  dismissed?: boolean;
 }
 
 const CASE_PROMPTS = [
@@ -226,6 +230,12 @@ export default function AskLitCalPanel() {
     }
   }, [loading, messages, activeCaseId, pendingEvent, pendingCase]);
 
+  const dismissProposalCards = useCallback(() => {
+    setMessages((prev) => prev.map((m) =>
+      (m.proposedEvent || m.proposedCase) ? { ...m, dismissed: true } : m
+    ));
+  }, []);
+
   const confirmEvent = useCallback(async (proposed: ProposedEvent) => {
     setCreatingEvent(true);
     try {
@@ -258,16 +268,17 @@ export default function AskLitCalPanel() {
       }
 
       setPendingEvent(null);
+      dismissProposalCards();
       setMessages((prev) => [...prev, {
         role: "assistant",
-        content: `**Event created successfully!** "${proposed.title}" has been added to LitCal. All automations (court rules, Google Calendar sync, reminders, and timeline) have been applied.`,
+        content: `**Event created successfully.** "${proposed.title}" has been added to LitCal with all automations applied.`,
       }]);
     } catch {
       setMessages((prev) => [...prev, { role: "assistant", content: "Failed to create event. Please try again." }]);
     } finally {
       setCreatingEvent(false);
     }
-  }, []);
+  }, [dismissProposalCards]);
 
   const confirmCase = useCallback(async (proposed: ProposedCase) => {
     setCreatingCase(true);
@@ -303,29 +314,37 @@ export default function AskLitCalPanel() {
       }
 
       setPendingCase(null);
-      if (data.case) {
-        setActiveCaseId(data.case.id);
-      }
+      dismissProposalCards();
+      const newCaseId = data.case?.id;
+      if (newCaseId) setActiveCaseId(newCaseId);
       setMessages((prev) => [...prev, {
         role: "assistant",
-        content: `**Case created successfully!** "${proposed.title}" has been added to LitCal with a timeline entry.\n\nYou can now add events, tasks, or discovery for this case. For example:\n- "Add a CMC for next Friday at 9 AM"\n- "Schedule a deposition for next month"`,
+        content: `**Case created successfully.** "${proposed.title}" has been added to LitCal.`,
+        quickActions: [
+          { label: "Schedule First Hearing", prompt: "Schedule a hearing for this case" },
+          { label: "Add Discovery", prompt: "What discovery do I need to add?" },
+          { label: "Assign Staff", prompt: "Who is assigned to this case?" },
+          ...(newCaseId ? [{ label: "Open Case", prompt: `__NAVIGATE__/cases/${newCaseId}` }] : []),
+        ],
       }]);
     } catch {
       setMessages((prev) => [...prev, { role: "assistant", content: "Failed to create case. Please try again." }]);
     } finally {
       setCreatingCase(false);
     }
-  }, []);
+  }, [dismissProposalCards]);
 
   const cancelEvent = useCallback(() => {
     setPendingEvent(null);
+    dismissProposalCards();
     setMessages((prev) => [...prev, { role: "assistant", content: "Event creation cancelled." }]);
-  }, []);
+  }, [dismissProposalCards]);
 
   const cancelCase = useCallback(() => {
     setPendingCase(null);
+    dismissProposalCards();
     setMessages((prev) => [...prev, { role: "assistant", content: "Case creation cancelled." }]);
-  }, []);
+  }, [dismissProposalCards]);
 
   function handleCaseSelect(id: string) {
     setActiveCaseId(id);
@@ -416,7 +435,7 @@ export default function AskLitCalPanel() {
                       ))}
                     </div>
                   )}
-                  {msg.proposedEvent && (
+                  {msg.proposedEvent && !msg.dismissed && (
                     <EventPreviewCard
                       event={msg.proposedEvent}
                       onConfirm={() => confirmEvent(msg.proposedEvent!)}
@@ -424,13 +443,32 @@ export default function AskLitCalPanel() {
                       creating={creatingEvent}
                     />
                   )}
-                  {msg.proposedCase && (
+                  {msg.proposedCase && !msg.dismissed && (
                     <CasePreviewCard
                       caseData={msg.proposedCase}
                       onConfirm={() => confirmCase(msg.proposedCase!)}
                       onCancel={cancelCase}
                       creating={creatingCase}
                     />
+                  )}
+                  {msg.quickActions && msg.quickActions.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {msg.quickActions.map((action, j) => (
+                        <button
+                          key={j}
+                          onClick={() => {
+                            if (action.prompt.startsWith("__NAVIGATE__")) {
+                              window.location.href = action.prompt.replace("__NAVIGATE__", "");
+                            } else {
+                              sendMessage(action.prompt);
+                            }
+                          }}
+                          className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 hover:bg-teal-50 hover:border-teal-200 hover:text-teal-800 transition-colors"
+                        >
+                          {action.label}
+                        </button>
+                      ))}
+                    </div>
                   )}
                 </div>
               ) : (

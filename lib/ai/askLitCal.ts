@@ -70,7 +70,7 @@ If the system provides PENDING EVENT fields, the user is continuing to fill in d
 After the [CREATE_EVENT:{json}] prefix, write a brief response. If all required fields are present, say something like "Here are the details I have — please review." If fields are missing, ask for them naturally.
 
 CASE CREATION:
-When a user asks to create or add a new case (e.g. "Make a new case, plaintiff Dylan Barlava, defendant Joe Shmo"), extract the case details and output a [CREATE_CASE:{json}] prefix.
+When a user asks to create or add a new case (e.g. "Make a new case, plaintiff Dylan Barlava, defendant Joe Shmo, rear-end collision in Los Angeles"), extract the case details and output a [CREATE_CASE:{json}] prefix.
 
 The JSON must include ONLY the fields you can extract. Omit any field you cannot determine.
 
@@ -91,17 +91,34 @@ Fields:
 - "paralegalName": assigned paralegal name (from workspace members)
 - "assistantName": assigned assistant name (from workspace members)
 - "description": notes
+- "preLitigation": true if the user indicates the case is pre-litigation, not yet filed, a government claim only, or no case number yet
 
 The case title is auto-generated from plaintiff and defendant: "{Plaintiff} v. {Defendant}". Do NOT include a "title" field.
 
-If the user says "auto accident", "slip and fall", "dog bite", etc., map to the matching caseType value.
+REQUIRED FIELDS: plaintiff, defendant, caseType, countyName
+If ANY required field is missing, ask for ALL missing required fields in a SINGLE response. Do NOT ask one at a time. Example: "I need a few more details before creating this case:\n\n- Defendant\n- County"
 
-If the plaintiff is missing, ask for it — it is required. All other fields are optional.
+CASE TYPE INFERENCE — infer caseType with high confidence. Do NOT ask for case type if you can infer it:
+- "rear-end collision", "car accident", "auto accident", "car crash", "hit and run", "fender bender", "motor vehicle accident", "MVA", "truck accident" → AUTO_ACCIDENT
+- "slip and fall", "trip and fall", "fell at" → SLIP_AND_FALL (note: this maps to PREMISES_LIABILITY in the system, but present as "Slip and Fall")
+- "dog bite", "dog attack", "animal attack" → DOG_BITE
+- "government claim", "city claim", "county claim" → GOVERNMENT_CLAIM
+- "medical malpractice", "doctor negligence", "surgical error" → MEDICAL_MALPRACTICE
+- "wrongful death" → WRONGFUL_DEATH
+- "product liability", "defective product" → PRODUCT_LIABILITY
+- "premises liability", "unsafe property", "property hazard" → PREMISES_LIABILITY
+If no inference possible, ask for it along with other missing fields.
+
+PRE-LITIGATION:
+If the user says "pre-lit", "pre-litigation", "not yet filed", "no case number", "government claim only", or otherwise indicates no filing has occurred, set "preLitigation": true. The system will skip asking for case number.
+
+SMART OPTIONAL FIELDS:
+After required fields are collected, the system will ask about case number and date of loss before showing the preview card. You do NOT need to ask for these — the system handles it. Just collect required fields and include whatever optional fields the user already provided.
 
 PENDING CASE CONTEXT:
 If the system provides PENDING CASE fields, the user is continuing to fill in details. Merge new info with existing fields. Always output [CREATE_CASE:{merged json}] with ALL known fields.
 
-After the prefix, if all required fields are present, say something like "Here are the details — please review." If fields are missing, ask for them naturally.
+After the prefix, write a brief response. If required fields are missing, ask for all of them in one message. If all required fields are present, say something like "Here are the details I have — please review."
 
 ROUTING PREFIXES:
 At the START of your response, output one of these routing prefixes on its own line (the user will NOT see this line — it is parsed by the system):
@@ -154,6 +171,7 @@ export interface CaseIntent {
   paralegalName?: string;
   assistantName?: string;
   description?: string;
+  preLitigation?: boolean;
 }
 
 export interface AskLitCalResult {

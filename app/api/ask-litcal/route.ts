@@ -304,14 +304,20 @@ export async function POST(request: NextRequest) {
   if (result.caseIntent) {
     const intent: CaseIntent = { ...pendingCase, ...result.caseIntent };
 
-    // Check required fields
-    if (!intent.plaintiff) {
+    // Check required fields: plaintiff, defendant, caseType, countyName
+    const missingRequired: string[] = [];
+    if (!intent.plaintiff) missingRequired.push("Plaintiff");
+    if (!intent.defendant) missingRequired.push("Defendant");
+    if (!intent.caseType) missingRequired.push("Case Type (e.g. auto accident, slip and fall, dog bite)");
+    if (!intent.countyName) missingRequired.push("County");
+
+    if (missingRequired.length > 0) {
       await prisma.askLitCalLog.create({
         data: {
           id: `alc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
           workspaceId: workspace.id, userId: user.id, caseId: null,
           question: question.slice(0, 1000),
-          answer: `Missing plaintiff. ${result.answer}`,
+          answer: `Missing required: ${missingRequired.join(", ")}. ${result.answer}`,
           model: result.model,
         },
       });
@@ -323,10 +329,38 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Smart optional fields: ask about case number and date of loss if not known and not pre-lit skipped
+    const needsOptionalPrompt = !intent.preLitigation && !intent.caseNumber && !intent.dateOfLoss
+      && !(pendingCase as Record<string, unknown> | undefined)?.optionalFieldsAsked;
+
+    if (needsOptionalPrompt) {
+      await prisma.askLitCalLog.create({
+        data: {
+          id: `alc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          workspaceId: workspace.id, userId: user.id, caseId: null,
+          question: question.slice(0, 1000),
+          answer: "Asking for optional fields before case creation.",
+          model: result.model,
+        },
+      });
+
+      const optionalQuestions: string[] = [];
+      if (!intent.caseNumber) optionalQuestions.push("Do you have the **case number**?");
+      if (!intent.dateOfLoss) optionalQuestions.push("Do you know the **date of loss**?");
+
+      const prompt = optionalQuestions.length > 0
+        ? `Before I create the case:\n\n${optionalQuestions.join("\n\n")}\n\nYou can answer with both, or say "no" to skip.`
+        : result.answer;
+
+      return NextResponse.json({
+        answer: prompt,
+        activeCaseId: activeCaseId ?? null,
+        pendingCase: { ...intent, optionalFieldsAsked: true } as CaseIntent,
+      });
+    }
+
     // Generate title
-    const title = intent.defendant
-      ? `${intent.plaintiff} v. ${intent.defendant}`
-      : intent.plaintiff;
+    const title = `${intent.plaintiff} v. ${intent.defendant}`;
 
     // Resolve staff names to user IDs
     const resolveStaffByName = async (name: string | undefined) => {
@@ -357,10 +391,10 @@ export async function POST(request: NextRequest) {
 
     const proposedCase = {
       title,
-      plaintiff: intent.plaintiff,
-      defendant: intent.defendant ?? null,
+      plaintiff: intent.plaintiff!,
+      defendant: intent.defendant!,
       caseNumber: intent.caseNumber ?? null,
-      countyName: intent.countyName ?? null,
+      countyName: intent.countyName!,
       courtName: intent.courtName ?? null,
       department: intent.department ?? null,
       judge: intent.judge ?? null,
