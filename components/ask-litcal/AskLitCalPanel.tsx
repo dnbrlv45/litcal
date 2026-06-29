@@ -48,8 +48,6 @@ interface ProposedEvent {
   date: string;
   startTime: string | null;
   endTime: string | null;
-  startISO: string;
-  endISO: string;
   allDay: boolean;
   department: string | null;
   location: string | null;
@@ -239,14 +237,25 @@ export default function AskLitCalPanel() {
   const confirmEvent = useCallback(async (proposed: ProposedEvent) => {
     setCreatingEvent(true);
     try {
+      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      let startISO: string;
+      let endISO: string;
+      if (proposed.allDay) {
+        const d = new Date(`${proposed.date}T00:00:00`);
+        startISO = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0)).toISOString();
+        endISO = new Date(`${proposed.date}T23:59:59`).toISOString();
+      } else {
+        startISO = new Date(`${proposed.date}T${proposed.startTime}`).toISOString();
+        endISO = new Date(`${proposed.date}T${proposed.endTime}`).toISOString();
+      }
       const res = await fetch("/api/calendar/events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: proposed.title,
-          start: proposed.startISO,
-          end: proposed.endISO,
-          timeZone: "America/Los_Angeles",
+          start: startISO,
+          end: endISO,
+          timeZone,
           eventType: proposed.eventType,
           subtype: proposed.subtype ?? undefined,
           subtypeReason: proposed.subtypeReason ?? undefined,

@@ -170,24 +170,12 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // All required fields present — build proposed event
-    const eventDate = new Date(`${intent.date}T00:00:00`);
-    let startISO: string;
-    let endISO: string;
-
-    if (intent.allDay) {
-      startISO = `${intent.date}T00:00:00`;
-      endISO = `${intent.date}T23:59:59`;
-    } else {
-      startISO = `${intent.date}T${intent.startTime}:00`;
-      if (intent.endTime) {
-        endISO = `${intent.date}T${intent.endTime}:00`;
-      } else {
-        // Default to 1 hour after start
-        const [h, m] = intent.startTime!.split(":").map(Number);
-        const endH = (h + 1) % 24;
-        endISO = `${intent.date}T${String(endH).padStart(2, "0")}:${String(m).padStart(2, "0")}:00`;
-      }
+    // Compute default end time if not specified (1 hour after start)
+    let effectiveEndTime = intent.endTime ?? null;
+    if (!intent.allDay && !effectiveEndTime && intent.startTime) {
+      const [h, m] = intent.startTime.split(":").map(Number);
+      const endH = (h + 1) % 24;
+      effectiveEndTime = `${String(endH).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
     }
 
     // Map eventType for API
@@ -224,8 +212,8 @@ export async function POST(request: NextRequest) {
       });
       const attorneyId = caseData?.staff[0]?.userId;
       if (attorneyId && !intent.allDay) {
-        const startDate = new Date(startISO);
-        const endDate = new Date(endISO);
+        const startDate = new Date(`${intent.date}T${intent.startTime}:00-07:00`);
+        const endDate = new Date(`${intent.date}T${effectiveEndTime}:00-07:00`);
         const found = await detectConflicts(attorneyId, startDate, endDate);
         conflicts = found.map((c) => ({
           eventId: c.eventId,
@@ -267,9 +255,7 @@ export async function POST(request: NextRequest) {
       subtypeReason: intent.subtypeReason ?? null,
       date: intent.date!,
       startTime: intent.allDay ? null : intent.startTime!,
-      endTime: intent.allDay ? null : (intent.endTime ?? null),
-      startISO,
-      endISO,
+      endTime: intent.allDay ? null : effectiveEndTime,
       allDay: intent.allDay ?? false,
       department: intent.department ?? null,
       location: intent.location ?? null,
