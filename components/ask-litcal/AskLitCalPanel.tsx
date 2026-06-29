@@ -181,21 +181,25 @@ export default function AskLitCalPanel() {
           history,
           pendingEvent: pendingEvent ?? undefined,
           pendingCase: pendingCase ?? undefined,
-          activeDraft: activeDraft ? {
-            title: activeDraft.title,
-            eventType: activeDraft.eventType,
-            subtype: activeDraft.subtype,
-            date: activeDraft.date,
-            startTime: activeDraft.startTime,
-            endTime: activeDraft.endTime,
-            allDay: activeDraft.allDay,
-            department: activeDraft.department,
-            location: activeDraft.location,
-            description: activeDraft.description,
-            inPerson: activeDraft.inPerson,
-            caseId: activeDraft.caseId,
-            caseName: activeDraft.caseName,
-          } : undefined,
+          activeDraft: (() => {
+            const draft = activeDraft ?? messages.filter((m) => m.proposedEvent && !m.dismissed).slice(-1)[0]?.proposedEvent;
+            if (!draft) return undefined;
+            return {
+              title: draft.title,
+              eventType: draft.eventType,
+              subtype: draft.subtype,
+              date: draft.date,
+              startTime: draft.startTime,
+              endTime: draft.endTime,
+              allDay: draft.allDay,
+              department: draft.department,
+              location: draft.location,
+              description: draft.description,
+              inPerson: draft.inPerson,
+              caseId: draft.caseId,
+              caseName: draft.caseName,
+            };
+          })(),
         }),
       });
       const data = await res.json() as {
