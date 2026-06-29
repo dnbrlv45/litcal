@@ -3,7 +3,11 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCurrentWorkspace } from "@/lib/workspaces";
 import { askLitCal } from "@/lib/ai/askLitCal";
+import type { EventIntent } from "@/lib/ai/askLitCal";
 import { getFullCaseContext, getGlobalContext, searchCases } from "@/lib/ai/askLitCalData";
+import { detectConflicts } from "@/lib/conflicts";
+import { findCourtHearingRule } from "@/lib/court-hearing-rules";
+import { HEARING_SUBTYPES } from "@/lib/google-calendar-payload";
 
 export const maxDuration = 30;
 
@@ -18,9 +22,10 @@ export async function POST(request: NextRequest) {
     question: string;
     activeCaseId?: string;
     history?: { role: "user" | "assistant"; content: string }[];
+    pendingEvent?: EventIntent;
   };
 
-  const { question, activeCaseId, history } = body;
+  const { question, activeCaseId, history, pendingEvent } = body;
   if (!question?.trim()) return NextResponse.json({ error: "Question is required" }, { status: 400 });
   if (question.length > 1000) return NextResponse.json({ error: "Question too long (max 1000 characters)" }, { status: 400 });
 
@@ -36,7 +41,6 @@ export async function POST(request: NextRequest) {
   // Build context based on whether we have an active case
   let contextText: string;
   if (activeCaseId) {
-    // Verify case belongs to workspace
     const caseExists = await prisma.case.findFirst({
       where: { id: activeCaseId, workspaceId: workspace.id },
       select: { id: true },
@@ -50,8 +54,231 @@ export async function POST(request: NextRequest) {
     contextText = await getGlobalContext(workspace.id);
   }
 
+  // Append pending event context so the AI can merge new info with existing fields
+  if (pendingEvent && Object.keys(pendingEvent).length > 0) {
+    const fields = Object.entries(pendingEvent)
+      .filter(([, v]) => v !== undefined && v !== null && v !== "")
+      .map(([k, v]) => `${k}: ${v}`)
+      .join("\n");
+    contextText += `\n\nPENDING EVENT (user is filling in details — merge new info with these):\n${fields}`;
+  }
+
   // Call Gemini
   const result = await askLitCal({ question, contextText, history });
+
+  // Handle event creation intent
+  if (result.eventIntent) {
+    const intent: EventIntent = { ...pendingEvent, ...result.eventIntent };
+    let finalActiveCaseId = activeCaseId;
+
+    // Resolve case from caseQuery
+    let resolvedCase: { id: string; title: string; caseNumber: string | null; county: string | null; court: string | null } | null = null;
+    let eventCaseMatches: { id: string; title: string; caseNumber: string | null }[] | undefined;
+
+    if (intent.caseQuery) {
+      const matches = await searchCases(intent.caseQuery, workspace.id);
+      if (matches.length === 1) {
+        const full = await prisma.case.findUnique({
+          where: { id: matches[0].id },
+          select: { id: true, title: true, caseNumber: true, county: true, court: true, status: true },
+        });
+        if (full && full.status !== "ARCHIVED" && full.status !== "CLOSED") {
+          resolvedCase = full;
+          finalActiveCaseId = full.id;
+        }
+      } else if (matches.length > 1) {
+        eventCaseMatches = matches.slice(0, 8);
+        const numbered = matches.slice(0, 8).map((m, i) =>
+          `${i + 1}. **${m.title}**${m.caseNumber ? ` (#${m.caseNumber})` : ""}`
+        ).join("\n");
+
+        await prisma.askLitCalLog.create({
+          data: {
+            id: `alc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            workspaceId: workspace.id, userId: user.id, caseId: null,
+            question: question.slice(0, 1000),
+            answer: "Multiple case matches — asking user to select.",
+            model: result.model,
+          },
+        });
+
+        return NextResponse.json({
+          answer: `I found multiple cases matching "${intent.caseQuery}". Which one did you mean?\n\n${numbered}\n\nYou can type the number, case name, or case number.`,
+          activeCaseId: finalActiveCaseId ?? null,
+          caseMatches: eventCaseMatches,
+          pendingEvent: intent,
+        });
+      }
+    } else if (activeCaseId) {
+      const full = await prisma.case.findFirst({
+        where: { id: activeCaseId, workspaceId: workspace.id },
+        select: { id: true, title: true, caseNumber: true, county: true, court: true, status: true },
+      });
+      if (full && full.status !== "ARCHIVED" && full.status !== "CLOSED") {
+        resolvedCase = full;
+      }
+    }
+
+    // Check what's missing
+    const missingFields: string[] = [];
+    if (!intent.eventType) missingFields.push("event type");
+    if (intent.eventType === "CONFERENCE" && !intent.subtype) missingFields.push("conference subtype (e.g. CMC, MSC, OSC)");
+    if (!intent.date) missingFields.push("date");
+    if (!intent.allDay && !intent.startTime) missingFields.push("start time");
+
+    if (missingFields.length > 0) {
+      await prisma.askLitCalLog.create({
+        data: {
+          id: `alc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          workspaceId: workspace.id, userId: user.id,
+          caseId: resolvedCase?.id ?? finalActiveCaseId ?? null,
+          question: question.slice(0, 1000),
+          answer: `Missing fields: ${missingFields.join(", ")}. ${result.answer}`,
+          model: result.model,
+        },
+      });
+
+      return NextResponse.json({
+        answer: result.answer,
+        activeCaseId: finalActiveCaseId ?? null,
+        pendingEvent: intent,
+      });
+    }
+
+    // All required fields present — build proposed event
+    const eventDate = new Date(`${intent.date}T00:00:00`);
+    let startISO: string;
+    let endISO: string;
+
+    if (intent.allDay) {
+      startISO = `${intent.date}T00:00:00`;
+      endISO = `${intent.date}T23:59:59`;
+    } else {
+      startISO = `${intent.date}T${intent.startTime}:00`;
+      if (intent.endTime) {
+        endISO = `${intent.date}T${intent.endTime}:00`;
+      } else {
+        // Default to 1 hour after start
+        const [h, m] = intent.startTime!.split(":").map(Number);
+        const endH = (h + 1) % 24;
+        endISO = `${intent.date}T${String(endH).padStart(2, "0")}:${String(m).padStart(2, "0")}:00`;
+      }
+    }
+
+    // Map eventType for API
+    let apiEventType = intent.eventType!;
+    if (apiEventType === "CONFERENCE") {
+      if (intent.subtype === "CMC" || intent.subtype === "Further CMC") {
+        apiEventType = "CASE_MANAGEMENT_CONFERENCE";
+      } else {
+        apiEventType = "CONFERENCE";
+      }
+    }
+
+    // Auto-generate title
+    const subtypeLabel = intent.subtype
+      ? (HEARING_SUBTYPES.find((s) => s.value === intent.subtype)?.label.replace(/ \([A-Z/ ]+\)$/, "") ?? intent.subtype)
+      : null;
+    const eventTypeLabels: Record<string, string> = {
+      CONFERENCE: "Conference", DEPOSITION: "Deposition", TRIAL: "Trial",
+      MEDIATION: "Mediation", DEADLINE: "Deadline", MEETING: "Meeting",
+      REMINDER: "Reminder", CASE_MANAGEMENT_CONFERENCE: "Case Management Conference",
+      OTHER: "Other",
+    };
+    const typeLabel = eventTypeLabels[apiEventType] ?? apiEventType;
+    const title = resolvedCase
+      ? `${resolvedCase.title} — ${subtypeLabel ?? typeLabel}`
+      : subtypeLabel ?? typeLabel;
+
+    // Check conflicts
+    let conflicts: { eventId: string; title: string; startTime: string; endTime: string; attorneyName: string }[] = [];
+    if (resolvedCase) {
+      const caseData = await prisma.case.findUnique({
+        where: { id: resolvedCase.id },
+        select: { staff: { where: { role: "ATTORNEY" }, select: { userId: true }, take: 1 } },
+      });
+      const attorneyId = caseData?.staff[0]?.userId;
+      if (attorneyId && !intent.allDay) {
+        const startDate = new Date(startISO);
+        const endDate = new Date(endISO);
+        const found = await detectConflicts(attorneyId, startDate, endDate);
+        conflicts = found.map((c) => ({
+          eventId: c.eventId,
+          title: c.title,
+          startTime: c.startTime.toISOString(),
+          endTime: c.endTime.toISOString(),
+          attorneyName: c.attorneyName,
+        }));
+      }
+    }
+
+    // Look up court hearing rule for preview
+    let rulePreview: { appearanceType: string | null; requestRequired: boolean } | null = null;
+    const supportsRemote = ["CONFERENCE", "CASE_MANAGEMENT_CONFERENCE", "COURT_CALL"].includes(apiEventType);
+    if (supportsRemote && intent.inPerson !== true && resolvedCase) {
+      const rule = await findCourtHearingRule({
+        state: null,
+        countyName: resolvedCase.county,
+        courtName: resolvedCase.court,
+        department: intent.department,
+      });
+      if (rule) {
+        rulePreview = { appearanceType: rule.appearanceType, requestRequired: rule.requestRequired };
+      }
+    }
+
+    // Format time for display
+    const formatTime12 = (t: string) => {
+      const [h, m] = t.split(":").map(Number);
+      const ampm = h >= 12 ? "PM" : "AM";
+      const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+      return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
+    };
+
+    const proposedEvent = {
+      title,
+      eventType: apiEventType,
+      subtype: intent.subtype ?? null,
+      subtypeReason: intent.subtypeReason ?? null,
+      date: intent.date!,
+      startTime: intent.allDay ? null : intent.startTime!,
+      endTime: intent.allDay ? null : (intent.endTime ?? null),
+      startISO,
+      endISO,
+      allDay: intent.allDay ?? false,
+      department: intent.department ?? null,
+      location: intent.location ?? null,
+      description: intent.description ?? null,
+      inPerson: intent.inPerson ?? false,
+      caseId: resolvedCase?.id ?? null,
+      caseName: resolvedCase?.title ?? null,
+      caseNumber: resolvedCase?.caseNumber ?? null,
+      county: resolvedCase?.county ?? null,
+      court: resolvedCase?.court ?? null,
+      conflicts,
+      rulePreview,
+      displayTime: intent.allDay
+        ? "All Day"
+        : `${formatTime12(intent.startTime!)}${intent.endTime ? ` – ${formatTime12(intent.endTime)}` : ""}`,
+    };
+
+    await prisma.askLitCalLog.create({
+      data: {
+        id: `alc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        workspaceId: workspace.id, userId: user.id,
+        caseId: resolvedCase?.id ?? finalActiveCaseId ?? null,
+        question: question.slice(0, 1000),
+        answer: `Proposed event: ${title}. Awaiting confirmation.`,
+        model: result.model,
+      },
+    });
+
+    return NextResponse.json({
+      answer: result.answer,
+      activeCaseId: finalActiveCaseId ?? null,
+      proposedEvent,
+    });
+  }
 
   // Handle search routing — Gemini wants to look up a case by name
   let caseMatches: { id: string; title: string; caseNumber: string | null }[] | undefined;
