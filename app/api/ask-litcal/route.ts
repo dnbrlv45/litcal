@@ -133,6 +133,23 @@ export async function POST(request: NextRequest) {
           caseMatches: eventCaseMatches,
           pendingEvent: intent,
         });
+      } else {
+        // No matches found — tell the user
+        await prisma.askLitCalLog.create({
+          data: {
+            id: `alc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            workspaceId: workspace.id, userId: user.id, caseId: null,
+            question: question.slice(0, 1000),
+            answer: `No case found matching "${intent.caseQuery}".`,
+            model: result.model,
+          },
+        });
+
+        return NextResponse.json({
+          answer: `I couldn't find a case matching "${intent.caseQuery}" in LitCal. Please try the full case name, case number, or plaintiff/defendant name.`,
+          activeCaseId: finalActiveCaseId ?? null,
+          pendingEvent: intent,
+        });
       }
     } else if (activeCaseId) {
       const full = await prisma.case.findFirst({
