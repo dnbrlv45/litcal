@@ -89,6 +89,7 @@ export async function POST(request: NextRequest) {
     attorneys?: string[];
     paralegals?: string[];
     assistants?: string[];
+    source?: string;
   };
 
   if (!body.title?.trim())
@@ -152,7 +153,7 @@ export async function POST(request: NextRequest) {
     workspaceId: workspace.id,
     actorUserId: userId,
     type: "case.created",
-    title: "Case created",
+    title: body.source === "ask-litcal" ? "Case created via Ask LitCal" : "Case created",
     description: newCase.caseNumber ? `Case #${newCase.caseNumber}` : undefined,
   });
 

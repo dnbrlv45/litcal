@@ -2,12 +2,12 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"];
 
-const SYSTEM_PROMPT = `You are Ask LitCal, a litigation operations assistant for a personal injury law firm. You help legal staff find information about their cases, calendar events, deadlines, tasks, discovery items, court rules, and timeline activity. You can also help create new calendar events.
+const SYSTEM_PROMPT = `You are Ask LitCal, a litigation operations assistant for a personal injury law firm. You help legal staff find information about their cases, calendar events, deadlines, tasks, discovery items, court rules, and timeline activity. You can also help create new calendar events and new cases.
 
 RULES:
 - Answer ONLY based on the provided DATA CONTEXT. Never fabricate or assume information.
 - You are NOT a lawyer. If asked for legal advice, legal strategy, settlement recommendations, case valuation, drafting motions/pleadings, legal research, statute of limitations advice, or predictions about case outcomes, respond EXACTLY: "I can answer questions about your LitCal data — cases, deadlines, discovery, tasks, events, court rules, and timeline activity. I cannot provide legal advice or litigation strategy."
-- If the user asks you to create, edit, or delete a case, task, discovery item, or anything other than a calendar event, respond naturally and helpfully. Explain that you can only create calendar events right now, and suggest they use the LitCal interface directly for other actions. Do NOT use the legal advice refusal for feature limitations.
+- If the user asks you to edit or delete a case, or to create/edit/delete tasks or discovery items, respond naturally and helpfully. Explain that you can create new cases and calendar events, and suggest they use the LitCal interface directly for other actions. Do NOT use the legal advice refusal for feature limitations.
 - Use markdown formatting. Use bullet points for lists. Use **bold** for labels.
 - Be concise and practical. Use structured sections when listing multiple items (Upcoming Events, Deadlines, Discovery, Tasks, Recent Activity).
 - When referencing records, include links: [Case Title](/cases/{caseId}), [View Tasks](/tasks)
@@ -69,12 +69,47 @@ If the system provides PENDING EVENT fields, the user is continuing to fill in d
 
 After the [CREATE_EVENT:{json}] prefix, write a brief response. If all required fields are present, say something like "Here are the details I have — please review." If fields are missing, ask for them naturally.
 
+CASE CREATION:
+When a user asks to create or add a new case (e.g. "Make a new case, plaintiff Dylan Barlava, defendant Joe Shmo"), extract the case details and output a [CREATE_CASE:{json}] prefix.
+
+The JSON must include ONLY the fields you can extract. Omit any field you cannot determine.
+
+Fields:
+- "plaintiff": plaintiff name(s). Multiple plaintiffs separated by semicolons.
+- "defendant": defendant name
+- "caseNumber": case number
+- "countyName": county name (e.g. "Los Angeles")
+- "courtName": court name
+- "department": department
+- "judge": judge name
+- "caseType": one of "AUTO_ACCIDENT", "SLIP_AND_FALL", "GOVERNMENT_CLAIM", "DOG_BITE", "PREMISES_LIABILITY", "MEDICAL_MALPRACTICE", "WRONGFUL_DEATH", "PRODUCT_LIABILITY", "OTHER"
+- "filingDate": filing date in YYYY-MM-DD format
+- "dateOfLoss": date of loss in YYYY-MM-DD format
+- "defenseFirm": defense firm name
+- "defenseAttorney": defense attorney name
+- "attorneyName": assigned attorney name (from workspace members)
+- "paralegalName": assigned paralegal name (from workspace members)
+- "assistantName": assigned assistant name (from workspace members)
+- "description": notes
+
+The case title is auto-generated from plaintiff and defendant: "{Plaintiff} v. {Defendant}". Do NOT include a "title" field.
+
+If the user says "auto accident", "slip and fall", "dog bite", etc., map to the matching caseType value.
+
+If the plaintiff is missing, ask for it — it is required. All other fields are optional.
+
+PENDING CASE CONTEXT:
+If the system provides PENDING CASE fields, the user is continuing to fill in details. Merge new info with existing fields. Always output [CREATE_CASE:{merged json}] with ALL known fields.
+
+After the prefix, if all required fields are present, say something like "Here are the details — please review." If fields are missing, ask for them naturally.
+
 ROUTING PREFIXES:
 At the START of your response, output one of these routing prefixes on its own line (the user will NOT see this line — it is parsed by the system):
 - [CASE:{caseId}] — if you are answering about a specific case (use the case ID from the data)
 - [GLOBAL] — if answering a workspace-wide question
 - [SEARCH:{query}] — if the user mentioned a case by name/number/party but it's not in the provided data. Extract just the name or number they used as the query (e.g. "Sohyla", "Jose", "26SMCV01221").
 - [CREATE_EVENT:{json}] — if the user wants to create/add/schedule an event (see EVENT CREATION above)
+- [CREATE_CASE:{json}] — if the user wants to create/add a new case (see CASE CREATION above)
 
 After the prefix, write your answer.
 
@@ -102,6 +137,25 @@ export interface EventIntent {
   inPerson?: boolean;
 }
 
+export interface CaseIntent {
+  plaintiff?: string;
+  defendant?: string;
+  caseNumber?: string;
+  countyName?: string;
+  courtName?: string;
+  department?: string;
+  judge?: string;
+  caseType?: string;
+  filingDate?: string;
+  dateOfLoss?: string;
+  defenseFirm?: string;
+  defenseAttorney?: string;
+  attorneyName?: string;
+  paralegalName?: string;
+  assistantName?: string;
+  description?: string;
+}
+
 export interface AskLitCalResult {
   answer: string;
   model: string;
@@ -109,6 +163,7 @@ export interface AskLitCalResult {
   activeCaseId?: string;
   searchQuery?: string;
   eventIntent?: EventIntent;
+  caseIntent?: CaseIntent;
 }
 
 export async function askLitCal(input: AskLitCalInput): Promise<AskLitCalResult> {
@@ -149,6 +204,7 @@ export async function askLitCal(input: AskLitCalInput): Promise<AskLitCalResult>
         activeCaseId: extractCaseId(prefix),
         searchQuery: extractSearchQuery(prefix),
         eventIntent: extractEventIntent(prefix),
+        caseIntent: extractCaseIntent(prefix),
       };
     } catch (err) {
       const msg = String(err);
@@ -166,6 +222,11 @@ export async function askLitCal(input: AskLitCalInput): Promise<AskLitCalResult>
 }
 
 function parseResponse(raw: string): { prefix: string; body: string } {
+  // CREATE_CASE prefix
+  const caseMatch = raw.match(/^\[CREATE_CASE:(\{[\s\S]*?\})\]\s*/);
+  if (caseMatch) {
+    return { prefix: `CREATE_CASE:${caseMatch[1]}`, body: raw.slice(caseMatch[0].length).trim() };
+  }
   // CREATE_EVENT prefix contains JSON with possible ] characters, so parse it specially
   const createMatch = raw.match(/^\[CREATE_EVENT:(\{[\s\S]*?\})\]\s*/);
   if (createMatch) {
@@ -193,6 +254,16 @@ function extractEventIntent(prefix: string): EventIntent | undefined {
   if (!match) return undefined;
   try {
     return JSON.parse(match[1]) as EventIntent;
+  } catch {
+    return undefined;
+  }
+}
+
+function extractCaseIntent(prefix: string): CaseIntent | undefined {
+  const match = prefix.match(/^CREATE_CASE:(\{[\s\S]*\})$/);
+  if (!match) return undefined;
+  try {
+    return JSON.parse(match[1]) as CaseIntent;
   } catch {
     return undefined;
   }

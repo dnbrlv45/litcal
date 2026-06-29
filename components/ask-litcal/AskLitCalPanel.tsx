@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { X, Send, Loader2, MessageSquare, Sparkles, CalendarPlus, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { X, Send, Loader2, MessageSquare, Sparkles, CalendarPlus, AlertTriangle, CheckCircle2, Briefcase } from "lucide-react";
 import { useAskLitCal } from "./AskLitCalContext";
 
 interface EventIntent {
@@ -17,6 +17,25 @@ interface EventIntent {
   allDay?: boolean;
   description?: string;
   inPerson?: boolean;
+}
+
+interface CaseIntent {
+  plaintiff?: string;
+  defendant?: string;
+  caseNumber?: string;
+  countyName?: string;
+  courtName?: string;
+  department?: string;
+  judge?: string;
+  caseType?: string;
+  filingDate?: string;
+  dateOfLoss?: string;
+  defenseFirm?: string;
+  defenseAttorney?: string;
+  attorneyName?: string;
+  paralegalName?: string;
+  assistantName?: string;
+  description?: string;
 }
 
 interface ProposedEvent {
@@ -44,11 +63,36 @@ interface ProposedEvent {
   displayTime: string;
 }
 
+interface ProposedCase {
+  title: string;
+  plaintiff: string;
+  defendant: string | null;
+  caseNumber: string | null;
+  countyName: string | null;
+  courtName: string | null;
+  department: string | null;
+  judge: string | null;
+  caseType: string;
+  caseTypeLabel: string;
+  filingDate: string | null;
+  dateOfLoss: string | null;
+  defenseFirm: string | null;
+  defenseAttorney: string | null;
+  description: string | null;
+  attorneyId: string | null;
+  attorneyName: string | null;
+  paralegalId: string | null;
+  paralegalName: string | null;
+  assistantId: string | null;
+  assistantName: string | null;
+}
+
 interface Message {
   role: "user" | "assistant";
   content: string;
   caseMatches?: { id: string; title: string; caseNumber: string | null }[];
   proposedEvent?: ProposedEvent;
+  proposedCase?: ProposedCase;
 }
 
 const CASE_PROMPTS = [
@@ -91,7 +135,9 @@ export default function AskLitCalPanel() {
   const [loading, setLoading] = useState(false);
   const [activeCaseId, setActiveCaseId] = useState<string | null>(null);
   const [pendingEvent, setPendingEvent] = useState<EventIntent | null>(null);
+  const [pendingCase, setPendingCase] = useState<CaseIntent | null>(null);
   const [creatingEvent, setCreatingEvent] = useState(false);
+  const [creatingCase, setCreatingCase] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const prevOpenRef = useRef(false);
@@ -102,6 +148,7 @@ export default function AskLitCalPanel() {
       setActiveCaseId(caseId);
       setInput("");
       setPendingEvent(null);
+      setPendingCase(null);
       setTimeout(() => inputRef.current?.focus(), 100);
     }
     prevOpenRef.current = open;
@@ -129,6 +176,7 @@ export default function AskLitCalPanel() {
           activeCaseId: activeCaseId,
           history,
           pendingEvent: pendingEvent ?? undefined,
+          pendingCase: pendingCase ?? undefined,
         }),
       });
       const data = await res.json() as {
@@ -136,7 +184,9 @@ export default function AskLitCalPanel() {
         activeCaseId?: string | null;
         caseMatches?: { id: string; title: string; caseNumber: string | null }[] | null;
         pendingEvent?: EventIntent | null;
+        pendingCase?: CaseIntent | null;
         proposedEvent?: ProposedEvent | null;
+        proposedCase?: ProposedCase | null;
         error?: string;
       };
 
@@ -147,11 +197,19 @@ export default function AskLitCalPanel() {
 
       if (data.activeCaseId) setActiveCaseId(data.activeCaseId);
 
-      // Track pending event state for multi-turn collection
+      // Track pending state for multi-turn collection
       if (data.pendingEvent) {
         setPendingEvent(data.pendingEvent);
+        setPendingCase(null);
       } else if (data.proposedEvent) {
         setPendingEvent(null);
+      }
+
+      if (data.pendingCase) {
+        setPendingCase(data.pendingCase);
+        setPendingEvent(null);
+      } else if (data.proposedCase) {
+        setPendingCase(null);
       }
 
       setMessages((prev) => [...prev, {
@@ -159,13 +217,14 @@ export default function AskLitCalPanel() {
         content: data.answer ?? "No response.",
         caseMatches: data.caseMatches ?? undefined,
         proposedEvent: data.proposedEvent ?? undefined,
+        proposedCase: data.proposedCase ?? undefined,
       }]);
     } catch {
       setMessages((prev) => [...prev, { role: "assistant", content: "Failed to connect. Please try again." }]);
     } finally {
       setLoading(false);
     }
-  }, [loading, messages, activeCaseId, pendingEvent]);
+  }, [loading, messages, activeCaseId, pendingEvent, pendingCase]);
 
   const confirmEvent = useCallback(async (proposed: ProposedEvent) => {
     setCreatingEvent(true);
@@ -210,9 +269,62 @@ export default function AskLitCalPanel() {
     }
   }, []);
 
+  const confirmCase = useCallback(async (proposed: ProposedCase) => {
+    setCreatingCase(true);
+    try {
+      const res = await fetch("/api/cases", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: proposed.title,
+          plaintiff: proposed.plaintiff,
+          defendant: proposed.defendant ?? undefined,
+          caseNumber: proposed.caseNumber ?? undefined,
+          countyName: proposed.countyName ?? undefined,
+          courtName: proposed.courtName ?? undefined,
+          judge: proposed.judge ?? undefined,
+          caseType: proposed.caseType,
+          filingDate: proposed.filingDate ?? undefined,
+          dateOfLoss: proposed.dateOfLoss ?? undefined,
+          defenseFirm: proposed.defenseFirm ?? undefined,
+          defenseAttorney: proposed.defenseAttorney ?? undefined,
+          description: proposed.description ?? undefined,
+          attorneys: proposed.attorneyId ? [proposed.attorneyId] : [],
+          paralegals: proposed.paralegalId ? [proposed.paralegalId] : [],
+          assistants: proposed.assistantId ? [proposed.assistantId] : [],
+          source: "ask-litcal",
+        }),
+      });
+      const data = await res.json() as { case?: { id: string; title: string }; error?: string };
+
+      if (!res.ok) {
+        setMessages((prev) => [...prev, { role: "assistant", content: `Failed to create case: ${data.error ?? "Unknown error"}` }]);
+        return;
+      }
+
+      setPendingCase(null);
+      if (data.case) {
+        setActiveCaseId(data.case.id);
+      }
+      setMessages((prev) => [...prev, {
+        role: "assistant",
+        content: `**Case created successfully!** "${proposed.title}" has been added to LitCal with a timeline entry.\n\nYou can now add events, tasks, or discovery for this case. For example:\n- "Add a CMC for next Friday at 9 AM"\n- "Schedule a deposition for next month"`,
+      }]);
+    } catch {
+      setMessages((prev) => [...prev, { role: "assistant", content: "Failed to create case. Please try again." }]);
+    } finally {
+      setCreatingCase(false);
+    }
+  }, []);
+
   const cancelEvent = useCallback(() => {
     setPendingEvent(null);
     setMessages((prev) => [...prev, { role: "assistant", content: "Event creation cancelled." }]);
+  }, []);
+
+  const cancelCase = useCallback(() => {
+    setPendingCase(null);
+    setMessages((prev) => [...prev, { role: "assistant", content: "Case creation cancelled." }]);
   }, []);
 
   function handleCaseSelect(id: string) {
@@ -227,6 +339,7 @@ export default function AskLitCalPanel() {
 
   if (!open) return null;
 
+  const isCreating = creatingEvent || creatingCase;
   const suggestedPrompts = activeCaseId ? CASE_PROMPTS : GLOBAL_PROMPTS;
 
   return (
@@ -311,6 +424,14 @@ export default function AskLitCalPanel() {
                       creating={creatingEvent}
                     />
                   )}
+                  {msg.proposedCase && (
+                    <CasePreviewCard
+                      caseData={msg.proposedCase}
+                      onConfirm={() => confirmCase(msg.proposedCase!)}
+                      onCancel={cancelCase}
+                      creating={creatingCase}
+                    />
+                  )}
                 </div>
               ) : (
                 <span>{msg.content}</span>
@@ -342,12 +463,12 @@ export default function AskLitCalPanel() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask about a case, deadline, event..."
-            disabled={loading || creatingEvent}
+            disabled={loading || isCreating}
             className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-teal-300 focus:ring-1 focus:ring-teal-200 disabled:opacity-50"
           />
           <button
             type="submit"
-            disabled={loading || !input.trim() || creatingEvent}
+            disabled={loading || !input.trim() || isCreating}
             className="grid size-9 place-items-center rounded-lg bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-40 transition-colors shrink-0"
           >
             <Send className="size-4" />
@@ -360,6 +481,8 @@ export default function AskLitCalPanel() {
     </div>
   );
 }
+
+// ── Event Preview Card ──────────────────────────────────────────────────────
 
 function EventPreviewCard({
   event,
@@ -503,6 +626,120 @@ function EventPreviewCard({
             <>
               <CalendarPlus className="size-3.5" />
               Create Event
+            </>
+          )}
+        </button>
+        <button
+          onClick={onCancel}
+          disabled={creating}
+          className="rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-600 px-4 py-2 hover:bg-slate-50 disabled:opacity-50 transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Case Preview Card ───────────────────────────────────────────────────────
+
+function CasePreviewCard({
+  caseData,
+  onConfirm,
+  onCancel,
+  creating,
+}: {
+  caseData: ProposedCase;
+  onConfirm: () => void;
+  onCancel: () => void;
+  creating: boolean;
+}) {
+  const rows: { label: string; value: string }[] = [
+    { label: "Title", value: caseData.title },
+    { label: "Plaintiff", value: caseData.plaintiff },
+  ];
+
+  if (caseData.defendant) rows.push({ label: "Defendant", value: caseData.defendant });
+  if (caseData.caseNumber) rows.push({ label: "Case #", value: caseData.caseNumber });
+  rows.push({ label: "Type", value: caseData.caseTypeLabel });
+  if (caseData.countyName) rows.push({ label: "County", value: caseData.countyName });
+  if (caseData.courtName) rows.push({ label: "Court", value: caseData.courtName });
+  if (caseData.department) rows.push({ label: "Dept", value: caseData.department });
+  if (caseData.judge) rows.push({ label: "Judge", value: caseData.judge });
+  if (caseData.filingDate) rows.push({ label: "Filed", value: formatDateDisplay(caseData.filingDate) });
+  if (caseData.dateOfLoss) rows.push({ label: "Date of Loss", value: formatDateDisplay(caseData.dateOfLoss) });
+  if (caseData.defenseFirm) rows.push({ label: "Def. Firm", value: caseData.defenseFirm });
+  if (caseData.defenseAttorney) rows.push({ label: "Def. Atty", value: caseData.defenseAttorney });
+  if (caseData.attorneyName) rows.push({ label: "Attorney", value: caseData.attorneyName });
+  if (caseData.paralegalName) rows.push({ label: "Paralegal", value: caseData.paralegalName });
+  if (caseData.assistantName) rows.push({ label: "Assistant", value: caseData.assistantName });
+  if (caseData.description) rows.push({ label: "Notes", value: caseData.description });
+
+  return (
+    <div className="mt-3 rounded-lg border border-indigo-200 bg-white overflow-hidden">
+      <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50 border-b border-indigo-200">
+        <Briefcase className="size-4 text-indigo-700" />
+        <span className="text-xs font-bold text-indigo-800">Proposed Case</span>
+      </div>
+
+      <div className="px-3 py-2.5 space-y-1.5 text-xs">
+        {rows.map((r, i) => (
+          <div key={i} className="flex gap-2">
+            <span className="text-slate-500 w-20 shrink-0">{r.label}</span>
+            <span className="font-medium text-slate-800">{r.value}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* What will happen */}
+      <div className="px-3 py-2 border-t border-slate-100">
+        <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-1">Will run:</p>
+        <ul className="space-y-0.5">
+          <li className="text-[11px] text-slate-600 flex items-center gap-1.5">
+            <CheckCircle2 className="size-3 text-indigo-500 shrink-0" />
+            Create LitCal case
+          </li>
+          <li className="text-[11px] text-slate-600 flex items-center gap-1.5">
+            <CheckCircle2 className="size-3 text-indigo-500 shrink-0" />
+            Add case timeline entry
+          </li>
+          {caseData.attorneyName && (
+            <li className="text-[11px] text-slate-600 flex items-center gap-1.5">
+              <CheckCircle2 className="size-3 text-indigo-500 shrink-0" />
+              Assign attorney: {caseData.attorneyName}
+            </li>
+          )}
+          {caseData.paralegalName && (
+            <li className="text-[11px] text-slate-600 flex items-center gap-1.5">
+              <CheckCircle2 className="size-3 text-indigo-500 shrink-0" />
+              Assign paralegal: {caseData.paralegalName}
+            </li>
+          )}
+          {caseData.assistantName && (
+            <li className="text-[11px] text-slate-600 flex items-center gap-1.5">
+              <CheckCircle2 className="size-3 text-indigo-500 shrink-0" />
+              Assign assistant: {caseData.assistantName}
+            </li>
+          )}
+        </ul>
+      </div>
+
+      {/* Actions */}
+      <div className="flex gap-2 px-3 py-2.5 border-t border-slate-100 bg-slate-50">
+        <button
+          onClick={onConfirm}
+          disabled={creating}
+          className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-indigo-700 text-white text-xs font-semibold py-2 hover:bg-indigo-800 disabled:opacity-50 transition-colors"
+        >
+          {creating ? (
+            <>
+              <Loader2 className="size-3.5 animate-spin" />
+              Creating...
+            </>
+          ) : (
+            <>
+              <Briefcase className="size-3.5" />
+              Create Case
             </>
           )}
         </button>

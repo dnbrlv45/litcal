@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCurrentWorkspace } from "@/lib/workspaces";
 import { askLitCal } from "@/lib/ai/askLitCal";
-import type { EventIntent } from "@/lib/ai/askLitCal";
+import type { EventIntent, CaseIntent } from "@/lib/ai/askLitCal";
 import { getFullCaseContext, getGlobalContext, searchCases } from "@/lib/ai/askLitCalData";
 import { detectConflicts } from "@/lib/conflicts";
 import { findCourtHearingRule } from "@/lib/court-hearing-rules";
@@ -23,9 +23,10 @@ export async function POST(request: NextRequest) {
     activeCaseId?: string;
     history?: { role: "user" | "assistant"; content: string }[];
     pendingEvent?: EventIntent;
+    pendingCase?: CaseIntent;
   };
 
-  const { question, activeCaseId, history, pendingEvent } = body;
+  const { question, activeCaseId, history, pendingEvent, pendingCase } = body;
   if (!question?.trim()) return NextResponse.json({ error: "Question is required" }, { status: 400 });
   if (question.length > 1000) return NextResponse.json({ error: "Question too long (max 1000 characters)" }, { status: 400 });
 
@@ -54,13 +55,32 @@ export async function POST(request: NextRequest) {
     contextText = await getGlobalContext(workspace.id);
   }
 
-  // Append pending event context so the AI can merge new info with existing fields
+  // Append pending event/case context so the AI can merge new info with existing fields
   if (pendingEvent && Object.keys(pendingEvent).length > 0) {
     const fields = Object.entries(pendingEvent)
       .filter(([, v]) => v !== undefined && v !== null && v !== "")
       .map(([k, v]) => `${k}: ${v}`)
       .join("\n");
     contextText += `\n\nPENDING EVENT (user is filling in details — merge new info with these):\n${fields}`;
+  }
+  if (pendingCase && Object.keys(pendingCase).length > 0) {
+    const fields = Object.entries(pendingCase)
+      .filter(([, v]) => v !== undefined && v !== null && v !== "")
+      .map(([k, v]) => `${k}: ${v}`)
+      .join("\n");
+    contextText += `\n\nPENDING CASE (user is filling in details — merge new info with these):\n${fields}`;
+  }
+
+  // Include workspace members so the AI can reference staff by name
+  const workspaceMembers = await prisma.workspaceMember.findMany({
+    where: { workspaceId: workspace.id },
+    include: { user: { select: { id: true, firstName: true, lastName: true } } },
+  });
+  if (workspaceMembers.length > 0) {
+    const memberLines = workspaceMembers.map((m) =>
+      `- ${[m.user.firstName, m.user.lastName].filter(Boolean).join(" ") || "Unknown"} (role: ${m.role})`
+    );
+    contextText += `\n\nWORKSPACE MEMBERS:\n${memberLines.join("\n")}`;
   }
 
   // Call Gemini
@@ -277,6 +297,102 @@ export async function POST(request: NextRequest) {
       answer: result.answer,
       activeCaseId: finalActiveCaseId ?? null,
       proposedEvent,
+    });
+  }
+
+  // Handle case creation intent
+  if (result.caseIntent) {
+    const intent: CaseIntent = { ...pendingCase, ...result.caseIntent };
+
+    // Check required fields
+    if (!intent.plaintiff) {
+      await prisma.askLitCalLog.create({
+        data: {
+          id: `alc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          workspaceId: workspace.id, userId: user.id, caseId: null,
+          question: question.slice(0, 1000),
+          answer: `Missing plaintiff. ${result.answer}`,
+          model: result.model,
+        },
+      });
+
+      return NextResponse.json({
+        answer: result.answer,
+        activeCaseId: activeCaseId ?? null,
+        pendingCase: intent,
+      });
+    }
+
+    // Generate title
+    const title = intent.defendant
+      ? `${intent.plaintiff} v. ${intent.defendant}`
+      : intent.plaintiff;
+
+    // Resolve staff names to user IDs
+    const resolveStaffByName = async (name: string | undefined) => {
+      if (!name) return null;
+      const nameLower = name.toLowerCase().trim();
+      const member = workspaceMembers.find((m) => {
+        const full = [m.user.firstName, m.user.lastName].filter(Boolean).join(" ").toLowerCase();
+        const first = (m.user.firstName ?? "").toLowerCase();
+        const last = (m.user.lastName ?? "").toLowerCase();
+        return full === nameLower || first === nameLower || last === nameLower;
+      });
+      return member?.user.id ?? null;
+    };
+
+    const attorneyId = await resolveStaffByName(intent.attorneyName);
+    const paralegalId = await resolveStaffByName(intent.paralegalName);
+    const assistantId = await resolveStaffByName(intent.assistantName);
+
+    const CASE_TYPE_VALUES = ["AUTO_ACCIDENT","SLIP_AND_FALL","GOVERNMENT_CLAIM","DOG_BITE","PREMISES_LIABILITY","MEDICAL_MALPRACTICE","WRONGFUL_DEATH","PRODUCT_LIABILITY","OTHER"];
+    const caseType = CASE_TYPE_VALUES.includes(intent.caseType ?? "") ? intent.caseType! : "AUTO_ACCIDENT";
+
+    const caseTypeLabels: Record<string, string> = {
+      AUTO_ACCIDENT: "Auto Accident", SLIP_AND_FALL: "Slip and Fall",
+      GOVERNMENT_CLAIM: "Government Claim", DOG_BITE: "Dog Bite",
+      PREMISES_LIABILITY: "Premises Liability", MEDICAL_MALPRACTICE: "Medical Malpractice",
+      WRONGFUL_DEATH: "Wrongful Death", PRODUCT_LIABILITY: "Product Liability", OTHER: "Other",
+    };
+
+    const proposedCase = {
+      title,
+      plaintiff: intent.plaintiff,
+      defendant: intent.defendant ?? null,
+      caseNumber: intent.caseNumber ?? null,
+      countyName: intent.countyName ?? null,
+      courtName: intent.courtName ?? null,
+      department: intent.department ?? null,
+      judge: intent.judge ?? null,
+      caseType,
+      caseTypeLabel: caseTypeLabels[caseType] ?? caseType,
+      filingDate: intent.filingDate ?? null,
+      dateOfLoss: intent.dateOfLoss ?? null,
+      defenseFirm: intent.defenseFirm ?? null,
+      defenseAttorney: intent.defenseAttorney ?? null,
+      description: intent.description ?? null,
+      attorneyId,
+      attorneyName: intent.attorneyName ?? null,
+      paralegalId,
+      paralegalName: intent.paralegalName ?? null,
+      assistantId,
+      assistantName: intent.assistantName ?? null,
+    };
+
+    await prisma.askLitCalLog.create({
+      data: {
+        id: `alc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        workspaceId: workspace.id, userId: user.id, caseId: null,
+        question: question.slice(0, 1000),
+        answer: `Proposed case: ${title}. Awaiting confirmation.`,
+        model: result.model,
+      },
+    });
+
+    return NextResponse.json({
+      answer: result.answer,
+      activeCaseId: activeCaseId ?? null,
+      proposedCase,
     });
   }
 
