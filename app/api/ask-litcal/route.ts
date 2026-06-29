@@ -55,6 +55,11 @@ export async function POST(request: NextRequest) {
     contextText = await getGlobalContext(workspace.id);
   }
 
+  // Tell the AI which case is active so it doesn't re-search
+  if (activeCaseId) {
+    contextText += `\n\nACTIVE CASE ID: ${activeCaseId}\nThe user has an active case in context. If they say "this case", "the case", or refer to the current case without naming a different one, use this case. Do NOT search for it again.`;
+  }
+
   // Append pending event/case context so the AI can merge new info with existing fields
   if (pendingEvent && Object.keys(pendingEvent).length > 0) {
     const fields = Object.entries(pendingEvent)

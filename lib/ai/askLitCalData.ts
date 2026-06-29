@@ -163,13 +163,20 @@ export async function getFullCaseContext(caseId: string, workspaceId: string): P
 
 // ── Workspace-wide tools ─────────────────────────────────────────────────────
 
+const BUSINESS_SUFFIXES = /\b(inc\.?|incorporated|llc|llp|ltd\.?|corporation|corp\.?|company|co\.?)\b/gi;
+
+function stripSuffixes(s: string): string {
+  return s.replace(BUSINESS_SUFFIXES, "").replace(/\s{2,}/g, " ").trim();
+}
+
 export async function searchCases(query: string, workspaceId: string): Promise<{ id: string; title: string; caseNumber: string | null }[]> {
   const allCases = await prisma.case.findMany({
     where: { workspaceId, status: { notIn: ["ARCHIVED", "CLOSED"] } },
     include: { parties: { select: { name: true } } },
   });
 
-  const q = query.toLowerCase().trim().replace(/['']/g, "'");
+  const q = stripSuffixes(query.toLowerCase().trim().replace(/['']/g, "'"));
+  if (!q) return [];
   const qParts = q.split(/\s+/).filter((p) => p.length >= 2);
 
   type ScoredCase = { id: string; title: string; caseNumber: string | null; score: number };
@@ -177,8 +184,8 @@ export async function searchCases(query: string, workspaceId: string): Promise<{
 
   for (const c of allCases) {
     let score = 0;
-    const titleLower = c.title.toLowerCase();
-    const allNames = [titleLower, ...c.parties.map((p) => p.name.toLowerCase())];
+    const titleLower = stripSuffixes(c.title.toLowerCase());
+    const allNames = [titleLower, ...c.parties.map((p) => stripSuffixes(p.name.toLowerCase()))];
 
     // Exact case number match
     if (c.caseNumber && c.caseNumber.toLowerCase() === q) { score = 100; }
