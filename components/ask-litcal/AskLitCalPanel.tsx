@@ -246,7 +246,12 @@ export default function AskLitCalPanel() {
         endISO = new Date(`${proposed.date}T23:59:59`).toISOString();
       } else {
         startISO = new Date(`${proposed.date}T${proposed.startTime}`).toISOString();
-        endISO = new Date(`${proposed.date}T${proposed.endTime}`).toISOString();
+        // Default end to 1 hour after start if not specified
+        const endTimeStr = proposed.endTime ?? (() => {
+          const [h, m] = (proposed.startTime ?? "09:00").split(":").map(Number);
+          return `${String((h + 1) % 24).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+        })();
+        endISO = new Date(`${proposed.date}T${endTimeStr}`).toISOString();
       }
       const res = await fetch("/api/calendar/events", {
         method: "POST",
