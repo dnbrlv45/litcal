@@ -98,10 +98,20 @@ export async function PATCH(
         return NextResponse.json({ error: "Missing event date in extracted data" }, { status: 400 });
       }
 
+      const mappedType = mapEventType(event.eventType);
       const startTime = localToUTC(event.date, event.startTime ?? "09:00", userTz);
-      const endTime = event.endTime
+      // Trials default to a 7-day all-day block; other events to 1 hour
+      let endTime = event.endTime
         ? localToUTC(event.date, event.endTime, userTz)
         : new Date(startTime.getTime() + 60 * 60 * 1000);
+      let eventAllDay = false;
+      if (mappedType === "TRIAL") {
+        const spanMs = endTime.getTime() - startTime.getTime();
+        if (isNaN(spanMs) || spanMs < 2 * 24 * 60 * 60 * 1000) {
+          eventAllDay = true;
+          endTime = new Date(startTime.getTime() + 7 * 24 * 60 * 60 * 1000);
+        }
+      }
 
       // Find or create the case so the event can be linked to it
       let caseId: string | undefined;
@@ -218,7 +228,7 @@ export async function PATCH(
               workspaceId: workspace.id,
               caseId,
               startTime,
-              eventType: mapEventType(event.eventType),
+              eventType: mappedType,
             },
           })
         : null;
@@ -233,8 +243,9 @@ export async function PATCH(
             description: event.description ?? undefined,
             startTime,
             endTime,
+            allDay:      eventAllDay,
             location:    event.location ?? undefined,
-            eventType:   mapEventType(event.eventType),
+            eventType:   mappedType,
             status:      "SCHEDULED",
           },
         });

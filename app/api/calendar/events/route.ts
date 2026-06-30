@@ -253,7 +253,21 @@ export async function POST(request: NextRequest) {
 
   // Check conflicts before creating (non-blocking)
   const startDate = new Date(start);
-  const endDate = new Date(end);
+  let endDate = new Date(end);
+  let effectiveAllDay = allDay ?? false;
+
+  // Trials default to a 7-day all-day block unless an explicit multi-day span
+  // was provided (e.g. from the event modal). This keeps Ask LitCal / AI Inbox
+  // trials consistent with manually-created ones.
+  if ((safeEventType as string) === "TRIAL") {
+    const spanMs = endDate.getTime() - startDate.getTime();
+    const twoDaysMs = 2 * 24 * 60 * 60 * 1000;
+    if (isNaN(spanMs) || spanMs < twoDaysMs) {
+      effectiveAllDay = true;
+      endDate = new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+    }
+  }
+
   const preConflicts = inheritedAttorneyId
     ? await detectConflicts(inheritedAttorneyId, startDate, endDate)
     : [];
@@ -269,7 +283,7 @@ export async function POST(request: NextRequest) {
       startTime: startDate,
       endTime: endDate,
       timeZone: timeZone ?? "UTC",
-      allDay: allDay ?? false,
+      allDay: effectiveAllDay,
       eventType: safeEventType,
       subtype: subtype?.trim() || null,
       subtypeReason: subtypeReason?.trim() || null,
