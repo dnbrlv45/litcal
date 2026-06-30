@@ -246,6 +246,7 @@ export default function CalendarView() {
   const [caseSearch, setCaseSearch] = useState("");
   const [calendarSearch, setCalendarSearch] = useState("");
   const [eventSearchResults, setEventSearchResults] = useState<CalEvent[]>([]);
+  const [searchActiveIndex, setSearchActiveIndex] = useState(-1);
   const [caseDropdownOpen, setCaseDropdownOpen] = useState(false);
   const caseDropdownRef = useRef<HTMLDivElement>(null);
   const calendarSearchRef = useRef<HTMLInputElement>(null);
@@ -428,7 +429,8 @@ export default function CalendarView() {
   const calendarSearchQuery = normalizeSearch(calendarSearch);
 
   useEffect(() => {
-    if (!calendarSearchQuery) { setEventSearchResults([]); return; }
+    if (!calendarSearchQuery) { setEventSearchResults([]); setSearchActiveIndex(-1); return; }
+    setSearchActiveIndex(-1);
     const timer = setTimeout(() => {
       fetch(`/api/calendar/events?q=${encodeURIComponent(calendarSearch)}`)
         .then((r) => r.json())
@@ -464,6 +466,30 @@ export default function CalendarView() {
   function closeCalendarSearch() {
     setCaseDropdownOpen(false);
     setCalendarSearch("");
+    setSearchActiveIndex(-1);
+  }
+
+  // Flat ordered list of all search result actions for arrow-key navigation
+  const searchActions = calendarSearchQuery ? [
+    ...caseSearchResults.map((c) => () => { closeCalendarSearch(); router.push(`/cases/${c.id}`); }),
+    ...eventSearchResults.map((e) => () => openSearchEvent(e)),
+    ...deadlineSearchResults.map((d) => () => openSearchDeadline(d)),
+  ] : [];
+
+  function handleSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (!calendarSearchQuery) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSearchActiveIndex((i) => Math.min(i + 1, searchActions.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSearchActiveIndex((i) => Math.max(i - 1, -1));
+    } else if (e.key === "Enter" && searchActiveIndex >= 0) {
+      e.preventDefault();
+      searchActions[searchActiveIndex]?.();
+    } else if (e.key === "Escape") {
+      closeCalendarSearch();
+    }
   }
 
   function openSearchEvent(event: CalEvent) {
@@ -553,13 +579,14 @@ export default function CalendarView() {
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden bg-slate-50">
       {/* Top nav — hidden on mobile */}
-      <div className="hidden md:flex h-[72px] shrink-0 border-b border-slate-200/80 bg-white/90 backdrop-blur px-7 items-center justify-between gap-5">
+      <div className="hidden md:flex h-[72px] shrink-0 border-b border-slate-200/80 bg-white/90 backdrop-blur px-7 items-center justify-between gap-5 z-20 relative">
         <div className="relative w-full max-w-[680px]">
           <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
           <input
             ref={calendarSearchRef}
             value={calendarSearch}
             onChange={(e) => setCalendarSearch(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
             className="h-11 w-full rounded-lg border border-slate-200 bg-white pl-10 pr-14 text-sm text-slate-700 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
             placeholder="Search cases, events, deadlines..."
           />
@@ -581,12 +608,12 @@ export default function CalendarView() {
             </span>
           )}
           {calendarSearchQuery && (
-            <div className="absolute left-0 top-full z-50 mt-2 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+            <div className="absolute left-0 top-full z-[200] mt-2 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
               {hasSearchResults ? (
                 <div className="max-h-[420px] overflow-y-auto py-2">
                   {caseSearchResults.length > 0 && (
                     <SearchResultSection title="Cases">
-                      {caseSearchResults.map((c) => (
+                      {caseSearchResults.map((c, i) => (
                         <button
                           key={c.id}
                           type="button"
@@ -595,7 +622,7 @@ export default function CalendarView() {
                             closeCalendarSearch();
                             router.push(`/cases/${c.id}`);
                           }}
-                          className="w-full px-3 py-2 text-left hover:bg-slate-50"
+                          className={`w-full px-3 py-2 text-left ${searchActiveIndex === i ? "bg-teal-50" : "hover:bg-slate-50"}`}
                         >
                           <span className="block truncate text-sm font-semibold text-slate-800">{c.title}</span>
                           <span className="block truncate text-xs text-slate-500">
@@ -608,13 +635,13 @@ export default function CalendarView() {
 
                   {eventSearchResults.length > 0 && (
                     <SearchResultSection title="Events">
-                      {eventSearchResults.map((event) => (
+                      {eventSearchResults.map((event, i) => (
                         <button
                           key={event.id}
                           type="button"
                           onMouseDown={(e) => e.preventDefault()}
                           onClick={() => openSearchEvent(event)}
-                          className="w-full px-3 py-2 text-left hover:bg-slate-50"
+                          className={`w-full px-3 py-2 text-left ${searchActiveIndex === caseSearchResults.length + i ? "bg-teal-50" : "hover:bg-slate-50"}`}
                         >
                           <span className="block truncate text-sm font-semibold text-slate-800">{event.title}</span>
                           <span className="block truncate text-xs text-slate-500">
@@ -636,7 +663,7 @@ export default function CalendarView() {
                             type="button"
                             onMouseDown={(e) => e.preventDefault()}
                             onClick={() => openSearchDeadline(deadline)}
-                            className="w-full px-3 py-2 text-left hover:bg-slate-50"
+                            className={`w-full px-3 py-2 text-left ${searchActiveIndex === caseSearchResults.length + eventSearchResults.length + deadlineSearchResults.indexOf(deadline) ? "bg-teal-50" : "hover:bg-slate-50"}`}
                           >
                             <span className="block truncate text-sm font-semibold text-slate-800">{deadline.title}</span>
                             <span className="block truncate text-xs text-slate-500">
