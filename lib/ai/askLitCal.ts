@@ -1,6 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-
-const MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"];
+import { GEMINI_TEXT_MODELS, isGeminiFallbackError } from "@/lib/ai/geminiModels";
 
 const SYSTEM_PROMPT = `You are Ask LitCal, a litigation operations assistant for a personal injury law firm. You help legal staff find information about their cases, calendar events, deadlines, tasks, discovery items, court rules, and timeline activity. You can also help create new calendar events and new cases.
 
@@ -284,15 +283,13 @@ export async function askLitCal(input: AskLitCalInput): Promise<AskLitCalResult>
   const genai = new GoogleGenerativeAI(apiKey);
   const { systemPrompt, userContent } = buildPrompts(input);
 
-  for (const modelName of MODELS) {
+  for (const modelName of GEMINI_TEXT_MODELS) {
     try {
       const model = genai.getGenerativeModel({ model: modelName });
       const result = await model.generateContent([systemPrompt, userContent]);
       return buildResult(result.response.text().trim(), modelName);
     } catch (err) {
-      const msg = String(err);
-      const isRateLimit = msg.includes("429") || msg.toLowerCase().includes("quota") || msg.toLowerCase().includes("rate");
-      if (isRateLimit) continue;
+      if (isGeminiFallbackError(err)) continue;
       throw err;
     }
   }
@@ -309,7 +306,7 @@ export async function askLitCalStream(
   const genai = new GoogleGenerativeAI(apiKey);
   const { systemPrompt, userContent } = buildPrompts(input);
 
-  for (const modelName of MODELS) {
+  for (const modelName of GEMINI_TEXT_MODELS) {
     try {
       const model = genai.getGenerativeModel({ model: modelName });
       const streamResult = await model.generateContentStream([systemPrompt, userContent]);
@@ -342,10 +339,7 @@ export async function askLitCalStream(
 
       return buildResult(fullText.trim(), modelName);
     } catch (err) {
-      const msg = String(err);
-      const isRateLimit = msg.includes("429") || msg.toLowerCase().includes("quota") || msg.toLowerCase().includes("rate");
-      const isStreamParseError = msg.toLowerCase().includes("failed to parse stream");
-      if (isRateLimit || isStreamParseError) continue;
+      if (isGeminiFallbackError(err)) continue;
       throw err;
     }
   }

@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GEMINI_TEXT_MODELS, isGeminiFallbackError } from "@/lib/ai/geminiModels";
 
 export type AIClassification = "CALENDAR_EVENT" | "EVENT_CANCELLATION" | "DISCOVERY" | "DISCOVERY_EXTENSION" | "NEW_CASE" | "IGNORE";
 
@@ -200,9 +201,7 @@ const MAX_BODY_CHARS = 12_000;
 const MAX_PDF_CHARS = 10_000;
 
 async function callGemini(genai: GoogleGenerativeAI, prompt: string, userContent: string): Promise<Record<string, unknown> | null> {
-  const MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"];
-
-  for (const modelName of MODELS) {
+  for (const modelName of GEMINI_TEXT_MODELS) {
     try {
       const model = genai.getGenerativeModel({ model: modelName });
       const result = await model.generateContent([prompt, userContent]);
@@ -211,9 +210,7 @@ async function callGemini(genai: GoogleGenerativeAI, prompt: string, userContent
       if (!objectMatch) continue;
       return JSON.parse(objectMatch[0]) as Record<string, unknown>;
     } catch (err) {
-      const msg = String(err);
-      const isRateLimit = msg.includes("429") || msg.toLowerCase().includes("quota") || msg.toLowerCase().includes("rate");
-      if (isRateLimit) continue;
+      if (isGeminiFallbackError(err) || err instanceof SyntaxError) continue;
       throw err;
     }
   }
