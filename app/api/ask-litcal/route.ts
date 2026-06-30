@@ -194,7 +194,7 @@ export async function POST(request: NextRequest) {
         });
 
         return NextResponse.json({
-          answer: `I found multiple cases matching "${intent.caseQuery}". Which one did you mean?\n\n${numbered}\n\nYou can type the number, case name, or case number.`,
+          answer: `I found multiple cases matching "${intent.caseQuery}". Which one did you mean?\n\n${numbered}\n\nClick a case below to select it.`,
           activeCaseId: finalActiveCaseId ?? null,
           caseMatches: eventCaseMatches,
           pendingEvent: intent,
@@ -544,7 +544,7 @@ export async function POST(request: NextRequest) {
       const numbered = matches.slice(0, 8).map((m, i) =>
         `${i + 1}. **${m.title}**${m.caseNumber ? ` (#${m.caseNumber})` : ""}`
       ).join("\n");
-      finalAnswer = `I found ${matches.length} cases matching "${result.searchQuery}". Which one did you mean?\n\n${numbered}\n\nYou can type the number, case name, or case number.`;
+      finalAnswer = `I found ${matches.length} cases matching "${result.searchQuery}". Which one did you mean?\n\n${numbered}\n\nClick a case below to select it.`;
     } else {
       finalAnswer = `I couldn't find a case matching "${result.searchQuery}" in LitCal. Try the full case name, case number, plaintiff name, or defendant name.`;
     }
