@@ -589,7 +589,7 @@ export default function CalendarView() {
             className="h-11 w-full rounded-lg border border-slate-200 bg-white pl-10 pr-14 text-sm text-slate-700 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
             placeholder="Search cases, events, deadlines..."
           />
-          {calendarSearch ? (
+          {calendarSearch && (
             <button
               type="button"
               onClick={() => {
