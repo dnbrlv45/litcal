@@ -84,9 +84,9 @@ function TaskCard({ task, onEdit, onDelete, onCycleStatus, onComplete, highlight
           <p className={`text-sm font-semibold leading-snug ${task.status === "DONE" ? "line-through text-muted-foreground" : "text-slate-950"}`}>
             {task.title}
           </p>
-          <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1 shrink-0">
             {task.status !== "DONE" && (
-              <button onClick={() => onComplete(task)} className="rounded px-1.5 py-0.5 text-xs font-medium text-green-700 hover:bg-green-50">Mark complete</button>
+              <button onClick={() => onComplete(task)} className="rounded px-1.5 py-0.5 text-xs font-medium text-green-700 hover:bg-green-50 border border-green-200">Mark complete</button>
             )}
             <button onClick={() => onEdit(task)} className="rounded px-1.5 py-0.5 text-xs font-medium text-muted-foreground hover:bg-slate-100 hover:text-foreground">Edit</button>
             <button onClick={() => onDelete(task.id)} className="rounded px-1.5 py-0.5 text-xs font-medium text-muted-foreground hover:bg-red-50 hover:text-red-600">Delete</button>
