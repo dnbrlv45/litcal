@@ -10,7 +10,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Command,
   Plus,
   Search,
   X,
@@ -602,10 +601,6 @@ export default function CalendarView() {
             >
               <X className="size-3.5" />
             </button>
-          ) : (
-            <span className="absolute right-3 top-1/2 inline-flex -translate-y-1/2 items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-1 text-[11px] font-medium text-slate-400">
-              <Command className="size-3" />K
-            </span>
           )}
           {calendarSearchQuery && (
             <div className="absolute left-0 top-full z-[200] mt-2 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
