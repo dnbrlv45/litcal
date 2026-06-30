@@ -41,7 +41,7 @@ export default async function RootLayout({
         <AskLitCalProvider>
           <Sidebar isSuperAdmin={isSuperAdmin} isViewer={isViewer} />
           <main className="flex-1 flex flex-col min-w-0 overflow-hidden pb-16 md:pb-0">{children}</main>
-          <MobileNav />
+          <MobileNav isViewer={isViewer} />
           <AskLitCalPanel />
         </AskLitCalProvider>
       </body>
