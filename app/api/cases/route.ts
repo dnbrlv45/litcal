@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getCurrentWorkspace } from "@/lib/workspaces";
+import { canEdit, getCurrentWorkspace } from "@/lib/workspaces";
 import { addTimelineEntry } from "@/lib/case-timeline";
 
 const CASE_TYPE_VALUES = ["AUTO_ACCIDENT","SLIP_AND_FALL","GOVERNMENT_CLAIM","DOG_BITE","PREMISES_LIABILITY","MEDICAL_MALPRACTICE","WRONGFUL_DEATH","PRODUCT_LIABILITY","OTHER"];
@@ -69,8 +69,9 @@ export async function POST(request: NextRequest) {
   const currentUser = await requireUser();
   if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = currentUser.id;
-  const { workspace } = await getCurrentWorkspace(userId);
-  if (!workspace) return NextResponse.json({ error: "No workspace" }, { status: 403 });
+  const { workspace, membership } = await getCurrentWorkspace(userId);
+  if (!workspace || !membership) return NextResponse.json({ error: "No workspace" }, { status: 403 });
+  if (!canEdit(membership.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await request.json() as {
     title: string;

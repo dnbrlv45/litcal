@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-type Role = "OWNER" | "ADMIN" | "MEMBER";
+type Role = "OWNER" | "ADMIN" | "MEMBER" | "VIEWER";
 type JobTitle = "ATTORNEY" | "PARALEGAL" | "ASSISTANT" | "STAFF" | null;
 
 const JOB_TITLE_OPTIONS: { value: JobTitle; label: string }[] = [
@@ -305,8 +305,9 @@ export default function TeamClient({ initialWorkspace, initialMembers, initialIn
                     value={member.role}
                     onChange={(e) => updateRole(member.id, e.target.value as Role)}
                     disabled={savingTitleId === member.id}
-                    className="h-8 rounded-md border border-input bg-background px-2 py-0 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 w-24"
+                    className="h-8 rounded-md border border-input bg-background px-2 py-0 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 w-28"
                   >
+                    <option value="VIEWER">Viewer</option>
                     <option value="MEMBER">Member</option>
                     <option value="ADMIN">Admin</option>
                   </select>
@@ -379,8 +380,9 @@ export default function TeamClient({ initialWorkspace, initialMembers, initialIn
             <div>
               <Label htmlFor="member-role">Role</Label>
               <select id="member-role" value={role} onChange={(e) => setRole(e.target.value as Role)} className={select}>
-                <option value="MEMBER">Member</option>
-                <option value="ADMIN">Admin</option>
+                <option value="VIEWER">Viewer — view only</option>
+                <option value="MEMBER">Member — can edit</option>
+                <option value="ADMIN">Admin — edit &amp; delete</option>
               </select>
             </div>
             <Button type="submit" disabled={addingMember} className="bg-teal-700 text-white hover:bg-teal-800">

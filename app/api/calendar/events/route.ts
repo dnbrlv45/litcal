@@ -6,7 +6,7 @@ import type { GoogleCalEvent } from "@/lib/google-calendar";
 import { buildGoogleEventPayload, eventSupportsRemoteAppearance, getGoogleColorId } from "@/lib/google-calendar-payload";
 import { addTimelineEntry } from "@/lib/case-timeline";
 import { computeReminders, googleReminderOverrides } from "@/lib/reminders";
-import { getCurrentWorkspace } from "@/lib/workspaces";
+import { canEdit, getCurrentWorkspace } from "@/lib/workspaces";
 import { detectConflicts, getConflictedEventIds } from "@/lib/conflicts";
 import { applyDeadlineRules } from "@/lib/deadline-rules";
 import { findCourtHearingRule, computeRemoteAppearanceDueDate } from "@/lib/court-hearing-rules";
@@ -139,8 +139,9 @@ export async function POST(request: NextRequest) {
   const currentUser = await requireUser();
   if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = currentUser.id;
-  const { workspace } = await getCurrentWorkspace(userId);
-  if (!workspace) return NextResponse.json({ error: "No workspace" }, { status: 403 });
+  const { workspace, membership } = await getCurrentWorkspace(userId);
+  if (!workspace || !membership) return NextResponse.json({ error: "No workspace" }, { status: 403 });
+  if (!canEdit(membership.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await request.json();
   const {

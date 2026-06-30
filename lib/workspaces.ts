@@ -80,3 +80,11 @@ export async function createWorkspace(userId: string, name: string) {
 export function canManageWorkspace(role: string) {
   return role === "OWNER" || role === "ADMIN";
 }
+
+export function canEdit(role: string) {
+  return role === "OWNER" || role === "ADMIN" || role === "MEMBER";
+}
+
+export function canDelete(role: string) {
+  return role === "OWNER" || role === "ADMIN";
+}

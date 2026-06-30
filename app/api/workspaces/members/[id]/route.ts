@@ -37,7 +37,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     if (target.role === "OWNER") {
       return NextResponse.json({ error: "Cannot change the owner's role" }, { status: 422 });
     }
-    const validRoles = ["ADMIN", "MEMBER"];
+    const validRoles = ["ADMIN", "MEMBER", "VIEWER"];
     if (validRoles.includes(body.role)) {
       data.role = body.role;
     }

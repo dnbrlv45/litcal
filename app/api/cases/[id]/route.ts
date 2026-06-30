@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getAccessToken, deleteGoogleEvent } from "@/lib/google-calendar";
-import { getCurrentWorkspace } from "@/lib/workspaces";
+import { canDelete, canEdit, getCurrentWorkspace } from "@/lib/workspaces";
 import { addTimelineEntry } from "@/lib/case-timeline";
 
 type Params = { params: Promise<{ id: string }> };
@@ -50,8 +50,9 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   const currentUser = await requireUser();
   if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = currentUser.id;
-  const { workspace } = await getCurrentWorkspace(userId);
-  if (!workspace) return NextResponse.json({ error: "No workspace" }, { status: 403 });
+  const { workspace, membership } = await getCurrentWorkspace(userId);
+  if (!workspace || !membership) return NextResponse.json({ error: "No workspace" }, { status: 403 });
+  if (!canEdit(membership.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { id } = await params;
   const body = await request.json() as {
@@ -324,8 +325,9 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   const currentUser = await requireUser();
   if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = currentUser.id;
-  const { workspace } = await getCurrentWorkspace(userId);
-  if (!workspace) return NextResponse.json({ error: "No workspace" }, { status: 403 });
+  const { workspace, membership } = await getCurrentWorkspace(userId);
+  if (!workspace || !membership) return NextResponse.json({ error: "No workspace" }, { status: 403 });
+  if (!canDelete(membership.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { id } = await params;
 
