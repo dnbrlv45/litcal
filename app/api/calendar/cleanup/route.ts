@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getCurrentWorkspace } from "@/lib/workspaces";
+import { getCurrentWorkspace, canManageWorkspace } from "@/lib/workspaces";
 import { getAccessToken, patchGoogleEvent } from "@/lib/google-calendar";
 
 export const dynamic = "force-dynamic";
@@ -27,8 +27,9 @@ async function cleanup() {
   const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { workspace } = await getCurrentWorkspace(user.id);
+  const { workspace, membership } = await getCurrentWorkspace(user.id);
   if (!workspace) return NextResponse.json({ error: "No workspace" }, { status: 403 });
+  if (!canManageWorkspace(membership?.role ?? "")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   // 1. Fix all-day events stored at midnight UTC → noon UTC
   //    Midnight UTC shows as previous day in PDT/PST

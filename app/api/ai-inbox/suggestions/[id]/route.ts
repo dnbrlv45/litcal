@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getCurrentWorkspace } from "@/lib/workspaces";
+import { getCurrentWorkspace, canEdit } from "@/lib/workspaces";
 import { Prisma } from "@prisma/client";
 import { google } from "googleapis";
 import { createDiscoveryItem, grantDiscoveryExtension } from "@/lib/discovery";
@@ -32,8 +32,9 @@ export async function PATCH(
   const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { workspace } = await getCurrentWorkspace(user.id);
+  const { workspace, membership } = await getCurrentWorkspace(user.id);
   if (!workspace) return NextResponse.json({ error: "No workspace" }, { status: 400 });
+  if (!canEdit(membership?.role ?? "")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const userRecord = await prisma.user.findUnique({ where: { id: user.id }, select: { timeZone: true } });
   const userTz = userRecord?.timeZone ?? "America/Los_Angeles";

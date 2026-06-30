@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getCurrentWorkspace } from "@/lib/workspaces";
+import { getCurrentWorkspace, canEdit } from "@/lib/workspaces";
 
 export async function POST() {
   const currentUser = await requireUser();
   if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { workspace } = await getCurrentWorkspace(currentUser.id);
+  const { workspace, membership } = await getCurrentWorkspace(currentUser.id);
   if (!workspace) return NextResponse.json({ error: "No workspace" }, { status: 403 });
+  if (!canEdit(membership?.role ?? "")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const now = new Date();
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getCurrentWorkspace } from "@/lib/workspaces";
+import { getCurrentWorkspace, canEdit } from "@/lib/workspaces";
 import { createDiscoveryItem, calcDiscoveryDueDate } from "@/lib/discovery";
 import type { DiscoveryDirection } from "@prisma/client";
 
@@ -41,8 +41,9 @@ export async function POST(req: NextRequest, { params }: Params) {
   const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { workspace } = await getCurrentWorkspace(user.id);
+  const { workspace, membership } = await getCurrentWorkspace(user.id);
   if (!workspace) return NextResponse.json({ error: "No workspace" }, { status: 403 });
+  if (!canEdit(membership?.role ?? "")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { id: caseId } = await params;
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getCurrentWorkspace } from "@/lib/workspaces";
+import { getCurrentWorkspace, canEdit, canDelete } from "@/lib/workspaces";
 import { markDiscoveryResponsesReceived } from "@/lib/discovery";
 import { getAccessToken, deleteGoogleEvent } from "@/lib/google-calendar";
 
@@ -32,8 +32,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { workspace } = await getCurrentWorkspace(user.id);
+  const { workspace, membership } = await getCurrentWorkspace(user.id);
   if (!workspace) return NextResponse.json({ error: "No workspace" }, { status: 403 });
+  if (!canEdit(membership?.role ?? "")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { discoveryId } = await params;
 
@@ -77,8 +78,9 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { workspace } = await getCurrentWorkspace(user.id);
+  const { workspace, membership } = await getCurrentWorkspace(user.id);
   if (!workspace) return NextResponse.json({ error: "No workspace" }, { status: 403 });
+  if (!canDelete(membership?.role ?? "")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { discoveryId } = await params;
 

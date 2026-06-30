@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getAccessToken, createGoogleEvent, createLitCalCalendar } from "@/lib/google-calendar";
 import { buildGoogleEventPayload, getGoogleColorId } from "@/lib/google-calendar-payload";
-import { getCurrentWorkspace } from "@/lib/workspaces";
+import { getCurrentWorkspace, canManageWorkspace } from "@/lib/workspaces";
 
 function googleAllDayEnd(date: Date): string {
   const end = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
@@ -52,8 +52,9 @@ export async function POST() {
   const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { workspace } = await getCurrentWorkspace(user.id);
+  const { workspace, membership } = await getCurrentWorkspace(user.id);
   if (!workspace) return NextResponse.json({ error: "No workspace" }, { status: 403 });
+  if (!canManageWorkspace(membership?.role ?? "")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const connection = await prisma.userCalendarConnection.findFirst({
     where: { userId: user.id, provider: "GOOGLE", isActive: true },
