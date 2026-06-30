@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import type { ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Bell,
@@ -59,6 +61,25 @@ interface CaseOption {
   id: string;
   title: string;
   caseNumber: string | null;
+  status?: string | null;
+  county?: string | null;
+  court?: string | null;
+}
+
+interface DeadlineSearchItem {
+  id: string;
+  type: "event" | "task";
+  title: string;
+  dueDate: string;
+  status: string;
+  sourceLabel: string;
+  caseId: string | null;
+  caseTitle: string | null;
+  caseNumber: string | null;
+  caseCounty: string | null;
+  assignedAttorneyName: string | null;
+  relatedEventId: string | null;
+  relatedTaskId: string | null;
 }
 
 function startOfWeek(date: Date): Date {
@@ -108,6 +129,12 @@ function normalizeSearch(value: string): string {
   return value.trim().toLowerCase();
 }
 
+function matchesQuery(values: Array<string | null | undefined>, query: string): boolean {
+  if (!query) return true;
+  const haystack = values.filter(Boolean).join(" ").toLowerCase();
+  return query.split(/\s+/).every((term) => haystack.includes(term));
+}
+
 function eventMatchesSearch(event: CalEvent, query: string): boolean {
   if (!query) return true;
 
@@ -122,7 +149,7 @@ function eventMatchesSearch(event: CalEvent, query: string): boolean {
     ? "all day"
     : event.start.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
-  const haystack = [
+  return matchesQuery([
     event.title,
     event.description,
     eventTypeLabel,
@@ -139,12 +166,46 @@ function eventMatchesSearch(event: CalEvent, query: string): boolean {
     event.requestContactEmail,
     dateLabel,
     timeLabel,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
+  ], query);
+}
 
-  return query.split(/\s+/).every((term) => haystack.includes(term));
+function caseMatchesSearch(c: CaseOption, query: string): boolean {
+  return matchesQuery([c.title, c.caseNumber, c.status, c.county, c.court], query);
+}
+
+function deadlineMatchesSearch(d: DeadlineSearchItem, query: string): boolean {
+  const dueDate = new Date(d.dueDate);
+  const dateLabel = isNaN(dueDate.getTime())
+    ? ""
+    : dueDate.toLocaleDateString("en-US", {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      });
+
+  return matchesQuery([
+    d.title,
+    d.status,
+    d.sourceLabel,
+    d.caseTitle,
+    d.caseNumber,
+    d.caseCounty,
+    d.assignedAttorneyName,
+    dateLabel,
+    "deadline",
+  ], query);
+}
+
+function SearchResultSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="border-b border-slate-100 py-1 last:border-b-0">
+      <div className="px-3 pb-1 pt-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+        {title}
+      </div>
+      {children}
+    </div>
+  );
 }
 
 function getInitialView(): CalView {
@@ -167,6 +228,7 @@ function getInitialDate(): Date {
 }
 
 export default function CalendarView() {
+  const router = useRouter();
   const today = new Date();
   const [view, setView] = useState<CalView>(getInitialView);
   const [date, setDate] = useState(getInitialDate);
@@ -199,7 +261,9 @@ export default function CalendarView() {
   // Reference data
   const [attorneys, setAttorneys] = useState<WorkspaceMember[]>([]);
   const [cases, setCases] = useState<CaseOption[]>([]);
+  const [deadlines, setDeadlines] = useState<DeadlineSearchItem[]>([]);
   const dataFetched = useRef(false);
+  const pendingSelectEventId = useRef<string | null>(null);
 
   useEffect(() => {
     if (dataFetched.current) return;
@@ -211,6 +275,10 @@ export default function CalendarView() {
       setAttorneys((membersData.members ?? []).filter((m: WorkspaceMember) => m.jobTitle === "ATTORNEY"));
       setCases(casesData.cases ?? []);
     });
+    void fetch("/api/deadlines")
+      .then((r) => r.json())
+      .then((d) => setDeadlines(d.deadlines ?? []))
+      .catch(() => setDeadlines([]));
   }, []);
 
   // Close case dropdown on outside click
@@ -342,6 +410,15 @@ export default function CalendarView() {
     void Promise.resolve().then(fetchEvents);
   }, [fetchEvents]);
 
+  useEffect(() => {
+    const pendingId = pendingSelectEventId.current;
+    if (!pendingId) return;
+    const match = events.find((event) => event.id === pendingId);
+    if (!match) return;
+    setSelectedEvent(match);
+    pendingSelectEventId.current = null;
+  }, [events]);
+
   const calendarSearchQuery = normalizeSearch(calendarSearch);
 
   // Apply all filters
@@ -355,6 +432,54 @@ export default function CalendarView() {
   }), [events, calendarSearchQuery, filterAttorneyId, filterEventType, filterCaseStatus, filterCaseId]);
 
   const activeFilterCount = [calendarSearchQuery, filterAttorneyId, filterEventType, filterCaseStatus, filterCaseId].filter(Boolean).length;
+
+  const caseSearchResults = useMemo(
+    () => calendarSearchQuery ? cases.filter((c) => caseMatchesSearch(c, calendarSearchQuery)).slice(0, 5) : [],
+    [cases, calendarSearchQuery],
+  );
+  const eventSearchResults = useMemo(
+    () => calendarSearchQuery ? events.filter((e) => eventMatchesSearch(e, calendarSearchQuery)).slice(0, 5) : [],
+    [events, calendarSearchQuery],
+  );
+  const deadlineSearchResults = useMemo(
+    () => calendarSearchQuery ? deadlines.filter((d) => deadlineMatchesSearch(d, calendarSearchQuery)).slice(0, 5) : [],
+    [deadlines, calendarSearchQuery],
+  );
+  const hasSearchResults = caseSearchResults.length > 0 || eventSearchResults.length > 0 || deadlineSearchResults.length > 0;
+
+  function closeCalendarSearch() {
+    setCaseDropdownOpen(false);
+    setCalendarSearch("");
+  }
+
+  function openSearchEvent(event: CalEvent) {
+    setDate(event.start);
+    setView("day");
+    setSelectedEvent(event);
+    closeCalendarSearch();
+  }
+
+  function openSearchDeadline(deadline: DeadlineSearchItem) {
+    const dueDate = new Date(deadline.dueDate);
+    if (!isNaN(dueDate.getTime())) {
+      setDate(dueDate);
+      setView("day");
+    }
+
+    const eventId = deadline.type === "event" ? deadline.id : deadline.relatedEventId;
+    if (eventId) {
+      const visibleEvent = events.find((event) => event.id === eventId);
+      if (visibleEvent) {
+        setSelectedEvent(visibleEvent);
+      } else {
+        pendingSelectEventId.current = eventId;
+      }
+    } else if (deadline.type === "task") {
+      router.push("/tasks");
+    }
+
+    closeCalendarSearch();
+  }
 
   function clearAllFilters() {
     setCalendarSearch("");
@@ -440,6 +565,77 @@ export default function CalendarView() {
             <span className="absolute right-3 top-1/2 inline-flex -translate-y-1/2 items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-1 text-[11px] font-medium text-slate-400">
               <Command className="size-3" />K
             </span>
+          )}
+          {calendarSearchQuery && (
+            <div className="absolute left-0 top-full z-50 mt-2 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+              {hasSearchResults ? (
+                <div className="max-h-[420px] overflow-y-auto py-2">
+                  {caseSearchResults.length > 0 && (
+                    <SearchResultSection title="Cases">
+                      {caseSearchResults.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => {
+                            closeCalendarSearch();
+                            router.push(`/cases/${c.id}`);
+                          }}
+                          className="w-full px-3 py-2 text-left hover:bg-slate-50"
+                        >
+                          <span className="block truncate text-sm font-semibold text-slate-800">{c.title}</span>
+                          <span className="block truncate text-xs text-slate-500">
+                            {[c.caseNumber ? `#${c.caseNumber}` : null, c.status, c.county, c.court].filter(Boolean).join(" · ") || "Case"}
+                          </span>
+                        </button>
+                      ))}
+                    </SearchResultSection>
+                  )}
+
+                  {eventSearchResults.length > 0 && (
+                    <SearchResultSection title="Events">
+                      {eventSearchResults.map((event) => (
+                        <button
+                          key={event.id}
+                          type="button"
+                          onClick={() => openSearchEvent(event)}
+                          className="w-full px-3 py-2 text-left hover:bg-slate-50"
+                        >
+                          <span className="block truncate text-sm font-semibold text-slate-800">{event.title}</span>
+                          <span className="block truncate text-xs text-slate-500">
+                            {`${EVENT_TYPE_LABELS[event.eventType] ?? event.eventType} · ${event.start.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`}
+                            {event.caseTitle ? ` · ${event.caseTitle}` : ""}
+                          </span>
+                        </button>
+                      ))}
+                    </SearchResultSection>
+                  )}
+
+                  {deadlineSearchResults.length > 0 && (
+                    <SearchResultSection title="Deadlines">
+                      {deadlineSearchResults.map((deadline) => {
+                        const dueDate = new Date(deadline.dueDate);
+                        return (
+                          <button
+                            key={`${deadline.type}-${deadline.id}`}
+                            type="button"
+                            onClick={() => openSearchDeadline(deadline)}
+                            className="w-full px-3 py-2 text-left hover:bg-slate-50"
+                          >
+                            <span className="block truncate text-sm font-semibold text-slate-800">{deadline.title}</span>
+                            <span className="block truncate text-xs text-slate-500">
+                              {`${deadline.sourceLabel} · ${isNaN(dueDate.getTime()) ? "No date" : dueDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`}
+                              {deadline.caseTitle ? ` · ${deadline.caseTitle}` : ""}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </SearchResultSection>
+                  )}
+                </div>
+              ) : (
+                <p className="px-3 py-3 text-sm text-slate-500">No cases, events, or deadlines found.</p>
+              )}
+            </div>
           )}
         </div>
         <div className="flex items-center gap-3 text-slate-700">
