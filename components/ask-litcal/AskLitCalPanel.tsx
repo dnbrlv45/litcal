@@ -740,7 +740,7 @@ export default function AskLitCalPanel() {
   const canClearChat = messages.length > 0 || pendingEvent || pendingCase || activeDraft || input.trim().length > 0;
 
   return (
-    <div className="fixed inset-y-0 right-0 z-50 flex flex-col w-full sm:w-[420px] bg-white border-l border-slate-200 shadow-2xl">
+    <div className="fixed inset-y-0 right-0 z-[300] flex flex-col w-full sm:w-[420px] bg-white border-l border-slate-200 shadow-2xl">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50 shrink-0">
         <div className="flex items-center gap-2">
