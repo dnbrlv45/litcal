@@ -468,7 +468,7 @@ export async function markDiscoveryResponsesReceived(discoveryItemId: string, ac
       });
       // Clear reminders and pending notifications so the user doesn't get alerted
       await tx.eventReminder.deleteMany({ where: { eventId: item.linkedEventId } });
-      await tx.notification.deleteMany({ where: { eventId: item.linkedEventId, isRead: false } });
+      await tx.notification.deleteMany({ where: { eventId: item.linkedEventId, read: false } });
     }
   });
 
