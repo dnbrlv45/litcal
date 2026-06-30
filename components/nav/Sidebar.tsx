@@ -35,7 +35,7 @@ const WORKSPACE_NAV_ITEMS = [
   { label: "Settings",  href: "/settings",     icon: Settings },
 ];
 
-export default function Sidebar({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
+export default function Sidebar({ isSuperAdmin = false, isViewer = false }: { isSuperAdmin?: boolean; isViewer?: boolean }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const { openPanel: openAskLitCal } = useAskLitCal();
@@ -109,7 +109,7 @@ export default function Sidebar({ isSuperAdmin = false }: { isSuperAdmin?: boole
 
       {/* Nav */}
       <nav className={`flex min-h-0 flex-1 flex-col gap-1 ${collapsed ? "overflow-visible px-3" : "overflow-y-auto px-4"}`}>
-        {PRIMARY_NAV_ITEMS.map(({ label, href, icon: Icon }) => (
+        {PRIMARY_NAV_ITEMS.filter(({ href }) => !(isViewer && href === "/ai-inbox")).map(({ label, href, icon: Icon }) => (
           <NavLink
             key={href}
             href={href}

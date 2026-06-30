@@ -5,6 +5,7 @@ import MobileNav from "@/components/nav/MobileNav";
 import { AskLitCalProvider } from "@/components/ask-litcal/AskLitCalContext";
 import AskLitCalPanel from "@/components/ask-litcal/AskLitCalPanel";
 import { getCurrentUser } from "@/lib/auth";
+import { getCurrentWorkspace } from "@/lib/workspaces";
 import "./globals.css";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -25,6 +26,11 @@ export default async function RootLayout({
 }>) {
   const user = await getCurrentUser();
   const isSuperAdmin = user?.isSuperAdmin ?? false;
+  let isViewer = false;
+  if (user) {
+    const { membership } = await getCurrentWorkspace(user.id);
+    isViewer = membership?.role === "VIEWER";
+  }
 
   return (
     <html
@@ -33,7 +39,7 @@ export default async function RootLayout({
     >
       <body className="h-full flex bg-background text-foreground overflow-hidden">
         <AskLitCalProvider>
-          <Sidebar isSuperAdmin={isSuperAdmin} />
+          <Sidebar isSuperAdmin={isSuperAdmin} isViewer={isViewer} />
           <main className="flex-1 flex flex-col min-w-0 overflow-hidden pb-16 md:pb-0">{children}</main>
           <MobileNav />
           <AskLitCalPanel />
