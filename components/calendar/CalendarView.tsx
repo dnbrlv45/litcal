@@ -578,7 +578,7 @@ export default function CalendarView() {
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden bg-slate-50">
       {/* Top nav — hidden on mobile */}
-      <div className="hidden md:flex h-[72px] shrink-0 border-b border-slate-200/80 bg-white/90 backdrop-blur px-7 items-center justify-between gap-5 z-20 relative">
+      <div className="hidden md:flex h-[72px] shrink-0 border-b border-slate-200/80 bg-white/90 backdrop-blur px-7 items-center justify-between gap-5 z-[100] relative">
         <div className="relative w-full max-w-[680px]">
           <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
           <input
