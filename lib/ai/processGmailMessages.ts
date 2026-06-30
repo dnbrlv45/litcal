@@ -277,7 +277,9 @@ export async function processGmailMessages(
               const targets = [c.title, ...c.parties.map((p) => p.name)];
               const pMatch = casePlaintiff && targets.some((t) => namePartsMatch(casePlaintiff, t));
               const dMatch = caseDefendant && targets.some((t) => namePartsMatch(caseDefendant, t));
-              if (pMatch || dMatch) {
+              // Require both to match when both are known — avoids false matches on shared party names (e.g. same insurer across cases)
+              const isMatch = casePlaintiff && caseDefendant ? (pMatch && dMatch) : (pMatch || dMatch);
+              if (isMatch) {
                 extractedWithWarning.matchedCaseId = c.id;
                 extractedWithWarning.matchedCaseTitle = c.title;
                 extractedWithWarning.matchedCaseNumber = c.caseNumber;

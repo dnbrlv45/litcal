@@ -271,6 +271,7 @@ function SuggestionCard({
               <span className="col-span-2 text-xs text-teal-700 font-medium">✓ Matched to existing case</span>
             )}
             <SummaryField label="Date" value={primaryDate} />
+            <SummaryField label="Time" value={data.event?.startTime ?? null} />
             <SummaryField label="Type" value={primaryDetail} />
             <SummaryField label="Court" value={data.case?.court ?? data.case?.county} />
             {data.cancellation?.reason && <SummaryField label="Reason" value={data.cancellation.reason} />}
