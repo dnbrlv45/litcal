@@ -344,14 +344,23 @@ export async function askLitCalStream(
     } catch (err) {
       const msg = String(err);
       const isRateLimit = msg.includes("429") || msg.toLowerCase().includes("quota") || msg.toLowerCase().includes("rate");
-      if (isRateLimit) continue;
+      const isStreamParseError = msg.toLowerCase().includes("failed to parse stream");
+      if (isRateLimit || isStreamParseError) continue;
       throw err;
     }
   }
 
-  const fallback = "I'm having trouble connecting right now. Please try again in a moment.";
-  onChunk(fallback);
-  return { answer: fallback, model: "none", routingPrefix: "[GLOBAL]" };
+  // All streaming attempts failed (often a transient NDJSON parse glitch in the
+  // SDK's stream reader) — fall back to a single non-streaming call before giving up.
+  try {
+    const nonStreamResult = await askLitCal(input);
+    onChunk(nonStreamResult.answer);
+    return nonStreamResult;
+  } catch {
+    const fallback = "I'm having trouble connecting right now. Please try again in a moment.";
+    onChunk(fallback);
+    return { answer: fallback, model: "none", routingPrefix: "[GLOBAL]" };
+  }
 }
 
 function parseResponse(raw: string): { prefix: string; body: string } {
