@@ -136,35 +136,10 @@ function matchesQuery(values: Array<string | null | undefined>, query: string): 
 
 function eventMatchesSearch(event: CalEvent, query: string): boolean {
   if (!query) return true;
-
-  const eventTypeLabel = EVENT_TYPE_LABELS[event.eventType] ?? event.eventType;
-  const dateLabel = event.start.toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-  const timeLabel = event.allDay
-    ? "all day"
-    : event.start.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-
   return matchesQuery([
     event.title,
-    event.description,
-    eventTypeLabel,
-    event.eventType,
     event.caseTitle,
     event.caseNumber,
-    event.caseStatus,
-    event.caseCounty,
-    event.caseCourt,
-    event.department,
-    event.location,
-    event.assignedAttorneyName,
-    event.appearanceType,
-    event.requestContactEmail,
-    dateLabel,
-    timeLabel,
   ], query);
 }
 
@@ -173,27 +148,7 @@ function caseMatchesSearch(c: CaseOption, query: string): boolean {
 }
 
 function deadlineMatchesSearch(d: DeadlineSearchItem, query: string): boolean {
-  const dueDate = new Date(d.dueDate);
-  const dateLabel = isNaN(dueDate.getTime())
-    ? ""
-    : dueDate.toLocaleDateString("en-US", {
-        weekday: "long",
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-      });
-
-  return matchesQuery([
-    d.title,
-    d.status,
-    d.sourceLabel,
-    d.caseTitle,
-    d.caseNumber,
-    d.caseCounty,
-    d.assignedAttorneyName,
-    dateLabel,
-    "deadline",
-  ], query);
+  return matchesQuery([d.title, d.caseTitle, d.caseNumber], query);
 }
 
 function SearchResultSection({ title, children }: { title: string; children: ReactNode }) {
