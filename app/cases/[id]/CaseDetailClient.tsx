@@ -79,6 +79,7 @@ const TYPE_LABELS: Record<string, string> = {
   GOVERNMENT_CLAIM: "Government Claim", DOG_BITE: "Dog Bite",
   PREMISES_LIABILITY: "Premises Liability", MEDICAL_MALPRACTICE: "Medical Malpractice",
   WRONGFUL_DEATH: "Wrongful Death", PRODUCT_LIABILITY: "Product Liability",
+  UIM_ARBITRATION: "UIM Arbitration",
   OTHER: "Other",
 };
 const EVENT_TYPE_LABELS: Record<string, string> = {

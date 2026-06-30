@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { canEdit, getCurrentWorkspace } from "@/lib/workspaces";
 import { addTimelineEntry } from "@/lib/case-timeline";
 
-const CASE_TYPE_VALUES = ["AUTO_ACCIDENT","SLIP_AND_FALL","GOVERNMENT_CLAIM","DOG_BITE","PREMISES_LIABILITY","MEDICAL_MALPRACTICE","WRONGFUL_DEATH","PRODUCT_LIABILITY","OTHER"];
+const CASE_TYPE_VALUES = ["AUTO_ACCIDENT","SLIP_AND_FALL","GOVERNMENT_CLAIM","DOG_BITE","PREMISES_LIABILITY","MEDICAL_MALPRACTICE","WRONGFUL_DEATH","PRODUCT_LIABILITY","UIM_ARBITRATION","OTHER"];
 
 async function resolveCountyCourt(countyName?: string | null, courtName?: string | null) {
   if (!countyName) return { countyId: null, courtId: null, county: null, court: null };

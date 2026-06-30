@@ -34,6 +34,7 @@ const CASE_TYPE_LABELS: Record<string, string> = {
   MEDICAL_MALPRACTICE: "Medical Malpractice",
   WRONGFUL_DEATH: "Wrongful Death",
   PRODUCT_LIABILITY: "Product Liability",
+  UIM_ARBITRATION: "UIM Arbitration",
   OTHER: "Other",
 };
 

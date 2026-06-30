@@ -761,7 +761,7 @@ async function handleAskLitCalRequest(
     const paralegalId = await resolveStaffByName(intent.paralegalName);
     const assistantId = await resolveStaffByName(intent.assistantName);
 
-    const CASE_TYPE_VALUES = ["AUTO_ACCIDENT","SLIP_AND_FALL","GOVERNMENT_CLAIM","DOG_BITE","PREMISES_LIABILITY","MEDICAL_MALPRACTICE","WRONGFUL_DEATH","PRODUCT_LIABILITY","OTHER"];
+    const CASE_TYPE_VALUES = ["AUTO_ACCIDENT","SLIP_AND_FALL","GOVERNMENT_CLAIM","DOG_BITE","PREMISES_LIABILITY","MEDICAL_MALPRACTICE","WRONGFUL_DEATH","PRODUCT_LIABILITY","UIM_ARBITRATION","OTHER"];
     const caseType = CASE_TYPE_VALUES.includes(intent.caseType ?? "") ? intent.caseType! : "AUTO_ACCIDENT";
 
     const caseTypeLabels: Record<string, string> = {

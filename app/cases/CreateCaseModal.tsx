@@ -16,6 +16,7 @@ const CASE_TYPES = [
   { value: "MEDICAL_MALPRACTICE", label: "Medical Malpractice" },
   { value: "WRONGFUL_DEATH",      label: "Wrongful Death" },
   { value: "PRODUCT_LIABILITY",   label: "Product Liability" },
+  { value: "UIM_ARBITRATION",     label: "UIM Arbitration" },
   { value: "OTHER",               label: "Other" },
 ];
 
