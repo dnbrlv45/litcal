@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Bell,
@@ -104,6 +104,49 @@ function memberLabel(m: WorkspaceMember) {
   return name || m.user.email;
 }
 
+function normalizeSearch(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function eventMatchesSearch(event: CalEvent, query: string): boolean {
+  if (!query) return true;
+
+  const eventTypeLabel = EVENT_TYPE_LABELS[event.eventType] ?? event.eventType;
+  const dateLabel = event.start.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+  const timeLabel = event.allDay
+    ? "all day"
+    : event.start.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+
+  const haystack = [
+    event.title,
+    event.description,
+    eventTypeLabel,
+    event.eventType,
+    event.caseTitle,
+    event.caseNumber,
+    event.caseStatus,
+    event.caseCounty,
+    event.caseCourt,
+    event.department,
+    event.location,
+    event.assignedAttorneyName,
+    event.appearanceType,
+    event.requestContactEmail,
+    dateLabel,
+    timeLabel,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return query.split(/\s+/).every((term) => haystack.includes(term));
+}
+
 function getInitialView(): CalView {
   if (typeof window === "undefined") return "week";
   const params = new URLSearchParams(window.location.search);
@@ -139,8 +182,10 @@ export default function CalendarView() {
   const [filterCaseStatus, setFilterCaseStatus] = useState("");
   const [filterCaseId, setFilterCaseId] = useState("");
   const [caseSearch, setCaseSearch] = useState("");
+  const [calendarSearch, setCalendarSearch] = useState("");
   const [caseDropdownOpen, setCaseDropdownOpen] = useState(false);
   const caseDropdownRef = useRef<HTMLDivElement>(null);
+  const calendarSearchRef = useRef<HTMLInputElement>(null);
 
   // Persist view and date in URL for refresh
   useEffect(() => {
@@ -177,6 +222,17 @@ export default function CalendarView() {
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  useEffect(() => {
+    function handleSearchShortcut(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        calendarSearchRef.current?.focus();
+      }
+    }
+    document.addEventListener("keydown", handleSearchShortcut);
+    return () => document.removeEventListener("keydown", handleSearchShortcut);
   }, []);
 
   const MAX_CACHE_SIZE = 5;
@@ -286,18 +342,22 @@ export default function CalendarView() {
     void Promise.resolve().then(fetchEvents);
   }, [fetchEvents]);
 
+  const calendarSearchQuery = normalizeSearch(calendarSearch);
+
   // Apply all filters
-  const filteredEvents = events.filter((e) => {
+  const filteredEvents = useMemo(() => events.filter((e) => {
+    if (!eventMatchesSearch(e, calendarSearchQuery)) return false;
     if (filterAttorneyId && e.assignedAttorneyId !== filterAttorneyId) return false;
     if (filterEventType && e.eventType !== filterEventType) return false;
     if (filterCaseStatus === "active" && e.caseId && (e.caseStatus === "CLOSED" || e.caseStatus === "ARCHIVED")) return false;
     if (filterCaseId && e.caseId !== filterCaseId) return false;
     return true;
-  });
+  }), [events, calendarSearchQuery, filterAttorneyId, filterEventType, filterCaseStatus, filterCaseId]);
 
-  const activeFilterCount = [filterAttorneyId, filterEventType, filterCaseStatus, filterCaseId].filter(Boolean).length;
+  const activeFilterCount = [calendarSearchQuery, filterAttorneyId, filterEventType, filterCaseStatus, filterCaseId].filter(Boolean).length;
 
   function clearAllFilters() {
+    setCalendarSearch("");
     setFilterAttorneyId("");
     setFilterEventType("");
     setFilterCaseStatus("");
@@ -358,12 +418,29 @@ export default function CalendarView() {
         <div className="relative w-full max-w-[680px]">
           <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
           <input
+            ref={calendarSearchRef}
+            value={calendarSearch}
+            onChange={(e) => setCalendarSearch(e.target.value)}
             className="h-11 w-full rounded-lg border border-slate-200 bg-white pl-10 pr-14 text-sm text-slate-700 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
             placeholder="Search cases, events, deadlines..."
           />
-          <span className="absolute right-3 top-1/2 inline-flex -translate-y-1/2 items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-1 text-[11px] font-medium text-slate-400">
-            <Command className="size-3" />K
-          </span>
+          {calendarSearch ? (
+            <button
+              type="button"
+              onClick={() => {
+                setCalendarSearch("");
+                calendarSearchRef.current?.focus();
+              }}
+              aria-label="Clear calendar search"
+              className="absolute right-3 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            >
+              <X className="size-3.5" />
+            </button>
+          ) : (
+            <span className="absolute right-3 top-1/2 inline-flex -translate-y-1/2 items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-1 text-[11px] font-medium text-slate-400">
+              <Command className="size-3" />K
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-3 text-slate-700">
           <button className="relative grid size-9 place-items-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-950">
