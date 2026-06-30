@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canEdit, getCurrentWorkspace } from "@/lib/workspaces";
 import { askLitCal } from "@/lib/ai/askLitCal";
-import type { EventIntent, CaseIntent, EditDraftIntent, EditEventIntent } from "@/lib/ai/askLitCal";
+import type { EventIntent, CaseIntent, EditDraftIntent, EditEventIntent, TaskIntent } from "@/lib/ai/askLitCal";
 import { getFullCaseContext, getGlobalContext, searchCases } from "@/lib/ai/askLitCalData";
 import { detectConflicts } from "@/lib/conflicts";
 import { findCourtHearingRule } from "@/lib/court-hearing-rules";
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
   const recentCount = await prisma.askLitCalLog.count({
     where: { userId: user.id, createdAt: { gte: oneMinuteAgo } },
   });
-  if (recentCount >= 10) {
+  if (recentCount >= 25) {
     return NextResponse.json({ error: "Rate limit exceeded. Please wait a moment." }, { status: 429 });
   }
 
@@ -131,10 +131,87 @@ export async function POST(request: NextRequest) {
   const result = await askLitCal({ question, contextText, history });
 
   // Viewers can read/search but not create or edit
-  if (isViewer && (result.editDraftIntent || result.editEventIntent || result.eventIntent || result.caseIntent)) {
+  if (isViewer && (result.editDraftIntent || result.editEventIntent || result.eventIntent || result.caseIntent || result.taskIntent)) {
     return NextResponse.json({
       answer: "You have view-only access and cannot create or edit events or cases. You can ask me to summarize cases, find events, or answer questions about your calendar.",
       activeCaseId,
+    });
+  }
+
+  // Handle task creation intent
+  if (result.taskIntent) {
+    const intent: TaskIntent = result.taskIntent;
+
+    let taskCaseId: string | null = activeCaseId ?? null;
+
+    if (intent.caseQuery) {
+      const matches = await searchCases(intent.caseQuery, workspace.id);
+      if (matches.length === 1) taskCaseId = matches[0].id;
+    }
+
+    const resolveStaffMember = async (name: string | undefined) => {
+      if (!name) return null;
+      const nameLower = name.toLowerCase().trim();
+      const members = await prisma.workspaceMember.findMany({
+        where: { workspaceId: workspace.id },
+        include: { user: { select: { id: true, firstName: true, lastName: true } } },
+      });
+      const match = members.find((m) => {
+        const full = [m.user.firstName, m.user.lastName].filter(Boolean).join(" ").toLowerCase();
+        return full === nameLower || (m.user.firstName ?? "").toLowerCase() === nameLower || (m.user.lastName ?? "").toLowerCase() === nameLower;
+      });
+      return match ?? null;
+    };
+
+    const assigneeMember = await resolveStaffMember(intent.assignedToName);
+
+    const VALID_PRIORITIES = ["LOW", "MEDIUM", "HIGH", "URGENT"];
+    const priority = VALID_PRIORITIES.includes(intent.priority ?? "") ? intent.priority! : "MEDIUM";
+
+    const task = await prisma.task.create({
+      data: {
+        workspaceId: workspace.id,
+        title: intent.title,
+        description: intent.description ?? null,
+        status: "TODO",
+        priority: priority as never,
+        dueDate: intent.dueDate ? new Date(intent.dueDate) : null,
+        caseId: taskCaseId,
+        assignees: assigneeMember
+          ? { create: [{ memberId: assigneeMember.id }] }
+          : undefined,
+      },
+      include: { caseRef: { select: { title: true } } },
+    });
+
+    if (task.caseId) {
+      void prisma.caseTimeline.create({
+        data: {
+          id: `ct_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          caseId: task.caseId,
+          workspaceId: workspace.id,
+          actorUserId: user.id,
+          type: "task.created",
+          title: `Task created via Ask LitCal: ${task.title}`,
+        },
+      });
+    }
+
+    await prisma.askLitCalLog.create({
+      data: {
+        id: `alc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        workspaceId: workspace.id, userId: user.id,
+        caseId: taskCaseId,
+        question: question.slice(0, 1000),
+        answer: `Task created: ${task.title}`,
+        model: result.model,
+      },
+    });
+
+    return NextResponse.json({
+      answer: result.answer,
+      activeCaseId: taskCaseId ?? activeCaseId ?? null,
+      createdTask: { id: task.id, title: task.title, caseTitle: task.caseRef?.title ?? null },
     });
   }
 

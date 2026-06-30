@@ -162,6 +162,7 @@ At the START of your response, output one of these routing prefixes on its own l
 - [CREATE_CASE:{json}] — if the user wants to create/add a new case (see CASE CREATION above)
 - [EDIT_DRAFT:{json}] — if the user wants to modify an existing event draft (see DRAFT EDITING above)
 - [EDIT_EVENT:{json}] — if the user wants to edit an existing saved event. JSON must include "eventId" plus ONLY the changed fields: "date" (YYYY-MM-DD), "startTime" (HH:MM 24h), "endTime" (HH:MM 24h), "title", "department", "location", "description", "eventType", "subtype"
+- [CREATE_TASK:{json}] — if the user wants to add a task (e.g. "add a task to follow up on discovery", "remind me to send the depo notice"). Fields: "title" (required), "caseQuery" (optional — case name/number), "dueDate" (YYYY-MM-DD, optional), "priority" ("LOW","MEDIUM","HIGH","URGENT", default MEDIUM), "assignedToName" (optional workspace member name), "description" (optional). After the prefix write a brief confirmation.
 
 After the prefix, write your answer.
 
@@ -209,6 +210,15 @@ export interface CaseIntent {
   preLitigation?: boolean;
 }
 
+export interface TaskIntent {
+  title: string;
+  caseQuery?: string;
+  dueDate?: string;
+  priority?: string;
+  assignedToName?: string;
+  description?: string;
+}
+
 export type EditDraftIntent = Partial<EventIntent> & { title?: string };
 
 export interface EditEventIntent {
@@ -234,6 +244,7 @@ export interface AskLitCalResult {
   caseIntent?: CaseIntent;
   editDraftIntent?: EditDraftIntent;
   editEventIntent?: EditEventIntent;
+  taskIntent?: TaskIntent;
 }
 
 export async function askLitCal(input: AskLitCalInput): Promise<AskLitCalResult> {
@@ -277,6 +288,7 @@ export async function askLitCal(input: AskLitCalInput): Promise<AskLitCalResult>
         caseIntent: extractCaseIntent(prefix),
         editDraftIntent: extractEditDraftIntent(prefix),
         editEventIntent: extractEditEventIntent(prefix),
+        taskIntent: extractTaskIntent(prefix),
       };
     } catch (err) {
       const msg = String(err);
@@ -308,6 +320,11 @@ function parseResponse(raw: string): { prefix: string; body: string } {
   const caseMatch = raw.match(/^\[CREATE_CASE:(\{[\s\S]*?\})\]\s*/);
   if (caseMatch) {
     return { prefix: `CREATE_CASE:${caseMatch[1]}`, body: raw.slice(caseMatch[0].length).trim() };
+  }
+  // CREATE_TASK prefix
+  const taskMatch = raw.match(/^\[CREATE_TASK:(\{[\s\S]*?\})\]\s*/);
+  if (taskMatch) {
+    return { prefix: `CREATE_TASK:${taskMatch[1]}`, body: raw.slice(taskMatch[0].length).trim() };
   }
   // CREATE_EVENT prefix contains JSON with possible ] characters, so parse it specially
   const createMatch = raw.match(/^\[CREATE_EVENT:(\{[\s\S]*?\})\]\s*/);
@@ -356,6 +373,17 @@ function extractEditDraftIntent(prefix: string): EditDraftIntent | undefined {
   if (!match) return undefined;
   try {
     return JSON.parse(match[1]) as EditDraftIntent;
+  } catch {
+    return undefined;
+  }
+}
+
+function extractTaskIntent(prefix: string): TaskIntent | undefined {
+  const match = prefix.match(/^CREATE_TASK:(\{[\s\S]*\})$/);
+  if (!match) return undefined;
+  try {
+    const parsed = JSON.parse(match[1]) as TaskIntent;
+    return parsed.title ? parsed : undefined;
   } catch {
     return undefined;
   }

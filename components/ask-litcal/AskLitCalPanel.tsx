@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { X, Send, Loader2, MessageSquare, Sparkles, CalendarPlus, AlertTriangle, CheckCircle2, Briefcase } from "lucide-react";
+import { useRouter, usePathname } from "next/navigation";
+import { X, Send, Loader2, MessageSquare, Sparkles, CalendarPlus, AlertTriangle, CheckCircle2, Briefcase, ClipboardList } from "lucide-react";
 import { useAskLitCal } from "./AskLitCalContext";
 
 interface EventIntent {
@@ -94,6 +95,7 @@ interface Message {
   proposedEvent?: ProposedEvent;
   proposedCase?: ProposedCase;
   quickActions?: { label: string; prompt: string }[];
+  createdTask?: { id: string; title: string; caseTitle: string | null };
   dismissed?: boolean;
 }
 
@@ -132,10 +134,15 @@ function formatDateDisplay(dateStr: string): string {
 
 export default function AskLitCalPanel() {
   const { open, caseId, closePanel } = useAskLitCal();
+  const router = useRouter();
+  const pathname = usePathname();
+  const urlCaseId = pathname.match(/^\/cases\/([^/]+)/)?.[1] ?? null;
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [activeCaseId, setActiveCaseId] = useState<string | null>(null);
+  const [activeCaseName, setActiveCaseName] = useState<string | null>(null);
   const [pendingEvent, setPendingEvent] = useState<EventIntent | null>(null);
   const [pendingCase, setPendingCase] = useState<CaseIntent | null>(null);
   const [activeDraft, setActiveDraft] = useState<ProposedEvent | null>(null);
@@ -145,18 +152,33 @@ export default function AskLitCalPanel() {
   const inputRef = useRef<HTMLInputElement>(null);
   const prevOpenRef = useRef(false);
 
+  // Resolve the effective case: explicit prop > URL > existing
+  const resolvedCaseId = caseId ?? urlCaseId ?? activeCaseId;
+
   useEffect(() => {
     if (open && !prevOpenRef.current) {
-      setMessages([]);
-      setActiveCaseId(caseId);
+      // Only clear conversation if we're switching to a different case
+      if (resolvedCaseId !== activeCaseId) {
+        setMessages([]);
+        setPendingEvent(null);
+        setPendingCase(null);
+        setActiveDraft(null);
+        setActiveCaseId(resolvedCaseId);
+      }
       setInput("");
-      setPendingEvent(null);
-      setPendingCase(null);
-      setActiveDraft(null);
       setTimeout(() => inputRef.current?.focus(), 100);
     }
     prevOpenRef.current = open;
-  }, [open, caseId]);
+  }, [open, resolvedCaseId, activeCaseId]);
+
+  // Fetch case name whenever activeCaseId changes
+  useEffect(() => {
+    if (!activeCaseId) { setActiveCaseName(null); return; }
+    void fetch(`/api/cases/${activeCaseId}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d?.case?.title) setActiveCaseName(d.case.title as string); })
+      .catch(() => {});
+  }, [activeCaseId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -179,7 +201,7 @@ export default function AskLitCalPanel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           question: text,
-          activeCaseId: overrideActiveCaseId ?? activeCaseId,
+          activeCaseId: overrideActiveCaseId ?? activeCaseId ?? resolvedCaseId,
           history,
           pendingEvent: pendingEvent ?? undefined,
           pendingCase: pendingCase ?? undefined,
@@ -213,6 +235,7 @@ export default function AskLitCalPanel() {
         proposedEvent?: ProposedEvent | null;
         proposedCase?: ProposedCase | null;
         draftEdits?: Partial<ProposedEvent> & { caseQuery?: string; title?: string };
+        createdTask?: { id: string; title: string; caseTitle: string | null };
         error?: string;
       };
 
@@ -317,6 +340,7 @@ export default function AskLitCalPanel() {
           caseMatches: data.caseMatches ?? undefined,
           proposedEvent: !activeDraft ? (data.proposedEvent ?? undefined) : undefined,
           proposedCase: data.proposedCase ?? undefined,
+          createdTask: data.createdTask ?? undefined,
         }]);
       }
     } catch {
@@ -495,7 +519,7 @@ export default function AskLitCalPanel() {
             <h2 className="text-sm font-bold text-slate-900">Ask LitCal</h2>
             {activeCaseId && (
               <p className="text-[11px] text-teal-700 font-medium truncate max-w-[260px]">
-                Active case context
+                {activeCaseName ?? "Loading case…"}
               </p>
             )}
           </div>
@@ -580,7 +604,7 @@ export default function AskLitCalPanel() {
                           key={j}
                           onClick={() => {
                             if (action.prompt.startsWith("__NAVIGATE__")) {
-                              window.location.href = action.prompt.replace("__NAVIGATE__", "");
+                              router.push(action.prompt.replace("__NAVIGATE__", ""));
                             } else {
                               sendMessage(action.prompt);
                             }
@@ -590,6 +614,21 @@ export default function AskLitCalPanel() {
                           {action.label}
                         </button>
                       ))}
+                    </div>
+                  )}
+                  {msg.createdTask && (
+                    <div className="mt-3 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
+                      <ClipboardList className="size-3.5 text-emerald-600 shrink-0" />
+                      <span className="text-[11px] text-emerald-800 font-medium flex-1 min-w-0 truncate">
+                        Task created: {msg.createdTask.title}
+                        {msg.createdTask.caseTitle && <span className="text-emerald-600"> — {msg.createdTask.caseTitle}</span>}
+                      </span>
+                      <button
+                        onClick={() => router.push("/tasks")}
+                        className="text-[10px] font-semibold text-emerald-700 hover:text-emerald-900 shrink-0"
+                      >
+                        View →
+                      </button>
                     </div>
                   )}
                 </div>
