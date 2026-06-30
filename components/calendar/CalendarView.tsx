@@ -204,6 +204,7 @@ export default function CalendarView() {
   const [caseDropdownOpen, setCaseDropdownOpen] = useState(false);
   const caseDropdownRef = useRef<HTMLDivElement>(null);
   const calendarSearchRef = useRef<HTMLInputElement>(null);
+  const calendarSearchContainerRef = useRef<HTMLDivElement>(null);
 
   // Persist view and date in URL for refresh
   useEffect(() => {
@@ -383,6 +384,19 @@ export default function CalendarView() {
   const calendarSearchQuery = normalizeSearch(calendarSearch);
 
   useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (calendarSearchContainerRef.current && !calendarSearchContainerRef.current.contains(e.target as Node)) {
+        setCalendarSearch("");
+        setSearchActiveIndex(-1);
+      }
+    }
+    if (calendarSearchQuery) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [calendarSearchQuery]);
+
+  useEffect(() => {
     if (!calendarSearchQuery) { setEventSearchResults([]); setSearchActiveIndex(-1); return; }
     setSearchActiveIndex(-1);
     const timer = setTimeout(() => {
@@ -534,7 +548,7 @@ export default function CalendarView() {
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden bg-slate-50">
       {/* Top nav — hidden on mobile */}
       <div className="hidden md:flex h-[72px] shrink-0 border-b border-slate-200/80 bg-white px-7 items-center justify-between gap-5 z-[100] relative">
-        <div className="relative w-full max-w-[680px]">
+        <div ref={calendarSearchContainerRef} className="relative w-full max-w-[680px]">
           <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
           <input
             ref={calendarSearchRef}
