@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import type { ReactNode } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { X, Send, Loader2, MessageSquare, Sparkles, CalendarPlus, AlertTriangle, CheckCircle2, Briefcase, ClipboardList } from "lucide-react";
 import { useAskLitCal } from "./AskLitCalContext";
@@ -97,6 +98,7 @@ interface Message {
   quickActions?: { label: string; prompt: string }[];
   createdTask?: { id: string; title: string; caseTitle: string | null };
   dismissed?: boolean;
+  streaming?: boolean;
 }
 
 interface AskLitCalData {
@@ -128,16 +130,150 @@ const GLOBAL_PROMPTS = [
   "What events do we have this week?",
 ];
 
-function renderMarkdown(text: string): string {
-  return text
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-teal-700 underline hover:text-teal-900">$1</a>')
-    .replace(/^- (.+)$/gm, "<li>$1</li>")
-    .replace(/(<li>.*<\/li>\n?)+/g, (m) => `<ul class="list-disc pl-4 space-y-0.5">${m}</ul>`)
-    .replace(/^### (.+)$/gm, '<h3 class="font-bold text-slate-900 mt-3 mb-1">$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2 class="font-bold text-slate-900 text-base mt-3 mb-1">$1</h2>')
-    .replace(/\n\n/g, "<br/><br/>")
-    .replace(/\n/g, "<br/>");
+function safeHref(href: string): string | null {
+  if (href.startsWith("/") || href.startsWith("https://") || href.startsWith("http://")) return href;
+  return null;
+}
+
+function renderInlineMarkdown(text: string, keyPrefix: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  const linkPattern = /\[([^\]]+)\]\(([^)]+)\)/g;
+  let lastIndex = 0;
+  let linkMatch: RegExpExecArray | null;
+
+  const pushBoldText = (value: string, segmentKey: string) => {
+    const boldPattern = /\*\*(.+?)\*\*/g;
+    let boldLastIndex = 0;
+    let boldMatch: RegExpExecArray | null;
+
+    while ((boldMatch = boldPattern.exec(value)) !== null) {
+      if (boldMatch.index > boldLastIndex) {
+        nodes.push(value.slice(boldLastIndex, boldMatch.index));
+      }
+      nodes.push(<strong key={`${segmentKey}-b-${boldMatch.index}`}>{boldMatch[1]}</strong>);
+      boldLastIndex = boldMatch.index + boldMatch[0].length;
+    }
+
+    if (boldLastIndex < value.length) {
+      nodes.push(value.slice(boldLastIndex));
+    }
+  };
+
+  while ((linkMatch = linkPattern.exec(text)) !== null) {
+    if (linkMatch.index > lastIndex) {
+      pushBoldText(text.slice(lastIndex, linkMatch.index), `${keyPrefix}-t-${lastIndex}`);
+    }
+
+    const href = safeHref(linkMatch[2]);
+    if (href) {
+      nodes.push(
+        <a
+          key={`${keyPrefix}-a-${linkMatch.index}`}
+          href={href}
+          className="font-medium text-teal-700 underline decoration-teal-200 underline-offset-2 hover:text-teal-900"
+          target={href.startsWith("http") ? "_blank" : undefined}
+          rel={href.startsWith("http") ? "noreferrer" : undefined}
+        >
+          {linkMatch[1]}
+        </a>,
+      );
+    } else {
+      nodes.push(linkMatch[1]);
+    }
+
+    lastIndex = linkMatch.index + linkMatch[0].length;
+  }
+
+  if (lastIndex < text.length) {
+    pushBoldText(text.slice(lastIndex), `${keyPrefix}-t-${lastIndex}`);
+  }
+
+  return nodes;
+}
+
+function MarkdownMessage({ text, streaming = false }: { text: string; streaming?: boolean }) {
+  const lines = text.split("\n");
+  const blocks: ReactNode[] = [];
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (!line.trim()) continue;
+
+    if (line.startsWith("### ")) {
+      blocks.push(
+        <h3 key={`h3-${i}`} className="mt-3 text-sm font-bold text-slate-900 first:mt-0">
+          {renderInlineMarkdown(line.slice(4), `h3-${i}`)}
+        </h3>,
+      );
+      continue;
+    }
+
+    if (line.startsWith("## ")) {
+      blocks.push(
+        <h2 key={`h2-${i}`} className="mt-3 text-sm font-bold text-slate-900 first:mt-0">
+          {renderInlineMarkdown(line.slice(3), `h2-${i}`)}
+        </h2>,
+      );
+      continue;
+    }
+
+    if (line.startsWith("- ")) {
+      const items: ReactNode[] = [];
+      let listIndex = i;
+      while (listIndex < lines.length && lines[listIndex].startsWith("- ")) {
+        items.push(
+          <li key={`li-${listIndex}`} className="pl-0.5">
+            {renderInlineMarkdown(lines[listIndex].slice(2), `li-${listIndex}`)}
+          </li>,
+        );
+        listIndex += 1;
+      }
+      blocks.push(
+        <ul key={`ul-${i}`} className="my-1 list-disc space-y-0.5 pl-4">
+          {items}
+        </ul>,
+      );
+      i = listIndex - 1;
+      continue;
+    }
+
+    const paragraphLines = [line];
+    let paragraphIndex = i + 1;
+    while (
+      paragraphIndex < lines.length &&
+      lines[paragraphIndex].trim() &&
+      !lines[paragraphIndex].startsWith("## ") &&
+      !lines[paragraphIndex].startsWith("### ") &&
+      !lines[paragraphIndex].startsWith("- ")
+    ) {
+      paragraphLines.push(lines[paragraphIndex]);
+      paragraphIndex += 1;
+    }
+
+    blocks.push(
+      <p key={`p-${i}`} className="my-1 leading-relaxed first:mt-0 last:mb-0">
+        {paragraphLines.map((paragraphLine, paragraphLineIndex) => (
+          <span key={`p-${i}-${paragraphLineIndex}`}>
+            {paragraphLineIndex > 0 && <br />}
+            {renderInlineMarkdown(paragraphLine, `p-${i}-${paragraphLineIndex}`)}
+          </span>
+        ))}
+      </p>,
+    );
+    i = paragraphIndex - 1;
+  }
+
+  return (
+    <div className="max-w-none text-sm leading-relaxed">
+      {blocks}
+      {streaming && (
+        <span
+          aria-label="Response streaming"
+          className="ml-0.5 inline-block h-4 w-1 translate-y-0.5 animate-pulse rounded-full bg-teal-500"
+        />
+      )}
+    </div>
+  );
 }
 
 function formatDateDisplay(dateStr: string): string {
@@ -216,31 +352,31 @@ export default function AskLitCalPanel() {
     setLoading(true);
     setStreamingResponse(false);
 
+    let streamedMessageIndex: number | null = null;
+    let streamedContent = "";
+
+    const upsertAssistantMessage = (message: Message) => {
+      setMessages((prev) => {
+        if (streamedMessageIndex === null) {
+          streamedMessageIndex = prev.length;
+          return [...prev, message];
+        }
+
+        return prev.map((existing, index) => (
+          index === streamedMessageIndex ? { ...existing, ...message } : existing
+        ));
+      });
+    };
+
+    const appendAssistantDelta = (delta: string) => {
+      if (!delta) return;
+      streamedContent += delta;
+      setStreamingResponse(true);
+      upsertAssistantMessage({ role: "assistant", content: streamedContent, streaming: true });
+    };
+
     try {
       const history = messages.map((m) => ({ role: m.role, content: m.content }));
-      let streamedMessageIndex: number | null = null;
-      let streamedContent = "";
-
-      const upsertAssistantMessage = (message: Message) => {
-        setMessages((prev) => {
-          if (streamedMessageIndex === null) {
-            streamedMessageIndex = prev.length;
-            return [...prev, message];
-          }
-
-          return prev.map((existing, index) => (
-            index === streamedMessageIndex ? { ...existing, ...message } : existing
-          ));
-        });
-      };
-
-      const appendAssistantDelta = (delta: string) => {
-        if (!delta) return;
-        streamedContent += delta;
-        setStreamingResponse(true);
-        upsertAssistantMessage({ role: "assistant", content: streamedContent });
-      };
-
       const res = await fetch("/api/ask-litcal", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Accept": "text/x-litcal-stream" },
@@ -318,7 +454,7 @@ export default function AskLitCalPanel() {
       }
 
       if (!responseOk) {
-        upsertAssistantMessage({ role: "assistant", content: data.error ?? "Something went wrong." });
+        upsertAssistantMessage({ role: "assistant", content: data.error ?? "Something went wrong.", streaming: false });
         return;
       }
 
@@ -394,6 +530,7 @@ export default function AskLitCalPanel() {
         upsertAssistantMessage({
           role: "assistant",
           content: data.answer ?? "Draft updated.",
+          streaming: false,
         });
       } else {
         // Track pending state for multi-turn collection
@@ -419,10 +556,14 @@ export default function AskLitCalPanel() {
           proposedEvent: !activeDraft ? (data.proposedEvent ?? undefined) : undefined,
           proposedCase: data.proposedCase ?? undefined,
           createdTask: data.createdTask ?? undefined,
+          streaming: false,
         });
       }
     } catch {
-      setMessages((prev) => [...prev, { role: "assistant", content: "Failed to connect. Please try again." }]);
+      const errorMessage = streamedContent
+        ? `${streamedContent}\n\nFailed to finish the response. Please try again.`
+        : "Failed to connect. Please try again.";
+      upsertAssistantMessage({ role: "assistant", content: errorMessage, streaming: false });
     } finally {
       setStreamingResponse(false);
       setLoading(false);
@@ -642,10 +783,7 @@ export default function AskLitCalPanel() {
             }`}>
               {msg.role === "assistant" ? (
                 <div>
-                  <div
-                    className="prose prose-sm max-w-none [&_ul]:my-1 [&_li]:my-0 [&_a]:text-teal-700"
-                    dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }}
-                  />
+                  <MarkdownMessage text={msg.content} streaming={msg.streaming} />
                   {msg.caseMatches && msg.caseMatches.length > 0 && (
                     <div className="mt-3 flex flex-col gap-1.5">
                       {msg.caseMatches.map((c) => (
@@ -736,7 +874,7 @@ export default function AskLitCalPanel() {
           <div className="flex justify-start">
             <div className="flex items-center gap-2 rounded-xl bg-slate-100 px-3.5 py-2.5 text-sm text-slate-500">
               <Loader2 className="size-3.5 animate-spin" />
-              Thinking...
+              Reading LitCal...
             </div>
           </div>
         )}
