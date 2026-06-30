@@ -11,6 +11,20 @@ import { toTitleCaseName } from "@/lib/utils";
 import { getAccessToken, patchGoogleEvent, deleteGoogleEvent } from "@/lib/google-calendar";
 import { addTimelineEntry } from "@/lib/case-timeline";
 
+// Convert a local date+time string to UTC using the given IANA timezone
+function localToUTC(dateStr: string, timeStr: string, tz: string): Date {
+  const candidate = new Date(`${dateStr}T${timeStr}Z`);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+  }).formatToParts(candidate);
+  const p = Object.fromEntries(parts.map((x) => [x.type, x.value]));
+  const localForCandidate = `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}`;
+  const diffMs = new Date(`${dateStr}T${timeStr}:00`).getTime() - new Date(localForCandidate).getTime();
+  return new Date(candidate.getTime() + diffMs);
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -20,6 +34,9 @@ export async function PATCH(
 
   const { workspace } = await getCurrentWorkspace(user.id);
   if (!workspace) return NextResponse.json({ error: "No workspace" }, { status: 400 });
+
+  const userRecord = await prisma.user.findUnique({ where: { id: user.id }, select: { timeZone: true } });
+  const userTz = userRecord?.timeZone ?? "America/Los_Angeles";
 
   const { id } = await params;
 
@@ -81,11 +98,9 @@ export async function PATCH(
         return NextResponse.json({ error: "Missing event date in extracted data" }, { status: 400 });
       }
 
-      const startTime = event.startTime
-        ? new Date(`${event.date}T${event.startTime}`)
-        : new Date(`${event.date}T09:00:00`);
+      const startTime = localToUTC(event.date, event.startTime ?? "09:00", userTz);
       const endTime = event.endTime
-        ? new Date(`${event.date}T${event.endTime}`)
+        ? localToUTC(event.date, event.endTime, userTz)
         : new Date(startTime.getTime() + 60 * 60 * 1000);
 
       // Find or create the case so the event can be linked to it
@@ -394,7 +409,7 @@ export async function PATCH(
 
           // If a new date was provided, create the rescheduled event
           if (cancellation.newDate) {
-            const newStart = new Date(`${cancellation.newDate}T09:00:00`);
+            const newStart = localToUTC(cancellation.newDate, "09:00", userTz);
             const newEnd = new Date(newStart.getTime() + 60 * 60 * 1000);
             const eventType = cancellation.eventType
               ? mapEventType(cancellation.eventType)
@@ -501,11 +516,9 @@ export async function PATCH(
     const eventData = data.event ?? {};
     const updateFields: Record<string, unknown> = {};
     if (eventData.date) {
-      const newStart = eventData.startTime
-        ? new Date(`${eventData.date}T${eventData.startTime}`)
-        : new Date(`${eventData.date}T09:00:00`);
+      const newStart = localToUTC(eventData.date, eventData.startTime ?? "09:00", userTz);
       const newEnd = eventData.endTime
-        ? new Date(`${eventData.date}T${eventData.endTime}`)
+        ? localToUTC(eventData.date, eventData.endTime, userTz)
         : new Date(newStart.getTime() + 60 * 60 * 1000);
       updateFields.startTime = newStart;
       updateFields.endTime = newEnd;
@@ -612,7 +625,7 @@ export async function PATCH(
     // Create rescheduled event if new date provided
     const cancellation = (data as Record<string, unknown>).cancellation as Record<string, string | null> | undefined;
     if (cancellation?.newDate) {
-      const newStart = new Date(`${cancellation.newDate}T09:00:00`);
+      const newStart = localToUTC(cancellation.newDate, "09:00", userTz);
       const newEnd = new Date(newStart.getTime() + 60 * 60 * 1000);
       await prisma.event.create({
         data: {
