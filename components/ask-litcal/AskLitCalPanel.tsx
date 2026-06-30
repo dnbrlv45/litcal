@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { ReactNode } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { X, Send, Loader2, MessageSquare, Sparkles, CalendarPlus, AlertTriangle, CheckCircle2, Briefcase, ClipboardList } from "lucide-react";
+import { X, Send, Loader2, MessageSquare, Sparkles, CalendarPlus, AlertTriangle, CheckCircle2, Briefcase, ClipboardList, Trash2 } from "lucide-react";
 import { useAskLitCal } from "./AskLitCalContext";
 
 interface EventIntent {
@@ -712,6 +712,17 @@ export default function AskLitCalPanel() {
     setMessages((prev) => [...prev, { role: "assistant", content: "Case creation cancelled." }]);
   }, [dismissProposalCards]);
 
+  const clearChat = useCallback(() => {
+    setMessages([]);
+    setInput("");
+    setPendingEvent(null);
+    setPendingCase(null);
+    setActiveDraft(null);
+    setLoading(false);
+    setStreamingResponse(false);
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }, []);
+
   function handleCaseSelect(id: string) {
     setActiveCaseId(id);
     if (pendingEvent) {
@@ -726,6 +737,7 @@ export default function AskLitCalPanel() {
 
   const isCreating = creatingEvent || creatingCase;
   const suggestedPrompts = activeCaseId ? CASE_PROMPTS : GLOBAL_PROMPTS;
+  const canClearChat = messages.length > 0 || pendingEvent || pendingCase || activeDraft || input.trim().length > 0;
 
   return (
     <div className="fixed inset-y-0 right-0 z-50 flex flex-col w-full sm:w-[420px] bg-white border-l border-slate-200 shadow-2xl">
@@ -744,9 +756,26 @@ export default function AskLitCalPanel() {
             )}
           </div>
         </div>
-        <button onClick={closePanel} className="grid size-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700">
-          <X className="size-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={clearChat}
+            disabled={!canClearChat || loading || isCreating}
+            aria-label="Clear Ask LitCal chat"
+            title="Clear chat"
+            className="grid size-8 place-items-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:pointer-events-none disabled:opacity-35"
+          >
+            <Trash2 className="size-4" />
+          </button>
+          <button
+            type="button"
+            onClick={closePanel}
+            aria-label="Close Ask LitCal"
+            className="grid size-8 place-items-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
       </div>
 
       {/* Messages */}
