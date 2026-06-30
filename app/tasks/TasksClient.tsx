@@ -54,10 +54,11 @@ interface TaskCardProps {
   onEdit: (t: TaskData) => void;
   onDelete: (id: string) => void;
   onCycleStatus: (t: TaskData) => void;
+  onComplete: (t: TaskData) => void;
   highlighted?: boolean;
 }
 
-function TaskCard({ task, onEdit, onDelete, onCycleStatus, highlighted = false }: TaskCardProps) {
+function TaskCard({ task, onEdit, onDelete, onCycleStatus, onComplete, highlighted = false }: TaskCardProps) {
   const overdue = isOverdue(task.dueDate, task.status);
   const Meta = STATUS_META[task.status as keyof typeof STATUS_META] ?? STATUS_META.TODO;
   const Icon = Meta.icon;
@@ -84,6 +85,9 @@ function TaskCard({ task, onEdit, onDelete, onCycleStatus, highlighted = false }
             {task.title}
           </p>
           <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+            {task.status !== "DONE" && (
+              <button onClick={() => onComplete(task)} className="rounded px-1.5 py-0.5 text-xs font-medium text-green-700 hover:bg-green-50">Mark complete</button>
+            )}
             <button onClick={() => onEdit(task)} className="rounded px-1.5 py-0.5 text-xs font-medium text-muted-foreground hover:bg-slate-100 hover:text-foreground">Edit</button>
             <button onClick={() => onDelete(task.id)} className="rounded px-1.5 py-0.5 text-xs font-medium text-muted-foreground hover:bg-red-50 hover:text-red-600">Delete</button>
           </div>
@@ -126,6 +130,8 @@ function TaskCard({ task, onEdit, onDelete, onCycleStatus, highlighted = false }
   );
 }
 
+const PAGE_SIZE = 20;
+
 interface GroupProps {
   title: string;
   tasks: TaskData[];
@@ -133,17 +139,24 @@ interface GroupProps {
   onEdit: (t: TaskData) => void;
   onDelete: (id: string) => void;
   onCycleStatus: (t: TaskData) => void;
+  onComplete: (t: TaskData) => void;
   highlightedTaskId: string | null;
 }
 
-function TaskGroup({ title, tasks, defaultOpen = true, onEdit, onDelete, onCycleStatus, highlightedTaskId }: GroupProps) {
+function TaskGroup({ title, tasks, defaultOpen = true, onEdit, onDelete, onCycleStatus, onComplete, highlightedTaskId }: GroupProps) {
   const [open, setOpen] = useState(defaultOpen);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const containsHighlightedTask = !!highlightedTaskId && tasks.some((t) => t.id === highlightedTaskId);
 
   useEffect(() => {
-    if (!containsHighlightedTask || open) return;
-    void Promise.resolve().then(() => setOpen(true));
-  }, [containsHighlightedTask, open]);
+    if (!containsHighlightedTask) return;
+    if (!open) void Promise.resolve().then(() => setOpen(true));
+    const idx = tasks.findIndex((t) => t.id === highlightedTaskId);
+    if (idx >= visibleCount) setVisibleCount(idx + 1);
+  }, [containsHighlightedTask, open, highlightedTaskId, tasks, visibleCount]);
+
+  const visibleTasks = tasks.slice(0, visibleCount);
+  const remaining = tasks.length - visibleTasks.length;
 
   return (
     <div className="mb-6">
@@ -159,16 +172,29 @@ function TaskGroup({ title, tasks, defaultOpen = true, onEdit, onDelete, onCycle
         <div className="space-y-2 pl-2">
           {tasks.length === 0 ? (
             <p className="text-xs text-muted-foreground py-2 pl-1">No tasks</p>
-          ) : tasks.map((t) => (
-            <TaskCard
-              key={t.id}
-              task={t}
-              highlighted={t.id === highlightedTaskId}
-              onEdit={onEdit}
-              onDelete={onDelete}
-              onCycleStatus={onCycleStatus}
-            />
-          ))}
+          ) : (
+            <>
+              {visibleTasks.map((t) => (
+                <TaskCard
+                  key={t.id}
+                  task={t}
+                  highlighted={t.id === highlightedTaskId}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                  onCycleStatus={onCycleStatus}
+                  onComplete={onComplete}
+                />
+              ))}
+              {remaining > 0 && (
+                <button
+                  onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+                  className="text-xs font-medium text-teal-700 hover:underline py-1 pl-1"
+                >
+                  Show {Math.min(remaining, PAGE_SIZE)} more ({remaining} remaining)
+                </button>
+              )}
+            </>
+          )}
         </div>
       )}
     </div>
@@ -246,6 +272,16 @@ export default function TasksClient() {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: newStatus }),
+    });
+    const data = await res.json();
+    if (res.ok) handleSaved(data.task);
+  }
+
+  async function handleComplete(task: TaskData) {
+    const res = await fetch(`/api/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "DONE" }),
     });
     const data = await res.json();
     if (res.ok) handleSaved(data.task);
@@ -331,9 +367,9 @@ export default function TasksClient() {
           </div>
         ) : (
           <>
-            <TaskGroup title="To Do" tasks={todo} highlightedTaskId={highlightedTaskId} onEdit={openEdit} onDelete={handleDelete} onCycleStatus={handleCycleStatus} />
-            <TaskGroup title="In Progress" tasks={inProgress} highlightedTaskId={highlightedTaskId} onEdit={openEdit} onDelete={handleDelete} onCycleStatus={handleCycleStatus} />
-            <TaskGroup title="Done" tasks={done} highlightedTaskId={highlightedTaskId} defaultOpen={false} onEdit={openEdit} onDelete={handleDelete} onCycleStatus={handleCycleStatus} />
+            <TaskGroup title="To Do" tasks={todo} highlightedTaskId={highlightedTaskId} onEdit={openEdit} onDelete={handleDelete} onCycleStatus={handleCycleStatus} onComplete={handleComplete} />
+            <TaskGroup title="In Progress" tasks={inProgress} highlightedTaskId={highlightedTaskId} onEdit={openEdit} onDelete={handleDelete} onCycleStatus={handleCycleStatus} onComplete={handleComplete} />
+            <TaskGroup title="Done" tasks={done} highlightedTaskId={highlightedTaskId} defaultOpen={false} onEdit={openEdit} onDelete={handleDelete} onCycleStatus={handleCycleStatus} onComplete={handleComplete} />
           </>
         )}
       </div>
