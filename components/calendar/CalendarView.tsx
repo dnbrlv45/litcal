@@ -468,22 +468,24 @@ export default function CalendarView() {
   }
 
   function openSearchDeadline(deadline: DeadlineSearchItem) {
+    if (deadline.type === "task") {
+      closeCalendarSearch();
+      router.push(`/tasks?taskId=${deadline.relatedTaskId ?? deadline.id}`);
+      return;
+    }
+
     const dueDate = new Date(deadline.dueDate);
     if (!isNaN(dueDate.getTime())) {
       setDate(dueDate);
       setView("day");
     }
 
-    const eventId = deadline.type === "event" ? deadline.id : deadline.relatedEventId;
-    if (eventId) {
-      const visibleEvent = events.find((event) => event.id === eventId);
-      if (visibleEvent) {
-        setSelectedEvent(visibleEvent);
-      } else {
-        pendingSelectEventId.current = eventId;
-      }
-    } else if (deadline.type === "task") {
-      router.push("/tasks");
+    const eventId = deadline.id;
+    const visibleEvent = events.find((event) => event.id === eventId);
+    if (visibleEvent) {
+      setSelectedEvent(visibleEvent);
+    } else {
+      pendingSelectEventId.current = eventId;
     }
 
     closeCalendarSearch();
