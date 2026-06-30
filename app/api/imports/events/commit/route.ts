@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getCurrentWorkspace } from "@/lib/workspaces";
+import { canManageWorkspace, getCurrentWorkspace } from "@/lib/workspaces";
 import { computeReminders } from "@/lib/reminders";
 
 export const runtime = "nodejs";
@@ -104,8 +104,9 @@ export async function POST(request: NextRequest) {
   const currentUser = await requireUser();
   if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { workspace } = await getCurrentWorkspace(currentUser.id);
-  if (!workspace) return NextResponse.json({ error: "No workspace" }, { status: 403 });
+  const { workspace, membership } = await getCurrentWorkspace(currentUser.id);
+  if (!workspace || !membership) return NextResponse.json({ error: "No workspace" }, { status: 403 });
+  if (!canManageWorkspace(membership.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await request.json() as { events?: ImportEvent[] };
   const events = body.events ?? [];

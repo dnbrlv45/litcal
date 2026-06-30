@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getCurrentWorkspace } from "@/lib/workspaces";
+import { canEdit, getCurrentWorkspace } from "@/lib/workspaces";
 import { askLitCal } from "@/lib/ai/askLitCal";
 import type { EventIntent, CaseIntent, EditDraftIntent } from "@/lib/ai/askLitCal";
 import { getFullCaseContext, getGlobalContext, searchCases } from "@/lib/ai/askLitCalData";
@@ -15,8 +15,9 @@ export async function POST(request: NextRequest) {
   const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { workspace } = await getCurrentWorkspace(user.id);
-  if (!workspace) return NextResponse.json({ error: "No workspace" }, { status: 403 });
+  const { workspace, membership } = await getCurrentWorkspace(user.id);
+  if (!workspace || !membership) return NextResponse.json({ error: "No workspace" }, { status: 403 });
+  const isViewer = !canEdit(membership.role);
 
   const body = await request.json() as {
     question: string;
@@ -125,6 +126,14 @@ export async function POST(request: NextRequest) {
 
   // Call Gemini
   const result = await askLitCal({ question, contextText, history });
+
+  // Viewers can read/search but not create or edit
+  if (isViewer && (result.editDraftIntent || result.eventIntent || result.caseIntent)) {
+    return NextResponse.json({
+      answer: "You have view-only access and cannot create or edit events or cases. You can ask me to summarize cases, find events, or answer questions about your calendar.",
+      activeCaseId,
+    });
+  }
 
   // Handle draft edit intent
   if (result.editDraftIntent && activeDraft) {
