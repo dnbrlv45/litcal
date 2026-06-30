@@ -162,11 +162,13 @@ export default function AskLitCalPanel() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const sendMessage = useCallback(async (text: string, overrideActiveCaseId?: string) => {
+  const sendMessage = useCallback(async (text: string, overrideActiveCaseId?: string, silent = false) => {
     if (!text.trim() || loading) return;
 
-    const userMsg: Message = { role: "user", content: text };
-    setMessages((prev) => [...prev, userMsg]);
+    if (!silent) {
+      const userMsg: Message = { role: "user", content: text };
+      setMessages((prev) => [...prev, userMsg]);
+    }
     setInput("");
     setLoading(true);
 
@@ -455,9 +457,9 @@ export default function AskLitCalPanel() {
     setActiveCaseId(id);
     if (pendingEvent) {
       setPendingEvent({ ...pendingEvent, caseQuery: undefined });
-      sendMessage(`Use this case.`, id);
+      sendMessage(`Use this case.`, id, true);
     } else {
-      sendMessage(`Tell me about this case.`, id);
+      sendMessage(`Tell me about this case.`, id, true);
     }
   }
 
