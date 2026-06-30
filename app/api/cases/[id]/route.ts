@@ -118,6 +118,9 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   const newStatus = body.status && validStatuses.includes(body.status) ? body.status : null;
   const newTrack = body.caseTrack && validTracks.includes(body.caseTrack) ? body.caseTrack : null;
   const isClosing = newStatus && closingStatuses.includes(newStatus) && !closingStatuses.includes(existing.status);
+  if (isClosing && !canDelete(membership.role)) {
+    return NextResponse.json({ error: "Only admins can close a case" }, { status: 403 });
+  }
 
   const countyCourt = await resolveCountyCourt(body.countyName, body.courtName);
 

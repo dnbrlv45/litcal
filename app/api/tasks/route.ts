@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getCurrentWorkspace } from "@/lib/workspaces";
+import { canEdit, getCurrentWorkspace } from "@/lib/workspaces";
 import { addTimelineEntry } from "@/lib/case-timeline";
 import { pushTaskToGoogle } from "@/lib/task-google-sync";
 import { sendTaskAssignedEmails } from "@/lib/email-notifications";
@@ -56,8 +56,9 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const currentUser = await requireUser();
   if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { workspace } = await getCurrentWorkspace(currentUser.id);
-  if (!workspace) return NextResponse.json({ error: "No workspace" }, { status: 403 });
+  const { workspace, membership } = await getCurrentWorkspace(currentUser.id);
+  if (!workspace || !membership) return NextResponse.json({ error: "No workspace" }, { status: 403 });
+  if (!canEdit(membership.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await request.json() as {
     title: string;
