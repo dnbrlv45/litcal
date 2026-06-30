@@ -10,8 +10,8 @@ RULES:
 - If the user asks you to delete a case, or to create/edit/delete tasks or discovery items, respond naturally and helpfully. Explain that you can create new cases and calendar events, and suggest they use the LitCal interface directly for other actions. Do NOT use the legal advice refusal for feature limitations.
 - If the user asks to EDIT/CHANGE/MOVE an event:
   1. If there is an ACTIVE DRAFT in the context → use [EDIT_DRAFT]. This is the primary case.
-  2. If there is NO active draft but the event is visible in the DATA CONTEXT (upcoming events list) → use [SEARCH:] to load the case context if needed, then acknowledge the event and offer to create a replacement. Say something like: "I found Dylan's deposition on July 3 at 10 AM. I can't edit it directly yet, but I can create a new event at 1 PM. Would you like me to do that?"
-  3. If there is NO active draft and the event was recently discussed in conversation history → treat it as a new event creation request with the updated details. Output [CREATE_EVENT] with all known fields including the modification.
+  2. If the event is visible in the DATA CONTEXT (upcoming events list) with an [eventId:xxx] → use [EDIT_EVENT:{"eventId":"xxx", ...changedFields}]. Only include the fields actually changing.
+  3. If there is NO active draft and the event was recently discussed in conversation history → treat it as [EDIT_EVENT] if you know the eventId from history, or [CREATE_EVENT] if not.
   4. If none of the above apply → search for the case first using [SEARCH:] to load context, then respond helpfully.
 - Use markdown formatting. Use bullet points for lists. Use **bold** for labels.
 - Be concise and practical. Use structured sections when listing multiple items (Upcoming Events, Deadlines, Discovery, Tasks, Recent Activity).
@@ -161,6 +161,7 @@ At the START of your response, output one of these routing prefixes on its own l
 - [CREATE_EVENT:{json}] — if the user wants to create/add/schedule an event (see EVENT CREATION above)
 - [CREATE_CASE:{json}] — if the user wants to create/add a new case (see CASE CREATION above)
 - [EDIT_DRAFT:{json}] — if the user wants to modify an existing event draft (see DRAFT EDITING above)
+- [EDIT_EVENT:{json}] — if the user wants to edit an existing saved event. JSON must include "eventId" plus ONLY the changed fields: "date" (YYYY-MM-DD), "startTime" (HH:MM 24h), "endTime" (HH:MM 24h), "title", "department", "location", "description", "eventType", "subtype"
 
 After the prefix, write your answer.
 
@@ -210,6 +211,19 @@ export interface CaseIntent {
 
 export type EditDraftIntent = Partial<EventIntent> & { title?: string };
 
+export interface EditEventIntent {
+  eventId: string;
+  date?: string;
+  startTime?: string;
+  endTime?: string;
+  title?: string;
+  department?: string;
+  location?: string;
+  description?: string;
+  eventType?: string;
+  subtype?: string;
+}
+
 export interface AskLitCalResult {
   answer: string;
   model: string;
@@ -219,6 +233,7 @@ export interface AskLitCalResult {
   eventIntent?: EventIntent;
   caseIntent?: CaseIntent;
   editDraftIntent?: EditDraftIntent;
+  editEventIntent?: EditEventIntent;
 }
 
 export async function askLitCal(input: AskLitCalInput): Promise<AskLitCalResult> {
@@ -261,6 +276,7 @@ export async function askLitCal(input: AskLitCalInput): Promise<AskLitCalResult>
         eventIntent: extractEventIntent(prefix),
         caseIntent: extractCaseIntent(prefix),
         editDraftIntent: extractEditDraftIntent(prefix),
+        editEventIntent: extractEditEventIntent(prefix),
       };
     } catch (err) {
       const msg = String(err);
@@ -278,6 +294,11 @@ export async function askLitCal(input: AskLitCalInput): Promise<AskLitCalResult>
 }
 
 function parseResponse(raw: string): { prefix: string; body: string } {
+  // EDIT_EVENT prefix
+  const editEventMatch = raw.match(/^\[EDIT_EVENT:(\{[\s\S]*?\})\]\s*/);
+  if (editEventMatch) {
+    return { prefix: `EDIT_EVENT:${editEventMatch[1]}`, body: raw.slice(editEventMatch[0].length).trim() };
+  }
   // EDIT_DRAFT prefix
   const editMatch = raw.match(/^\[EDIT_DRAFT:(\{[\s\S]*?\})\]\s*/);
   if (editMatch) {
@@ -335,6 +356,17 @@ function extractEditDraftIntent(prefix: string): EditDraftIntent | undefined {
   if (!match) return undefined;
   try {
     return JSON.parse(match[1]) as EditDraftIntent;
+  } catch {
+    return undefined;
+  }
+}
+
+function extractEditEventIntent(prefix: string): EditEventIntent | undefined {
+  const match = prefix.match(/^EDIT_EVENT:(\{[\s\S]*\})$/);
+  if (!match) return undefined;
+  try {
+    const parsed = JSON.parse(match[1]) as EditEventIntent;
+    return parsed.eventId ? parsed : undefined;
   } catch {
     return undefined;
   }

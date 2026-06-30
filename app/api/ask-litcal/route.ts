@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canEdit, getCurrentWorkspace } from "@/lib/workspaces";
 import { askLitCal } from "@/lib/ai/askLitCal";
-import type { EventIntent, CaseIntent, EditDraftIntent } from "@/lib/ai/askLitCal";
+import type { EventIntent, CaseIntent, EditDraftIntent, EditEventIntent } from "@/lib/ai/askLitCal";
 import { getFullCaseContext, getGlobalContext, searchCases } from "@/lib/ai/askLitCalData";
 import { detectConflicts } from "@/lib/conflicts";
 import { findCourtHearingRule } from "@/lib/court-hearing-rules";
@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
   const result = await askLitCal({ question, contextText, history });
 
   // Viewers can read/search but not create or edit
-  if (isViewer && (result.editDraftIntent || result.eventIntent || result.caseIntent)) {
+  if (isViewer && (result.editDraftIntent || result.editEventIntent || result.eventIntent || result.caseIntent)) {
     return NextResponse.json({
       answer: "You have view-only access and cannot create or edit events or cases. You can ask me to summarize cases, find events, or answer questions about your calendar.",
       activeCaseId,
@@ -155,6 +155,104 @@ export async function POST(request: NextRequest) {
       activeCaseId: activeCaseId ?? null,
       draftEdits: edits,
     });
+  }
+
+  // Handle existing event edit intent
+  if (result.editEventIntent) {
+    const intent: EditEventIntent = result.editEventIntent;
+
+    const existing = await prisma.event.findFirst({
+      where: {
+        id: intent.eventId,
+        OR: [{ workspaceId: workspace.id }, { userId: user.id, workspaceId: null }],
+      },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ answer: "I couldn't find that event in your workspace.", activeCaseId });
+    }
+
+    // Build updated times using user's timezone
+    const userRecord = await prisma.user.findUnique({ where: { id: user.id }, select: { timeZone: true } });
+    const tz = userRecord?.timeZone ?? "America/Los_Angeles";
+
+    function localToUTC(dateStr: string, timeStr: string, timezone: string): Date {
+      // Interpret dateStr+timeStr as a local time in `timezone`, return UTC Date
+      const dtStr = `${dateStr}T${timeStr}:00`;
+      // Get what UTC time corresponds to this local time in the given timezone
+      // by comparing what the formatter says the local time is for a UTC candidate
+      const candidate = new Date(`${dtStr}Z`); // treat as UTC first
+      const localParts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: timezone,
+        year: "numeric", month: "2-digit", day: "2-digit",
+        hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+      }).formatToParts(candidate);
+      const p = Object.fromEntries(localParts.map((x) => [x.type, x.value]));
+      const localForCandidate = `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}`;
+      const diffMs = new Date(`${dtStr}:00`).getTime() - new Date(localForCandidate).getTime();
+      return new Date(candidate.getTime() + diffMs);
+    }
+
+    const fmtDate = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" });
+    const fmtTime = new Intl.DateTimeFormat("en-CA", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false });
+    const existingDate = fmtDate.format(existing.startTime);
+    const existingStart = fmtTime.format(existing.startTime);
+    const existingEnd = fmtTime.format(existing.endTime);
+
+    const newDate = intent.date ?? existingDate;
+    const newStartTime = intent.startTime ?? existingStart;
+    const newEndTime = intent.endTime ?? existingEnd;
+
+    let newStart: Date;
+    let newEnd: Date;
+    try {
+      newStart = localToUTC(newDate, newStartTime, tz);
+      newEnd = localToUTC(newDate, newEndTime, tz);
+      if (isNaN(newStart.getTime()) || isNaN(newEnd.getTime())) throw new Error("Invalid date");
+    } catch {
+      return NextResponse.json({ answer: "I couldn't parse the new time. Please try again with a clearer time like '9 AM' or '14:00'.", activeCaseId });
+    }
+
+    const validTypes = ["DEADLINE","HEARING","DEPOSITION","TRIAL","CONFERENCE","MEETING","MEDIATION","COURT_CALL","CASE_MANAGEMENT_CONFERENCE","REMINDER","OTHER"];
+    await prisma.event.update({
+      where: { id: intent.eventId },
+      data: {
+        ...(intent.title !== undefined && { title: intent.title }),
+        ...(intent.department !== undefined && { department: intent.department }),
+        ...(intent.location !== undefined && { location: intent.location }),
+        ...(intent.description !== undefined && { description: intent.description }),
+        ...(intent.eventType && validTypes.includes(intent.eventType) && { eventType: intent.eventType as never }),
+        ...(intent.subtype !== undefined && { subtype: intent.subtype }),
+        startTime: newStart,
+        endTime: newEnd,
+      },
+    });
+
+    if (existing.caseId) {
+      void prisma.caseTimeline.create({
+        data: {
+          id: `ct_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          caseId: existing.caseId,
+          workspaceId: workspace.id,
+          actorUserId: user.id,
+          type: "event.edited",
+          title: `Event updated via Ask LitCal: ${existing.title}`,
+        },
+      });
+    }
+
+    await prisma.askLitCalLog.create({
+      data: {
+        id: `alc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        workspaceId: workspace.id, userId: user.id,
+        caseId: existing.caseId ?? activeCaseId ?? null,
+        question: question.slice(0, 1000),
+        answer: result.answer,
+        model: result.model,
+      },
+    });
+
+    return NextResponse.json({ answer: result.answer, activeCaseId: existing.caseId ?? activeCaseId ?? null });
   }
 
   // Handle event creation intent
