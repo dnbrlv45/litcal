@@ -231,6 +231,21 @@ export default function AskLitCalPanel() {
         if (edits.date) updated.date = edits.date;
         if (edits.startTime) updated.startTime = edits.startTime;
         if (edits.endTime) updated.endTime = edits.endTime;
+
+        // If the start time moved but the end time wasn't explicitly changed,
+        // shift the end time to preserve the original event duration.
+        if (edits.startTime && !edits.endTime && activeDraft.startTime && activeDraft.endTime) {
+          const toMin = (t: string) => {
+            const [h, m] = t.split(":").map(Number);
+            return h * 60 + m;
+          };
+          const toStr = (mins: number) => {
+            const norm = ((mins % 1440) + 1440) % 1440;
+            return `${String(Math.floor(norm / 60)).padStart(2, "0")}:${String(norm % 60).padStart(2, "0")}`;
+          };
+          const duration = toMin(activeDraft.endTime) - toMin(activeDraft.startTime);
+          if (duration > 0) updated.endTime = toStr(toMin(edits.startTime) + duration);
+        }
         if (edits.department !== undefined) updated.department = edits.department ?? null;
         if (edits.location !== undefined) updated.location = edits.location ?? null;
         if (edits.description !== undefined) updated.description = edits.description ?? null;

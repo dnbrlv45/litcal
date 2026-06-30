@@ -7,7 +7,10 @@ import type { EventIntent, CaseIntent, EditDraftIntent, EditEventIntent } from "
 import { getFullCaseContext, getGlobalContext, searchCases } from "@/lib/ai/askLitCalData";
 import { detectConflicts } from "@/lib/conflicts";
 import { findCourtHearingRule } from "@/lib/court-hearing-rules";
-import { HEARING_SUBTYPES } from "@/lib/google-calendar-payload";
+import { HEARING_SUBTYPES, buildGoogleEventPayload } from "@/lib/google-calendar-payload";
+import { getAccessToken, patchGoogleEvent } from "@/lib/google-calendar";
+import { replaceEventReminders } from "@/lib/reminders";
+import { cascadeDeadlineDateChange } from "@/lib/deadline-rules";
 
 export const maxDuration = 30;
 
@@ -176,32 +179,40 @@ export async function POST(request: NextRequest) {
     const userRecord = await prisma.user.findUnique({ where: { id: user.id }, select: { timeZone: true } });
     const tz = userRecord?.timeZone ?? "America/Los_Angeles";
 
+    // Interpret a local date+time string as wall-clock time in `tz`, return UTC Date
     function localToUTC(dateStr: string, timeStr: string, timezone: string): Date {
-      // Interpret dateStr+timeStr as a local time in `timezone`, return UTC Date
-      const dtStr = `${dateStr}T${timeStr}:00`;
-      // Get what UTC time corresponds to this local time in the given timezone
-      // by comparing what the formatter says the local time is for a UTC candidate
-      const candidate = new Date(`${dtStr}Z`); // treat as UTC first
-      const localParts = new Intl.DateTimeFormat("en-CA", {
+      const candidate = new Date(`${dateStr}T${timeStr}Z`);
+      const parts = new Intl.DateTimeFormat("en-CA", {
         timeZone: timezone,
         year: "numeric", month: "2-digit", day: "2-digit",
         hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
       }).formatToParts(candidate);
-      const p = Object.fromEntries(localParts.map((x) => [x.type, x.value]));
+      const p = Object.fromEntries(parts.map((x) => [x.type, x.value]));
       const localForCandidate = `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}`;
-      const diffMs = new Date(`${dtStr}:00`).getTime() - new Date(localForCandidate).getTime();
+      const diffMs = new Date(`${dateStr}T${timeStr}:00`).getTime() - new Date(localForCandidate).getTime();
       return new Date(candidate.getTime() + diffMs);
     }
 
     const fmtDate = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" });
     const fmtTime = new Intl.DateTimeFormat("en-CA", { timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false });
     const existingDate = fmtDate.format(existing.startTime);
-    const existingStart = fmtTime.format(existing.startTime);
-    const existingEnd = fmtTime.format(existing.endTime);
+    const existingStart = fmtTime.format(existing.startTime).replace(/^24:/, "00:");
+    const existingEnd = fmtTime.format(existing.endTime).replace(/^24:/, "00:");
 
     const newDate = intent.date ?? existingDate;
-    const newStartTime = intent.startTime ?? existingStart;
-    const newEndTime = intent.endTime ?? existingEnd;
+    const newStartTime = (intent.startTime ?? existingStart).replace(/^24:/, "00:");
+    let newEndTime = (intent.endTime ?? existingEnd).replace(/^24:/, "00:");
+
+    // If only the start time moved, shift the end time to preserve the original duration
+    if (intent.startTime !== undefined && intent.endTime === undefined) {
+      const toMin = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+      const toStr = (mins: number) => {
+        const norm = ((mins % 1440) + 1440) % 1440;
+        return `${String(Math.floor(norm / 60)).padStart(2, "0")}:${String(norm % 60).padStart(2, "0")}`;
+      };
+      const duration = toMin(existingEnd) - toMin(existingStart);
+      if (duration > 0) newEndTime = toStr(toMin(newStartTime) + duration);
+    }
 
     let newStart: Date;
     let newEnd: Date;
@@ -213,8 +224,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ answer: "I couldn't parse the new time. Please try again with a clearer time like '9 AM' or '14:00'.", activeCaseId });
     }
 
+    const timingChanged = intent.date !== undefined || intent.startTime !== undefined || intent.endTime !== undefined;
+    // A specific time given on a previously all-day event makes it a timed event
+    const becomesTimed = existing.allDay && (intent.startTime !== undefined || intent.endTime !== undefined);
+
     const validTypes = ["DEADLINE","HEARING","DEPOSITION","TRIAL","CONFERENCE","MEETING","MEDIATION","COURT_CALL","CASE_MANAGEMENT_CONFERENCE","REMINDER","OTHER"];
-    await prisma.event.update({
+    const updatedEvent = await prisma.event.update({
       where: { id: intent.eventId },
       data: {
         ...(intent.title !== undefined && { title: intent.title }),
@@ -223,10 +238,81 @@ export async function POST(request: NextRequest) {
         ...(intent.description !== undefined && { description: intent.description }),
         ...(intent.eventType && validTypes.includes(intent.eventType) && { eventType: intent.eventType as never }),
         ...(intent.subtype !== undefined && { subtype: intent.subtype }),
+        ...(becomesTimed && { allDay: false }),
         startTime: newStart,
         endTime: newEnd,
       },
+      include: {
+        googleSync: true,
+        caseRef: { select: { title: true, caseNumber: true, county: true, court: true } },
+        assignedAttorney: { select: { firstName: true, lastName: true } },
+      },
     });
+
+    // Cascade deadline date changes and refresh reminders when timing changed
+    if (timingChanged) {
+      try {
+        await replaceEventReminders(prisma, intent.eventId, newStart, updatedEvent.eventType);
+        await cascadeDeadlineDateChange(intent.eventId, newStart);
+      } catch (err) {
+        console.error("Deadline cascade / reminder refresh failed on Ask LitCal edit:", err);
+      }
+    }
+
+    // Mirror the edit to Google Calendar
+    if (updatedEvent.googleSync) {
+      try {
+        const connection = await prisma.userCalendarConnection.findFirst({
+          where: { userId: user.id, provider: "GOOGLE", isActive: true },
+          select: { refreshToken: true },
+        });
+        if (connection) {
+          const accessToken = await getAccessToken(connection.refreshToken);
+          const payload = buildGoogleEventPayload({
+            title: updatedEvent.title,
+            eventType: updatedEvent.eventType,
+            subtype: updatedEvent.subtype,
+            subtypeReason: updatedEvent.subtypeReason,
+            description: updatedEvent.description,
+            location: updatedEvent.location,
+            department: updatedEvent.department,
+            inPerson: updatedEvent.inPerson,
+            caseName: updatedEvent.caseRef?.title ?? null,
+            caseNumber: updatedEvent.caseRef?.caseNumber ?? null,
+            countyName: updatedEvent.caseRef?.county ?? null,
+            courtName: updatedEvent.caseRef?.court ?? null,
+            appearanceType: updatedEvent.appearanceType,
+            remoteLink: updatedEvent.remoteLink,
+            phoneNumber: updatedEvent.phoneNumber,
+            bridge: updatedEvent.bridge,
+            password: updatedEvent.remotePassword,
+            requestRequired: updatedEvent.requestRequired,
+            attorneyName: updatedEvent.assignedAttorney
+              ? [updatedEvent.assignedAttorney.firstName, updatedEvent.assignedAttorney.lastName].filter(Boolean).join(" ") || null
+              : null,
+          });
+          await patchGoogleEvent(
+            accessToken,
+            updatedEvent.googleSync.googleCalendarId,
+            updatedEvent.googleSync.googleEventId,
+            {
+              summary: payload.summary,
+              description: payload.description,
+              location: payload.location,
+              colorId: payload.colorId,
+              start: updatedEvent.allDay
+                ? { date: newStart.toISOString().slice(0, 10) }
+                : { dateTime: newStart.toISOString(), timeZone: tz },
+              end: updatedEvent.allDay
+                ? { date: newEnd.toISOString().slice(0, 10) }
+                : { dateTime: newEnd.toISOString(), timeZone: tz },
+            }
+          );
+        }
+      } catch (err) {
+        console.error("Google Calendar patch failed on Ask LitCal edit:", err);
+      }
+    }
 
     if (existing.caseId) {
       void prisma.caseTimeline.create({
