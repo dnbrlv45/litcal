@@ -39,6 +39,20 @@ export async function GET(_request: NextRequest) {
     return NextResponse.json({ sent: 0, notifications: 0, emails: { event: { sent: 0, skipped: 0, failed: 0 }, task: taskEmails } });
   }
 
+  // Load active coverage assignments for all affected workspaces
+  const workspaceIds = [...new Set(due.map((r) => r.event.workspaceId).filter(Boolean) as string[])];
+  const coverageAssignments = await prisma.coverageAssignment.findMany({
+    where: {
+      workspaceId: { in: workspaceIds },
+      startDate: { lte: now },
+      endDate: { gte: now },
+    },
+    select: { coveredUserId: true, coveringUserId: true },
+  });
+  // Map coveredUserId -> coveringUserId for quick lookup
+  const coverageMap = new Map<string, string>();
+  for (const a of coverageAssignments) coverageMap.set(a.coveredUserId, a.coveringUserId);
+
   // Build notification rows — one per reminder per recipient
   type NotifRow = {
     userId: string;
@@ -73,10 +87,19 @@ export async function GET(_request: NextRequest) {
       ev.caseRef ? `Case: ${ev.caseRef.caseNumber ? `#${ev.caseRef.caseNumber} · ` : ""}${ev.caseRef.title}` : null,
     ].filter(Boolean).join("\n");
 
-    // Collect all unique recipients: event owner, event attorney, case staff
-    const recipientIds = new Set<string>([ev.userId]);
+    // Recipients: case staff + assigned attorney only.
+    // Do NOT include ev.userId (event creator) — admins create events but shouldn't get notifications.
+    // Fall back to creator only when there is no case (personal/uncategorized events).
+    const recipientIds = new Set<string>();
     if (ev.assignedAttorney) recipientIds.add(ev.assignedAttorney.id);
     for (const s of ev.caseRef?.staff ?? []) recipientIds.add(s.userId);
+    if (recipientIds.size === 0) recipientIds.add(ev.userId); // no case — notify creator
+
+    // Add covering attorneys for any covered recipient
+    for (const userId of [...recipientIds]) {
+      const covering = coverageMap.get(userId);
+      if (covering) recipientIds.add(covering);
+    }
 
     for (const userId of recipientIds) {
       rows.push({
@@ -95,7 +118,7 @@ export async function GET(_request: NextRequest) {
     await prisma.notification.createMany({ data: rows, skipDuplicates: true });
   }
 
-  const eventEmails = await sendEventReminderEmails(due.map((r) => r.id));
+  const eventEmails = await sendEventReminderEmails(due.map((r) => r.id), coverageMap);
   const taskEmails = await sendDueTaskEmails(now);
 
   // Mark reminders sent

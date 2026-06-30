@@ -39,6 +39,8 @@ model User {
   createdDiscovery     DiscoveryItem[] @relation("DiscoveryCreator")
   assignedDiscovery    DiscoveryItem[] @relation("DiscoveryAssignee")
   askLitCalLogs        AskLitCalLog[]
+  coverageAssignmentsOut CoverageAssignment[] @relation("CoveredUser")
+  coverageAssignmentsIn  CoverageAssignment[] @relation("CoveringUser")
 }
 
 model AuthSession {
@@ -76,6 +78,7 @@ model Workspace {
   courtRuleRequests    CourtRuleRequest[]
   caseTimeline         CaseTimeline[]
   discoveryItems       DiscoveryItem[]
+  coverageAssignments  CoverageAssignment[]
 
   @@index([createdBy])
 }
@@ -449,6 +452,26 @@ model CaseStaff {
   @@unique([caseId, userId, role])
   @@index([caseId])
   @@index([userId])
+}
+
+model CoverageAssignment {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  coveredUserId  String
+  coveringUserId String
+  startDate      DateTime
+  endDate        DateTime
+  note           String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  coveredUser  User      @relation("CoveredUser",  fields: [coveredUserId],  references: [id], onDelete: Cascade)
+  coveringUser User      @relation("CoveringUser", fields: [coveringUserId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([coveredUserId])
+  @@index([coveringUserId])
 }
 
 enum PartyRole {

@@ -348,7 +348,7 @@ function eventEmailType(event: {
   return null;
 }
 
-export async function sendEventReminderEmails(reminderIds: string[]) {
+export async function sendEventReminderEmails(reminderIds: string[], coverageMap: Map<string, string> = new Map()) {
   if (reminderIds.length === 0) return { sent: 0, skipped: 0, failed: 0 };
   const reminders = await prisma.eventReminder.findMany({
     where: { id: { in: reminderIds } },
@@ -374,6 +374,16 @@ export async function sendEventReminderEmails(reminderIds: string[]) {
     },
   });
 
+  // Collect all covering user IDs we may need to look up
+  const coveringUserIds = [...new Set([...coverageMap.values()])];
+  const coveringUsers = coveringUserIds.length > 0
+    ? await prisma.user.findMany({
+        where: { id: { in: coveringUserIds } },
+        select: { id: true, email: true, firstName: true, lastName: true },
+      })
+    : [];
+  const coveringUserMap = new Map(coveringUsers.map((u) => [u.id, u]));
+
   const counts = { sent: 0, skipped: 0, failed: 0 };
   for (const reminder of reminders) {
     const event = reminder.event;
@@ -381,10 +391,22 @@ export async function sendEventReminderEmails(reminderIds: string[]) {
     const emailType = eventEmailType(event);
     if (!emailType) continue;
 
+    // Recipients: case staff + assigned attorney.
+    // Do NOT include event.user (creator) — admins create events but shouldn't get reminder emails.
+    // Fall back to creator only when there is no case.
     const recipientMap = new Map<string, { id: string; email: string; firstName: string | null; lastName: string | null }>();
-    recipientMap.set(event.user.id, event.user);
     if (event.assignedAttorney) recipientMap.set(event.assignedAttorney.id, event.assignedAttorney);
     for (const staff of event.caseRef?.staff ?? []) recipientMap.set(staff.user.id, staff.user);
+    if (recipientMap.size === 0) recipientMap.set(event.user.id, event.user); // no case — notify creator
+
+    // Add covering attorneys
+    for (const [coveredId, coveringId] of coverageMap) {
+      if (recipientMap.has(coveredId)) {
+        const coveringUser = coveringUserMap.get(coveringId);
+        if (coveringUser) recipientMap.set(coveringId, coveringUser);
+      }
+    }
+
     const recipients = [...recipientMap.values()];
     const reminderKey = reminderKeyFromMinutes(reminder.minutesBefore);
     const caseLabel = event.caseRef ? `${event.caseRef.title}${event.caseRef.caseNumber ? ` (#${event.caseRef.caseNumber})` : ""}` : null;
