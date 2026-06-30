@@ -247,19 +247,11 @@ export interface AskLitCalResult {
   taskIntent?: TaskIntent;
 }
 
-export async function askLitCal(input: AskLitCalInput): Promise<AskLitCalResult> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
-
-  const genai = new GoogleGenerativeAI(apiKey);
+function buildPrompts(input: AskLitCalInput): { systemPrompt: string; userContent: string } {
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: "America/Los_Angeles",
   });
-
-  const systemPrompt = SYSTEM_PROMPT
-    .replace("{TODAY}", today)
-    .replace("{CONTEXT}", input.contextText);
-
+  const systemPrompt = SYSTEM_PROMPT.replace("{TODAY}", today).replace("{CONTEXT}", input.contextText);
   const conversationParts: string[] = [];
   if (input.history) {
     for (const msg of input.history.slice(-10)) {
@@ -267,29 +259,36 @@ export async function askLitCal(input: AskLitCalInput): Promise<AskLitCalResult>
     }
   }
   conversationParts.push(`User: ${input.question}`);
+  return { systemPrompt, userContent: conversationParts.join("\n\n") };
+}
 
-  const userContent = conversationParts.join("\n\n");
+function buildResult(raw: string, modelName: string): AskLitCalResult {
+  const { prefix, body } = parseResponse(raw);
+  return {
+    answer: body,
+    model: modelName,
+    routingPrefix: prefix,
+    activeCaseId: extractCaseId(prefix),
+    searchQuery: extractSearchQuery(prefix),
+    eventIntent: extractEventIntent(prefix),
+    caseIntent: extractCaseIntent(prefix),
+    editDraftIntent: extractEditDraftIntent(prefix),
+    editEventIntent: extractEditEventIntent(prefix),
+    taskIntent: extractTaskIntent(prefix),
+  };
+}
+
+export async function askLitCal(input: AskLitCalInput): Promise<AskLitCalResult> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
+  const genai = new GoogleGenerativeAI(apiKey);
+  const { systemPrompt, userContent } = buildPrompts(input);
 
   for (const modelName of MODELS) {
     try {
       const model = genai.getGenerativeModel({ model: modelName });
       const result = await model.generateContent([systemPrompt, userContent]);
-      const raw = result.response.text().trim();
-
-      const { prefix, body } = parseResponse(raw);
-
-      return {
-        answer: body,
-        model: modelName,
-        routingPrefix: prefix,
-        activeCaseId: extractCaseId(prefix),
-        searchQuery: extractSearchQuery(prefix),
-        eventIntent: extractEventIntent(prefix),
-        caseIntent: extractCaseIntent(prefix),
-        editDraftIntent: extractEditDraftIntent(prefix),
-        editEventIntent: extractEditEventIntent(prefix),
-        taskIntent: extractTaskIntent(prefix),
-      };
+      return buildResult(result.response.text().trim(), modelName);
     } catch (err) {
       const msg = String(err);
       const isRateLimit = msg.includes("429") || msg.toLowerCase().includes("quota") || msg.toLowerCase().includes("rate");
@@ -298,11 +297,61 @@ export async function askLitCal(input: AskLitCalInput): Promise<AskLitCalResult>
     }
   }
 
-  return {
-    answer: "I'm having trouble connecting right now. Please try again in a moment.",
-    model: "none",
-    routingPrefix: "[GLOBAL]",
-  };
+  return { answer: "I'm having trouble connecting right now. Please try again in a moment.", model: "none", routingPrefix: "[GLOBAL]" };
+}
+
+export async function askLitCalStream(
+  input: AskLitCalInput,
+  onChunk: (text: string) => void,
+): Promise<AskLitCalResult> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
+  const genai = new GoogleGenerativeAI(apiKey);
+  const { systemPrompt, userContent } = buildPrompts(input);
+
+  for (const modelName of MODELS) {
+    try {
+      const model = genai.getGenerativeModel({ model: modelName });
+      const streamResult = await model.generateContentStream([systemPrompt, userContent]);
+
+      let fullText = "";
+      let prefixDone = false;
+      let buf = "";
+
+      for await (const chunk of streamResult.stream) {
+        const text = chunk.text();
+        fullText += text;
+
+        if (!prefixDone) {
+          buf += text;
+          // The prefix ends with "]\n" — everything after that is the answer body
+          const cut = buf.indexOf("]\n");
+          if (cut !== -1) {
+            prefixDone = true;
+            const body = buf.slice(cut + 2);
+            if (body) onChunk(body);
+          } else if (!buf.startsWith("[")) {
+            // No prefix at all — stream everything as-is
+            prefixDone = true;
+            onChunk(buf);
+          }
+        } else {
+          onChunk(text);
+        }
+      }
+
+      return buildResult(fullText.trim(), modelName);
+    } catch (err) {
+      const msg = String(err);
+      const isRateLimit = msg.includes("429") || msg.toLowerCase().includes("quota") || msg.toLowerCase().includes("rate");
+      if (isRateLimit) continue;
+      throw err;
+    }
+  }
+
+  const fallback = "I'm having trouble connecting right now. Please try again in a moment.";
+  onChunk(fallback);
+  return { answer: fallback, model: "none", routingPrefix: "[GLOBAL]" };
 }
 
 function parseResponse(raw: string): { prefix: string; body: string } {

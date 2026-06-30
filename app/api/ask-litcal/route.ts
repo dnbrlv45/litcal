@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canEdit, getCurrentWorkspace } from "@/lib/workspaces";
-import { askLitCal } from "@/lib/ai/askLitCal";
-import type { EventIntent, CaseIntent, EditDraftIntent, EditEventIntent, TaskIntent } from "@/lib/ai/askLitCal";
+import { askLitCal, askLitCalStream } from "@/lib/ai/askLitCal";
+import type { EventIntent, CaseIntent, EditEventIntent, TaskIntent } from "@/lib/ai/askLitCal";
 import { getFullCaseContext, getGlobalContext, searchCases } from "@/lib/ai/askLitCalData";
 import { detectConflicts } from "@/lib/conflicts";
 import { findCourtHearingRule } from "@/lib/court-hearing-rules";
@@ -12,11 +12,56 @@ import { getAccessToken, patchGoogleEvent } from "@/lib/google-calendar";
 import { replaceEventReminders } from "@/lib/reminders";
 import { cascadeDeadlineDateChange } from "@/lib/deadline-rules";
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
+  if (request.headers.get("accept")?.includes("text/x-litcal-stream")) {
+    return streamAskLitCalResponse(request);
+  }
+
+  return handleAskLitCalRequest(request);
+}
+
+function streamAskLitCalResponse(request: NextRequest) {
+  const encoder = new TextEncoder();
+
+  return new Response(
+    new ReadableStream({
+      async start(controller) {
+        const send = (payload: unknown) => {
+          controller.enqueue(encoder.encode(`${JSON.stringify(payload)}\n`));
+        };
+
+        try {
+          const response = await handleAskLitCalRequest(request, {
+            onAnswerChunk: (text) => send({ type: "delta", text }),
+          });
+          const data = await response.clone().json().catch(() => ({ error: "Something went wrong." }));
+          send({ type: "final", status: response.status, data });
+        } catch (err) {
+          console.error("Ask LitCal stream failed:", err);
+          send({ type: "final", status: 500, data: { error: "Something went wrong." } });
+        } finally {
+          controller.close();
+        }
+      },
+    }),
+    {
+      headers: {
+        "Content-Type": "text/x-litcal-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        "X-Accel-Buffering": "no",
+      },
+    },
+  );
+}
+
+async function handleAskLitCalRequest(
+  request: NextRequest,
+  options: { onAnswerChunk?: (text: string) => void } = {},
+) {
   const user = await requireUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
 
   const { workspace, membership } = await getCurrentWorkspace(user.id);
   if (!workspace || !membership) return NextResponse.json({ error: "No workspace" }, { status: 403 });
@@ -128,7 +173,9 @@ export async function POST(request: NextRequest) {
   }
 
   // Call Gemini
-  const result = await askLitCal({ question, contextText, history });
+  const result = options.onAnswerChunk
+    ? await askLitCalStream({ question, contextText, history }, options.onAnswerChunk)
+    : await askLitCal({ question, contextText, history });
 
   // Viewers can read/search but not create or edit
   if (isViewer && (result.editDraftIntent || result.editEventIntent || result.eventIntent || result.caseIntent || result.taskIntent)) {

@@ -99,6 +99,19 @@ interface Message {
   dismissed?: boolean;
 }
 
+interface AskLitCalData {
+  answer?: string;
+  activeCaseId?: string | null;
+  caseMatches?: { id: string; title: string; caseNumber: string | null }[] | null;
+  pendingEvent?: EventIntent | null;
+  pendingCase?: CaseIntent | null;
+  proposedEvent?: ProposedEvent | null;
+  proposedCase?: ProposedCase | null;
+  draftEdits?: Partial<ProposedEvent> & { caseQuery?: string; title?: string };
+  createdTask?: { id: string; title: string; caseTitle: string | null };
+  error?: string;
+}
+
 const CASE_PROMPTS = [
   "What is going on in this case?",
   "What deadlines are coming up?",
@@ -141,6 +154,7 @@ export default function AskLitCalPanel() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [streamingResponse, setStreamingResponse] = useState(false);
   const [activeCaseId, setActiveCaseId] = useState<string | null>(null);
   const [activeCaseName, setActiveCaseName] = useState<string | null>(null);
   const [pendingEvent, setPendingEvent] = useState<EventIntent | null>(null);
@@ -157,23 +171,30 @@ export default function AskLitCalPanel() {
 
   useEffect(() => {
     if (open && !prevOpenRef.current) {
-      // Only clear conversation if we're switching to a different case
-      if (resolvedCaseId !== activeCaseId) {
-        setMessages([]);
-        setPendingEvent(null);
-        setPendingCase(null);
-        setActiveDraft(null);
-        setActiveCaseId(resolvedCaseId);
-      }
-      setInput("");
-      setTimeout(() => inputRef.current?.focus(), 100);
+      const timeoutId = window.setTimeout(() => {
+        // Only clear conversation if we're switching to a different case
+        if (resolvedCaseId !== activeCaseId) {
+          setMessages([]);
+          setPendingEvent(null);
+          setPendingCase(null);
+          setActiveDraft(null);
+          setActiveCaseId(resolvedCaseId);
+        }
+        setInput("");
+        inputRef.current?.focus();
+      }, 100);
+      prevOpenRef.current = open;
+      return () => window.clearTimeout(timeoutId);
     }
     prevOpenRef.current = open;
   }, [open, resolvedCaseId, activeCaseId]);
 
   // Fetch case name whenever activeCaseId changes
   useEffect(() => {
-    if (!activeCaseId) { setActiveCaseName(null); return; }
+    if (!activeCaseId) {
+      const timeoutId = window.setTimeout(() => setActiveCaseName(null), 0);
+      return () => window.clearTimeout(timeoutId);
+    }
     void fetch(`/api/cases/${activeCaseId}`)
       .then((r) => r.ok ? r.json() : null)
       .then((d) => { if (d?.case?.title) setActiveCaseName(d.case.title as string); })
@@ -193,12 +214,36 @@ export default function AskLitCalPanel() {
     }
     setInput("");
     setLoading(true);
+    setStreamingResponse(false);
 
     try {
       const history = messages.map((m) => ({ role: m.role, content: m.content }));
+      let streamedMessageIndex: number | null = null;
+      let streamedContent = "";
+
+      const upsertAssistantMessage = (message: Message) => {
+        setMessages((prev) => {
+          if (streamedMessageIndex === null) {
+            streamedMessageIndex = prev.length;
+            return [...prev, message];
+          }
+
+          return prev.map((existing, index) => (
+            index === streamedMessageIndex ? { ...existing, ...message } : existing
+          ));
+        });
+      };
+
+      const appendAssistantDelta = (delta: string) => {
+        if (!delta) return;
+        streamedContent += delta;
+        setStreamingResponse(true);
+        upsertAssistantMessage({ role: "assistant", content: streamedContent });
+      };
+
       const res = await fetch("/api/ask-litcal", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Accept": "text/x-litcal-stream" },
         body: JSON.stringify({
           question: text,
           activeCaseId: overrideActiveCaseId ?? activeCaseId ?? resolvedCaseId,
@@ -226,21 +271,54 @@ export default function AskLitCalPanel() {
           })(),
         }),
       });
-      const data = await res.json() as {
-        answer?: string;
-        activeCaseId?: string | null;
-        caseMatches?: { id: string; title: string; caseNumber: string | null }[] | null;
-        pendingEvent?: EventIntent | null;
-        pendingCase?: CaseIntent | null;
-        proposedEvent?: ProposedEvent | null;
-        proposedCase?: ProposedCase | null;
-        draftEdits?: Partial<ProposedEvent> & { caseQuery?: string; title?: string };
-        createdTask?: { id: string; title: string; caseTitle: string | null };
-        error?: string;
-      };
+      let data: AskLitCalData;
+      let responseOk = res.ok;
 
-      if (!res.ok) {
-        setMessages((prev) => [...prev, { role: "assistant", content: data.error ?? "Something went wrong." }]);
+      if (res.headers.get("content-type")?.includes("text/x-litcal-stream") && res.body) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        data = {};
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            const event = JSON.parse(line) as
+              | { type: "delta"; text: string }
+              | { type: "final"; status: number; data: AskLitCalData };
+
+            if (event.type === "delta") {
+              appendAssistantDelta(event.text);
+            } else {
+              data = event.data;
+              responseOk = event.status >= 200 && event.status < 300;
+            }
+          }
+        }
+
+        if (buffer.trim()) {
+          const event = JSON.parse(buffer) as
+            | { type: "delta"; text: string }
+            | { type: "final"; status: number; data: AskLitCalData };
+          if (event.type === "delta") appendAssistantDelta(event.text);
+          else {
+            data = event.data;
+            responseOk = event.status >= 200 && event.status < 300;
+          }
+        }
+      } else {
+        data = await res.json() as AskLitCalData;
+      }
+
+      if (!responseOk) {
+        upsertAssistantMessage({ role: "assistant", content: data.error ?? "Something went wrong." });
         return;
       }
 
@@ -313,10 +391,10 @@ export default function AskLitCalPanel() {
         }
 
         setActiveDraft(updated);
-        setMessages((prev) => [...prev, {
+        upsertAssistantMessage({
           role: "assistant",
           content: data.answer ?? "Draft updated.",
-        }]);
+        });
       } else {
         // Track pending state for multi-turn collection
         if (data.pendingEvent) {
@@ -334,21 +412,22 @@ export default function AskLitCalPanel() {
           setPendingCase(null);
         }
 
-        setMessages((prev) => [...prev, {
+        upsertAssistantMessage({
           role: "assistant",
           content: data.answer ?? "No response.",
           caseMatches: data.caseMatches ?? undefined,
           proposedEvent: !activeDraft ? (data.proposedEvent ?? undefined) : undefined,
           proposedCase: data.proposedCase ?? undefined,
           createdTask: data.createdTask ?? undefined,
-        }]);
+        });
       }
     } catch {
       setMessages((prev) => [...prev, { role: "assistant", content: "Failed to connect. Please try again." }]);
     } finally {
+      setStreamingResponse(false);
       setLoading(false);
     }
-  }, [loading, messages, activeCaseId, pendingEvent, pendingCase, activeDraft]);
+  }, [loading, messages, activeCaseId, pendingEvent, pendingCase, activeDraft, resolvedCaseId]);
 
   const dismissProposalCards = useCallback(() => {
     setMessages((prev) => prev.map((m) =>
@@ -653,7 +732,7 @@ export default function AskLitCalPanel() {
           </div>
         )}
 
-        {loading && (
+        {loading && !streamingResponse && (
           <div className="flex justify-start">
             <div className="flex items-center gap-2 rounded-xl bg-slate-100 px-3.5 py-2.5 text-sm text-slate-500">
               <Loader2 className="size-3.5 animate-spin" />
