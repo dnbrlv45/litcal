@@ -60,6 +60,55 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const start = searchParams.get("start");
   const end = searchParams.get("end");
+  const q = searchParams.get("q")?.trim();
+
+  // Search mode: no date range, full-text match across all events
+  if (q) {
+    const events = await prisma.event.findMany({
+      where: {
+        status: { notIn: ["CANCELLED", "COMPLETED"] },
+        OR: [{ workspaceId: workspace.id }, { userId, workspaceId: null }],
+        AND: [{
+          OR: [
+            { title: { contains: q, mode: "insensitive" } },
+            { caseRef: { title: { contains: q, mode: "insensitive" } } },
+          ],
+        }],
+      },
+      include: {
+        caseRef: { select: { id: true, title: true, status: true, county: true, court: true, caseNumber: true } },
+        assignedAttorney: { select: { id: true, firstName: true, lastName: true } },
+      },
+      orderBy: { startTime: "asc" },
+      take: 20,
+    });
+    return NextResponse.json({
+      events: events.map((e) => ({
+        id: e.id,
+        title: e.title,
+        start: e.startTime.toISOString(),
+        end: e.endTime.toISOString(),
+        allDay: e.allDay,
+        eventType: e.eventType,
+        caseId: e.caseId,
+        caseTitle: e.caseRef?.title ?? null,
+        caseStatus: e.caseRef?.status ?? null,
+        assignedAttorneyId: e.assignedAttorney?.id ?? null,
+        assignedAttorneyName: e.assignedAttorney
+          ? [e.assignedAttorney.firstName, e.assignedAttorney.lastName].filter(Boolean).join(" ") || null
+          : null,
+        hasConflict: false,
+        caseCounty: e.caseRef?.county ?? null,
+        caseCourt: e.caseRef?.court ?? null,
+        inPerson: e.inPerson,
+        appearanceType: null, remoteLink: null, phoneNumber: null, bridge: null,
+        remotePassword: null, requestRequired: null, requestContactEmail: null, requestNotes: null,
+        department: e.department, location: e.location, description: e.description,
+        subtype: e.subtype, subtypeReason: e.subtypeReason, caseNumber: e.caseRef?.caseNumber ?? null,
+      })),
+    });
+  }
+
   if (!start || !end) return NextResponse.json({ error: "Missing start/end" }, { status: 400 });
 
   const rangeStart = new Date(start);

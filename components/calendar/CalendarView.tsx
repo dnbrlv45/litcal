@@ -245,6 +245,7 @@ export default function CalendarView() {
   const [filterCaseId, setFilterCaseId] = useState("");
   const [caseSearch, setCaseSearch] = useState("");
   const [calendarSearch, setCalendarSearch] = useState("");
+  const [eventSearchResults, setEventSearchResults] = useState<CalEvent[]>([]);
   const [caseDropdownOpen, setCaseDropdownOpen] = useState(false);
   const caseDropdownRef = useRef<HTMLDivElement>(null);
   const calendarSearchRef = useRef<HTMLInputElement>(null);
@@ -389,6 +390,11 @@ export default function CalendarView() {
     if (!eventCacheRef.current.has(nextKey)) void fetchRange(next.start, next.end);
   }
 
+  function bustCache() {
+    eventCacheRef.current.clear();
+    cacheOrderRef.current = [];
+  }
+
   const fetchEvents = useCallback(async () => {
     const { start, end } = getDateRange(view, date);
     const cacheKey = `${start.toISOString()}|${end.toISOString()}`;
@@ -421,6 +427,17 @@ export default function CalendarView() {
 
   const calendarSearchQuery = normalizeSearch(calendarSearch);
 
+  useEffect(() => {
+    if (!calendarSearchQuery) { setEventSearchResults([]); return; }
+    const timer = setTimeout(() => {
+      fetch(`/api/calendar/events?q=${encodeURIComponent(calendarSearch)}`)
+        .then((r) => r.json())
+        .then((d) => setEventSearchResults(d.events ? (d.events as CalEvent[]).map((e) => ({ ...e, start: new Date(e.start), end: new Date(e.end), eventType: e.eventType ?? "OTHER" })) : []))
+        .catch(() => setEventSearchResults([]));
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [calendarSearchQuery, calendarSearch]);
+
   // Apply all filters
   const filteredEvents = useMemo(() => events.filter((e) => {
     if (!eventMatchesSearch(e, calendarSearchQuery)) return false;
@@ -437,10 +454,7 @@ export default function CalendarView() {
     () => calendarSearchQuery ? cases.filter((c) => caseMatchesSearch(c, calendarSearchQuery)).slice(0, 5) : [],
     [cases, calendarSearchQuery],
   );
-  const eventSearchResults = useMemo(
-    () => calendarSearchQuery ? events.filter((e) => eventMatchesSearch(e, calendarSearchQuery)).slice(0, 5) : [],
-    [events, calendarSearchQuery],
-  );
+  // eventSearchResults populated via server-side search useEffect above
   const deadlineSearchResults = useMemo(
     () => calendarSearchQuery ? deadlines.filter((d) => deadlineMatchesSearch(d, calendarSearchQuery)).slice(0, 5) : [],
     [deadlines, calendarSearchQuery],
@@ -576,6 +590,7 @@ export default function CalendarView() {
                         <button
                           key={c.id}
                           type="button"
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => {
                             closeCalendarSearch();
                             router.push(`/cases/${c.id}`);
@@ -597,6 +612,7 @@ export default function CalendarView() {
                         <button
                           key={event.id}
                           type="button"
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => openSearchEvent(event)}
                           className="w-full px-3 py-2 text-left hover:bg-slate-50"
                         >
@@ -618,6 +634,7 @@ export default function CalendarView() {
                           <button
                             key={`${deadline.type}-${deadline.id}`}
                             type="button"
+                            onMouseDown={(e) => e.preventDefault()}
                             onClick={() => openSearchDeadline(deadline)}
                             className="w-full px-3 py-2 text-left hover:bg-slate-50"
                           >
@@ -895,8 +912,8 @@ export default function CalendarView() {
           <EventDetailPanel
             event={selectedEvent}
             onClose={() => setSelectedEvent(null)}
-            onDeleted={() => { fetchEvents(); setSelectedEvent(null); }}
-            onUpdated={() => { fetchEvents(); setSelectedEvent(null); }}
+            onDeleted={() => { bustCache(); void fetchEvents(); setSelectedEvent(null); }}
+            onUpdated={() => { bustCache(); void fetchEvents(); setSelectedEvent(null); }}
           />
         )}
       </div>
