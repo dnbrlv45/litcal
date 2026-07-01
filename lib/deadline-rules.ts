@@ -156,7 +156,7 @@ export async function applyDeadlineRules(
       if (trigger.caseId) {
         const [caseStaff, caseRecord] = await Promise.all([
           prisma.caseStaff.findMany({
-            where: { caseId: trigger.caseId, role: { in: ["ATTORNEY", "PARALEGAL"] } },
+            where: { caseId: trigger.caseId, role: { in: ["ATTORNEY", "PARALEGAL", "ASSISTANT"] } },
             select: { userId: true, role: true },
             orderBy: { createdAt: "asc" },
           }),

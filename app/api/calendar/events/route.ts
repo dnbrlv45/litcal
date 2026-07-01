@@ -240,7 +240,7 @@ export async function POST(request: NextRequest) {
         court: true,
         countyId: true,
         staff: {
-          where: { role: { in: ["ATTORNEY", "PARALEGAL"] } },
+          where: { role: { in: ["ATTORNEY", "PARALEGAL", "ASSISTANT"] } },
           select: { userId: true, role: true, user: { select: { firstName: true, lastName: true } } },
           orderBy: { createdAt: "asc" },
         },

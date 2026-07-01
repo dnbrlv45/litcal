@@ -87,7 +87,7 @@ function taskPriority(ev: ImportEvent): "MEDIUM" | "HIGH" | "URGENT" {
 async function caseStaffMemberIds(workspaceId: string, caseId: string | null): Promise<string[]> {
   if (!caseId) return [];
   const staff = await prisma.caseStaff.findMany({
-    where: { caseId, role: { in: ["ATTORNEY", "PARALEGAL"] } },
+    where: { caseId, role: { in: ["ATTORNEY", "PARALEGAL", "ASSISTANT"] } },
     select: { userId: true },
     orderBy: { createdAt: "asc" },
   });
