@@ -298,13 +298,17 @@ export async function processGmailMessages(
             const matchedCaseId = extractedWithWarning.matchedCaseId as string | undefined;
             const eventType = extracted.event?.eventType?.toUpperCase();
             if (matchedCaseId && eventType) {
+              // Don't restrict to strictly-future events: a same-day follow-up
+              // (e.g. "here's the Zoom link") can arrive after the event's
+              // start time has technically passed, so include events from the
+              // last day onward rather than excluding anything already begun.
               const candidates = await prisma.event.findMany({
                 where: {
                   workspaceId: targetWorkspaceId,
                   caseId: matchedCaseId,
                   eventType: eventType as never,
                   status: { notIn: ["CANCELLED", "COMPLETED"] },
-                  startTime: { gte: new Date() },
+                  startTime: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
                 },
                 include: { caseRef: { select: { id: true, title: true, caseNumber: true } } },
                 orderBy: { startTime: "asc" },
