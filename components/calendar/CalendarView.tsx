@@ -916,7 +916,7 @@ export default function CalendarView() {
         onClose={() => setModalOpen(false)}
         defaultStart={modalDefaultStart}
         googleConnected={googleConnected}
-        onCreated={fetchEvents}
+        onCreated={() => { bustCache(); void fetchEvents(); }}
       />
     </div>
   );
