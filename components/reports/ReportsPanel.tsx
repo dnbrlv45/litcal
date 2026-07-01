@@ -15,8 +15,9 @@ interface Props {
   attorneys: Attorney[];
 }
 
-function getWeekBounds() {
-  const now = new Date();
+// Returns the Sunday-Saturday week (as YYYY-MM-DD strings) containing `dateStr`.
+function getWeekBounds(dateStr?: string) {
+  const now = dateStr ? new Date(`${dateStr}T00:00:00.000Z`) : new Date();
   const day = now.getUTCDay();
   const start = new Date(now);
   start.setUTCDate(now.getUTCDate() - day);
@@ -38,8 +39,10 @@ export default function ReportsPanel({ isAdmin, attorneys }: Props) {
   const week = getWeekBounds();
   const today = daysFromNow(0);
 
-  const [calStart, setCalStart]       = useState(week.start);
-  const [calEnd, setCalEnd]           = useState(week.end);
+  // Weekly calendar — user picks any day in the week; start/end are derived.
+  const [calWeekDay, setCalWeekDay]   = useState(week.start);
+  const calStart = getWeekBounds(calWeekDay).start;
+  const calEnd   = getWeekBounds(calWeekDay).end;
   const [calAttorney, setCalAttorney] = useState("");
   const [calLoading, setCalLoading]   = useState(false);
   const [calError, setCalError]       = useState<string | null>(null);
@@ -152,7 +155,14 @@ export default function ReportsPanel({ isAdmin, attorneys }: Props) {
         buttonLabel="Download Excel"
         onDownload={downloadCalendar}
       >
-        <DateRange start={calStart} end={calEnd} onStart={setCalStart} onEnd={setCalEnd} />
+        <div className="flex flex-col gap-1">
+          <DateInput label="Week of" value={calWeekDay} onChange={setCalWeekDay} />
+          <p className="text-xs text-slate-400">
+            {new Date(`${calStart}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+            {" – "}
+            {new Date(`${calEnd}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+          </p>
+        </div>
         <AttorneySelect isAdmin={isAdmin} attorneys={attorneys} value={calAttorney} onChange={setCalAttorney} />
       </ReportCard>
 

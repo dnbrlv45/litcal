@@ -13,8 +13,9 @@ interface Props {
   attorneys: Attorney[];
 }
 
-function getWeekBounds() {
-  const now = new Date();
+// Returns the Sunday-Saturday week (as YYYY-MM-DD strings) containing `dateStr`.
+function getWeekBounds(dateStr?: string) {
+  const now = dateStr ? new Date(`${dateStr}T00:00:00.000Z`) : new Date();
   const day = now.getUTCDay(); // 0=Sun
   const start = new Date(now);
   start.setUTCDate(now.getUTCDate() - day);
@@ -29,9 +30,10 @@ function getWeekBounds() {
 export default function ExportsPanel({ isAdmin, attorneys }: Props) {
   const week = getWeekBounds();
 
-  // Weekly calendar state
-  const [calStart, setCalStart]       = useState(week.start);
-  const [calEnd, setCalEnd]           = useState(week.end);
+  // Weekly calendar state — user picks any day in the week; start/end are derived.
+  const [calWeekDay, setCalWeekDay]   = useState(week.start);
+  const calStart = getWeekBounds(calWeekDay).start;
+  const calEnd   = getWeekBounds(calWeekDay).end;
   const [calAttorney, setCalAttorney] = useState("");
   const [calLoading, setCalLoading]   = useState(false);
   const [calError, setCalError]       = useState<string | null>(null);
@@ -92,25 +94,19 @@ export default function ExportsPanel({ isAdmin, attorneys }: Props) {
           </p>
         </div>
         <div className="px-5 py-4 flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-slate-600">Start Date</label>
-              <input
-                type="date"
-                value={calStart}
-                onChange={(e) => setCalStart(e.target.value)}
-                className="rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-slate-600">End Date</label>
-              <input
-                type="date"
-                value={calEnd}
-                onChange={(e) => setCalEnd(e.target.value)}
-                className="rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600"
-              />
-            </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-slate-600">Week of</label>
+            <input
+              type="date"
+              value={calWeekDay}
+              onChange={(e) => setCalWeekDay(e.target.value)}
+              className="rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-600"
+            />
+            <p className="text-xs text-slate-400">
+              {new Date(`${calStart}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+              {" – "}
+              {new Date(`${calEnd}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+            </p>
           </div>
 
           {isAdmin && attorneys.length > 0 && (
