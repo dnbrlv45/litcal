@@ -289,6 +289,42 @@ export async function processGmailMessages(
                 caseNumber: finalMatch.caseRef?.caseNumber ?? null,
               };
             }
+          } else {
+            // No date extracted (e.g. a bare forward with just a link/case name).
+            // If we resolved the case and know the event type, fall back to
+            // matching a single unambiguous upcoming event of that type on the
+            // case — this covers "here's the deposition link" follow-ups that
+            // don't restate the date.
+            const matchedCaseId = extractedWithWarning.matchedCaseId as string | undefined;
+            const eventType = extracted.event?.eventType?.toUpperCase();
+            if (matchedCaseId && eventType) {
+              const candidates = await prisma.event.findMany({
+                where: {
+                  workspaceId: targetWorkspaceId,
+                  caseId: matchedCaseId,
+                  eventType: eventType as never,
+                  status: { notIn: ["CANCELLED", "COMPLETED"] },
+                  startTime: { gte: new Date() },
+                },
+                include: { caseRef: { select: { id: true, title: true, caseNumber: true } } },
+                orderBy: { startTime: "asc" },
+                take: 2,
+              });
+              if (candidates.length === 1) {
+                const finalMatch = candidates[0];
+                extractedWithWarning.existingEventWarning =
+                  `Matches existing event: "${finalMatch.title}" on ${finalMatch.startTime.toISOString().slice(0, 10)}`;
+                extractedWithWarning.matchedEventId = finalMatch.id;
+                extractedWithWarning.matchedEventDetails = {
+                  id: finalMatch.id,
+                  title: finalMatch.title,
+                  date: finalMatch.startTime.toISOString().slice(0, 10),
+                  eventType: finalMatch.eventType,
+                  caseTitle: finalMatch.caseRef?.title ?? null,
+                  caseNumber: finalMatch.caseRef?.caseNumber ?? null,
+                };
+              }
+            }
           }
         }
 
