@@ -11,7 +11,6 @@ interface Attorney {
 }
 
 interface Props {
-  isAdmin: boolean;
   attorneys: Attorney[];
 }
 
@@ -35,7 +34,7 @@ function daysFromNow(days: number) {
   return d.toISOString().slice(0, 10);
 }
 
-export default function ReportsPanel({ isAdmin, attorneys }: Props) {
+export default function ReportsPanel({ attorneys }: Props) {
   const week = getWeekBounds();
   const today = daysFromNow(0);
 
@@ -163,7 +162,7 @@ export default function ReportsPanel({ isAdmin, attorneys }: Props) {
             {new Date(`${calEnd}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
           </p>
         </div>
-        <AttorneySelect isAdmin={isAdmin} attorneys={attorneys} value={calAttorney} onChange={setCalAttorney} />
+        <AttorneySelect attorneys={attorneys} value={calAttorney} onChange={setCalAttorney} />
       </ReportCard>
 
       <ReportCard
@@ -175,7 +174,7 @@ export default function ReportsPanel({ isAdmin, attorneys }: Props) {
         buttonLabel="Download Excel"
         onDownload={downloadCases}
       >
-        <AttorneySelect isAdmin={isAdmin} attorneys={attorneys} value={caseAttorney} onChange={setCaseAttorney} />
+        <AttorneySelect attorneys={attorneys} value={caseAttorney} onChange={setCaseAttorney} />
       </ReportCard>
 
       <ReportCard
@@ -189,7 +188,7 @@ export default function ReportsPanel({ isAdmin, attorneys }: Props) {
         onDownload={downloadDiscovery}
       >
         <DateInput label="Due Through" value={discoveryEnd} onChange={setDiscoveryEnd} />
-        <AttorneySelect isAdmin={isAdmin} attorneys={attorneys} value={discoveryAttorney} onChange={setDiscoveryAttorney} />
+        <AttorneySelect attorneys={attorneys} value={discoveryAttorney} onChange={setDiscoveryAttorney} />
       </ReportCard>
 
       <ReportCard
@@ -203,7 +202,7 @@ export default function ReportsPanel({ isAdmin, attorneys }: Props) {
         onDownload={downloadTrials}
       >
         <DateRange start={trialStart} end={trialEnd} onStart={setTrialStart} onEnd={setTrialEnd} />
-        <AttorneySelect isAdmin={isAdmin} attorneys={attorneys} value={trialAttorney} onChange={setTrialAttorney} />
+        <AttorneySelect attorneys={attorneys} value={trialAttorney} onChange={setTrialAttorney} />
       </ReportCard>
     </div>
   );
@@ -297,13 +296,12 @@ function DateInput({ label, value, onChange }: {
   );
 }
 
-function AttorneySelect({ isAdmin, attorneys, value, onChange }: {
-  isAdmin: boolean;
+function AttorneySelect({ attorneys, value, onChange }: {
   attorneys: Attorney[];
   value: string;
   onChange: (value: string) => void;
 }) {
-  if (!isAdmin || attorneys.length === 0) return null;
+  if (attorneys.length === 0) return null;
 
   return (
     <div className="flex flex-col gap-1">

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getCurrentWorkspace, canManageWorkspace } from "@/lib/workspaces";
+import { getCurrentWorkspace } from "@/lib/workspaces";
 import { getEventDisplayName, formatCsvDate, formatCsvTime } from "@/lib/event-display";
 import { buildXlsx, type CalendarDay } from "@/lib/excel";
 
@@ -29,9 +29,7 @@ export async function GET(request: NextRequest) {
   }
 
   const tz = url.searchParams.get("tz") ?? "UTC";
-  let requestedAttorneyId = url.searchParams.get("attorneyId") ?? null;
-  const isAdmin = canManageWorkspace(membership.role);
-  if (!isAdmin) requestedAttorneyId = null;
+  const requestedAttorneyId = url.searchParams.get("attorneyId") ?? null;
 
   const [events, tasks] = await Promise.all([
     prisma.event.findMany({

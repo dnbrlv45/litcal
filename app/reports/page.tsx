@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
-import { getCurrentWorkspace, canManageWorkspace } from "@/lib/workspaces";
+import { getCurrentWorkspace } from "@/lib/workspaces";
 import { prisma } from "@/lib/prisma";
 import ReportsPanel from "@/components/reports/ReportsPanel";
 
@@ -11,14 +11,11 @@ export default async function ReportsPage() {
   const { workspace, membership } = await getCurrentWorkspace(user.id);
   if (!workspace || !membership) redirect("/setup");
 
-  const isAdmin = canManageWorkspace(membership.role);
-  const attorneys = isAdmin
-    ? await prisma.workspaceMember.findMany({
-        where: { workspaceId: workspace.id, jobTitle: "ATTORNEY" },
-        include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
-        orderBy: { user: { lastName: "asc" } },
-      })
-    : [];
+  const attorneys = await prisma.workspaceMember.findMany({
+    where: { workspaceId: workspace.id, jobTitle: "ATTORNEY" },
+    include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
+    orderBy: { user: { lastName: "asc" } },
+  });
 
   return (
     <div className="flex-1 overflow-y-auto bg-slate-50 p-8">
@@ -29,7 +26,6 @@ export default async function ReportsPage() {
         </p>
         <div className="mt-6">
           <ReportsPanel
-            isAdmin={isAdmin}
             attorneys={attorneys.map((m) => ({
               id: m.user.id,
               name: [m.user.firstName, m.user.lastName].filter(Boolean).join(" ") || m.user.email,

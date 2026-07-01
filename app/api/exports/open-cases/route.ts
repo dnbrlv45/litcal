@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getCurrentWorkspace, canManageWorkspace } from "@/lib/workspaces";
+import { getCurrentWorkspace } from "@/lib/workspaces";
 import { buildXlsxWorkbook } from "@/lib/excel";
 
 export const dynamic = "force-dynamic";
@@ -88,9 +88,7 @@ export async function GET(request: NextRequest) {
   if (!workspace || !membership) return NextResponse.json({ error: "No workspace" }, { status: 403 });
 
   const url = new URL(request.url);
-  let requestedAttorneyId = url.searchParams.get("attorneyId") ?? null;
-  const isAdmin = canManageWorkspace(membership.role);
-  if (!isAdmin) requestedAttorneyId = null;
+  const requestedAttorneyId = url.searchParams.get("attorneyId") ?? null;
 
   const cases = await prisma.case.findMany({
     where: {

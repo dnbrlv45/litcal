@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getCurrentWorkspace, canManageWorkspace } from "@/lib/workspaces";
+import { getCurrentWorkspace } from "@/lib/workspaces";
 import { buildXlsxWorkbook } from "@/lib/excel";
 import { formatCsvDate } from "@/lib/event-display";
 import {
@@ -47,9 +47,7 @@ export async function GET(request: NextRequest) {
   const endDate = endParam ? new Date(`${endParam}T23:59:59.999Z`) : daysFromNow(90);
   if (isNaN(endDate.getTime())) return NextResponse.json({ error: "Invalid end date" }, { status: 400 });
 
-  let requestedAttorneyId = url.searchParams.get("attorneyId") ?? null;
-  const isAdmin = canManageWorkspace(membership.role);
-  if (!isAdmin) requestedAttorneyId = null;
+  const requestedAttorneyId = url.searchParams.get("attorneyId") ?? null;
 
   const items = await prisma.discoveryItem.findMany({
     where: {
