@@ -115,14 +115,24 @@ export async function GET(request: NextRequest) {
 
   const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+  // Bucket by UTC day-of-week, matching how the week's start/end boundaries
+  // and the DB query range are computed (pure UTC, from date-only YYYY-MM-DD
+  // strings). Converting through the display `tz` here caused date-only
+  // values (e.g. a task due date stored as UTC midnight) to shift back a day
+  // in negative-UTC-offset zones — a Monday due date would land in Sunday's
+  // bucket. Time-of-day display still uses `tz` via formatCsvTime/formatted rows.
   const dayMap = new Map<number, CalItem[]>();
   for (const item of allItems) {
-    const dow = new Date(item.date.toLocaleString("en-US", { timeZone: tz })).getDay();
+    const dow = item.date.getUTCDay();
     if (!dayMap.has(dow)) dayMap.set(dow, []);
     dayMap.get(dow)!.push(item);
   }
 
-  const calendarDays: CalendarDay[] = [1, 2, 3, 4, 5, 6, 0].map((dow, i) => {
+  // Column order follows the actual week start (Sunday, per getWeekBounds()
+  // on the client), not a hardcoded Monday-first order.
+  const startDow = startDate.getUTCDay();
+  const calendarDays: CalendarDay[] = Array.from({ length: 7 }, (_, i) => {
+    const dow = (startDow + i) % 7;
     const dayDate = new Date(startDate);
     dayDate.setUTCDate(startDate.getUTCDate() + i);
     const dayItems = dayMap.get(dow) ?? [];
