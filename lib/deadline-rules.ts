@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { adjustToBusinessDay, replaceEventReminders } from "@/lib/reminders";
 import { sendTaskAssignedEmails } from "@/lib/email-notifications";
+import { findCourtHearingRule, computeRemoteAppearanceDueDate } from "@/lib/court-hearing-rules";
 import type { EventType } from "@/lib/google-calendar";
 
 // ─── Rule types ──────────────────────────────────────────────────────────────
@@ -332,6 +333,43 @@ export async function cascadeDeadlineDateChange(
   for (const row of rows) {
     if (row.userModified) {
       skippedModified++;
+      continue;
+    }
+
+    // Remote appearance request tasks aren't part of the standard rule table —
+    // they're created ad hoc from the matched court hearing rule's lead time.
+    // Recompute the same way here so rescheduling the hearing keeps the
+    // request task's due date in sync instead of leaving it stuck on the
+    // original date.
+    if (row.ruleKey === "REMOTE_APPEARANCE_REQUEST") {
+      if (!row.generatedTaskId || !row.generatedTask) continue;
+      const trigger = await prisma.event.findUnique({
+        where: { id: triggerId },
+        select: {
+          department: true,
+          caseRef: { select: { county: true, court: true, countyId: true } },
+        },
+      });
+      if (!trigger) continue;
+      let state: string | null = null;
+      if (trigger.caseRef?.countyId) {
+        const countyRecord = await prisma.county.findUnique({
+          where: { id: trigger.caseRef.countyId },
+          select: { state: true },
+        });
+        state = countyRecord?.state ?? null;
+      }
+      const hearingRule = await findCourtHearingRule({
+        state,
+        countyName: trigger.caseRef?.county ?? null,
+        courtName: trigger.caseRef?.court ?? null,
+        department: trigger.department,
+      });
+      const newDueDate = computeRemoteAppearanceDueDate(newStartTime, hearingRule?.requestDaysBefore);
+      await prisma.task.update({
+        where: { id: row.generatedTaskId },
+        data: { dueDate: newDueDate },
+      });
       continue;
     }
 
