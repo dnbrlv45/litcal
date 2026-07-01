@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { google } from "googleapis";
+import { google, type gmail_v1 } from "googleapis";
 import { prisma } from "@/lib/prisma";
 import { makeOAuth2Client, getInboxRefreshToken, processGmailMessages } from "@/lib/ai/processGmailMessages";
 
@@ -95,49 +95,75 @@ export async function POST(req: NextRequest) {
 
   const startHistoryId = connection.lastHistoryId ?? String(newHistoryId);
 
-  // Fetch messages added since lastHistoryId
+  // Fetch ALL messages added since lastHistoryId, following pagination.
+  // Gmail pushes a separate notification per change and Pub/Sub can deliver
+  // them out of order, so we list the full window from the stored cursor
+  // (not just the latest notification) and only advance the cursor AFTER
+  // processing succeeds — otherwise a paged-out or errored message would be
+  // skipped forever.
   let messageIds: string[] = [];
+  // historyId of the mailbox state we actually covered by listing.
+  let coveredHistoryId = String(newHistoryId);
   try {
-    const historyRes = await gmail.users.history.list({
-      userId: "me",
-      startHistoryId,
-      historyTypes: ["messageAdded"],
-      labelId: "INBOX",
-    });
+    let pageToken: string | undefined = undefined;
+    do {
+      const historyData: gmail_v1.Schema$ListHistoryResponse = (await gmail.users.history.list({
+        userId: "me",
+        startHistoryId,
+        historyTypes: ["messageAdded"],
+        labelId: "INBOX",
+        pageToken,
+      })).data;
 
-    const histories = historyRes.data.history ?? [];
-    for (const h of histories) {
-      for (const added of h.messagesAdded ?? []) {
-        if (added.message?.id) messageIds.push(added.message.id);
+      for (const h of historyData.history ?? []) {
+        for (const added of h.messagesAdded ?? []) {
+          if (added.message?.id) messageIds.push(added.message.id);
+        }
       }
-    }
+      if (historyData.historyId) coveredHistoryId = historyData.historyId;
+      pageToken = historyData.nextPageToken ?? undefined;
+    } while (pageToken);
   } catch (err: unknown) {
-    // If historyId is too old, fall back to a fresh inbox scan with maxResults=5
+    // If historyId is too old, fall back to a fresh inbox scan
     const code = typeof err === "object" && err !== null && "code" in err
       ? (err as { code: number }).code : 0;
     if (code === 404) {
       console.warn("Gmail history expired, falling back to inbox scan");
-      const listRes = await gmail.users.messages.list({ userId: "me", maxResults: 5, q: "in:inbox" });
+      const listRes = await gmail.users.messages.list({ userId: "me", maxResults: 20, q: "in:inbox" });
       messageIds = (listRes.data.messages ?? []).map((m) => m.id!).filter(Boolean);
     } else {
       console.error("Gmail history list failed:", err);
+      // Do NOT advance the cursor — let the next webhook retry from the same point.
       return new NextResponse(null, { status: 204 });
     }
   }
 
-  // Update lastHistoryId regardless of whether we processed anything
-  await prisma.gmailConnection.update({
-    where: { id: connection.id },
-    data: { lastHistoryId: String(newHistoryId) },
-  });
+  messageIds = [...new Set(messageIds)];
 
-  if (messageIds.length === 0) {
-    return new NextResponse(null, { status: 204 });
+  // Process FIRST, then advance the cursor only on success.
+  let processedOk = true;
+  if (messageIds.length > 0) {
+    try {
+      const results = await processGmailMessages(auth, messageIds, connection.workspaceId);
+      console.log(`Gmail webhook processed ${messageIds.length} messages for ${emailAddress}:`, results);
+    } catch (err) {
+      processedOk = false;
+      console.error("Gmail webhook processing failed; not advancing cursor:", err);
+    }
   }
 
-  const results = await processGmailMessages(auth, messageIds, connection.workspaceId);
-
-  console.log(`Gmail webhook processed ${messageIds.length} messages for ${emailAddress}:`, results);
+  // Advance the cursor forward-only, and only after successful processing, so a
+  // concurrent or out-of-order notification can never skip an unprocessed message.
+  if (processedOk) {
+    const advanceTo = Math.max(Number(coveredHistoryId) || 0, Number(newHistoryId) || 0);
+    const current = Number(connection.lastHistoryId ?? 0);
+    if (advanceTo > current) {
+      await prisma.gmailConnection.update({
+        where: { id: connection.id },
+        data: { lastHistoryId: String(advanceTo) },
+      });
+    }
+  }
 
   // Always return 204 so Pub/Sub marks the message as acknowledged
   return new NextResponse(null, { status: 204 });

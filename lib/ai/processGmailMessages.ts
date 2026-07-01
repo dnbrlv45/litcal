@@ -192,55 +192,10 @@ export async function processGmailMessages(
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const extractedWithWarning: any = { ...extracted };
-        if ((extracted.classification === "CALENDAR_EVENT" || extracted.classification === "EVENT_CANCELLATION") && !duplicateOfId) {
-          const cancellationData = (extracted as unknown as Record<string, unknown>).cancellation as Record<string, string | null> | undefined;
-          const eventDate = extracted.event?.date ?? cancellationData?.originalDate ?? null;
-          const caseNum = extracted.case?.caseNumber;
-          const casePlaintiff = extracted.case?.plaintiff;
-          const caseDefendant = extracted.case?.defendant;
 
-          if (eventDate) {
-            const dayStart = new Date(`${eventDate}T00:00:00`);
-            const dayEnd   = new Date(`${eventDate}T23:59:59`);
-
-            // Use pre-matched case ID if available, otherwise try case number
-            const matchedCaseId = extractedWithWarning.matchedCaseId as string | undefined;
-            const eventWhere: Record<string, unknown> = {
-              workspaceId: targetWorkspaceId,
-              startTime: { gte: dayStart, lte: dayEnd },
-              status: { notIn: ["CANCELLED", "COMPLETED"] },
-            };
-            if (matchedCaseId) {
-              eventWhere.caseId = matchedCaseId;
-            } else if (caseNum) {
-              eventWhere.caseRef = { caseNumber: caseNum };
-            }
-
-            // Only match events that belong to the same case
-            const finalMatch = (matchedCaseId || caseNum)
-              ? await prisma.event.findFirst({
-                  where: eventWhere as never,
-                  include: { caseRef: { select: { id: true, title: true, caseNumber: true } } },
-                })
-              : null;
-
-            if (finalMatch) {
-              extractedWithWarning.existingEventWarning =
-                `Matches existing event: "${finalMatch.title}" on ${eventDate}`;
-              extractedWithWarning.matchedEventId = finalMatch.id;
-              extractedWithWarning.matchedEventDetails = {
-                id: finalMatch.id,
-                title: finalMatch.title,
-                date: eventDate,
-                eventType: finalMatch.eventType,
-                caseTitle: finalMatch.caseRef?.title ?? null,
-                caseNumber: finalMatch.caseRef?.caseNumber ?? null,
-              };
-            }
-          }
-        }
-
-        // Try to match the suggestion to an existing case by case number or name
+        // 1. Resolve the case FIRST (by number, then by party name) so that
+        //    event matching below can find an existing event even when the
+        //    email only identifies the case by name (no exact case number).
         if (!extractedWithWarning.matchedCaseId) {
           const caseNum = extracted.case?.caseNumber;
           const casePlaintiff = extracted.case?.plaintiff;
@@ -285,6 +240,54 @@ export async function processGmailMessages(
                 extractedWithWarning.matchedCaseNumber = c.caseNumber;
                 break;
               }
+            }
+          }
+        }
+
+        // 2. Now that the case is resolved, look for an existing event on the
+        //    same date for that case — so a duplicate calendar/cancellation
+        //    email offers "update existing" instead of proposing a new event.
+        if ((extracted.classification === "CALENDAR_EVENT" || extracted.classification === "EVENT_CANCELLATION") && !duplicateOfId) {
+          const cancellationData = (extracted as unknown as Record<string, unknown>).cancellation as Record<string, string | null> | undefined;
+          const eventDate = extracted.event?.date ?? cancellationData?.originalDate ?? null;
+          const caseNum = extracted.case?.caseNumber;
+
+          if (eventDate) {
+            const dayStart = new Date(`${eventDate}T00:00:00`);
+            const dayEnd   = new Date(`${eventDate}T23:59:59`);
+
+            const matchedCaseId = extractedWithWarning.matchedCaseId as string | undefined;
+            const eventWhere: Record<string, unknown> = {
+              workspaceId: targetWorkspaceId,
+              startTime: { gte: dayStart, lte: dayEnd },
+              status: { notIn: ["CANCELLED", "COMPLETED"] },
+            };
+            if (matchedCaseId) {
+              eventWhere.caseId = matchedCaseId;
+            } else if (caseNum) {
+              eventWhere.caseRef = { caseNumber: caseNum };
+            }
+
+            // Only match events that belong to the same case
+            const finalMatch = (matchedCaseId || caseNum)
+              ? await prisma.event.findFirst({
+                  where: eventWhere as never,
+                  include: { caseRef: { select: { id: true, title: true, caseNumber: true } } },
+                })
+              : null;
+
+            if (finalMatch) {
+              extractedWithWarning.existingEventWarning =
+                `Matches existing event: "${finalMatch.title}" on ${eventDate}`;
+              extractedWithWarning.matchedEventId = finalMatch.id;
+              extractedWithWarning.matchedEventDetails = {
+                id: finalMatch.id,
+                title: finalMatch.title,
+                date: eventDate,
+                eventType: finalMatch.eventType,
+                caseTitle: finalMatch.caseRef?.title ?? null,
+                caseNumber: finalMatch.caseRef?.caseNumber ?? null,
+              };
             }
           }
         }
