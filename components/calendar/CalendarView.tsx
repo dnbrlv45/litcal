@@ -372,6 +372,31 @@ export default function CalendarView() {
     void Promise.resolve().then(fetchEvents);
   }, [fetchEvents]);
 
+  // Refresh events when this tab/window regains focus — catches changes
+  // (create/edit/delete) made in another tab or by another user while this
+  // one was in the background, without needing a manual page refresh.
+  useEffect(() => {
+    const lastRefreshRef = { current: Date.now() };
+    const MIN_INTERVAL_MS = 5000;
+
+    function refreshIfStale() {
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - lastRefreshRef.current < MIN_INTERVAL_MS) return;
+      lastRefreshRef.current = now;
+      bustCache();
+      void fetchEvents();
+    }
+
+    window.addEventListener("focus", refreshIfStale);
+    document.addEventListener("visibilitychange", refreshIfStale);
+    return () => {
+      window.removeEventListener("focus", refreshIfStale);
+      document.removeEventListener("visibilitychange", refreshIfStale);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchEvents]);
+
   useEffect(() => {
     const pendingId = pendingSelectEventId.current;
     if (!pendingId) return;
