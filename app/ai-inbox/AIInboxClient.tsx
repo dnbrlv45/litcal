@@ -855,23 +855,6 @@ export default function AIInboxClient({ isSuperAdmin = false }: { isSuperAdmin?:
           </div>
         )}
 
-        {watchStatus?.healthy && watchStatus.watchExpiration && (
-          <div className="mt-2 rounded-lg bg-teal-50 border border-teal-200 px-4 py-2 text-xs text-teal-700 space-y-0.5">
-            <div>
-              <CheckCircle2 className="inline size-3.5 mr-1.5 -mt-0.5" />
-              Gmail push active · expires {new Date(watchStatus.watchExpiration).toLocaleDateString()}
-            </div>
-            {watchStatus.lastWebhookAt && (
-              <div className="text-teal-600 pl-5">
-                Last webhook: {new Date(watchStatus.lastWebhookAt).toLocaleString()}
-              </div>
-            )}
-            {!watchStatus.lastWebhookAt && (
-              <div className="text-amber-600 pl-5">No webhook received yet — send a test email to litcalai@gmail.com</div>
-            )}
-          </div>
-        )}
-
         <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 px-4 py-2.5 text-xs text-amber-800">
           <Mail className="inline size-3.5 mr-1.5 -mt-0.5" />
           AI suggestions are never applied automatically. You must approve each one before any case, event, or deadline is created.
