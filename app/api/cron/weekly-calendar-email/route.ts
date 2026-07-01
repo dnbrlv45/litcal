@@ -205,8 +205,12 @@ export async function GET(_request: NextRequest) {
       }),
     ]);
 
-    // Normalize events and tasks into a common shape for the calendar
-    type CalItem = { date: Date; event: string; time: string; caseName: string; attorney: string };
+    // Normalize events and tasks into a common shape for the calendar.
+    // dateOnly items (all-day events, task due dates) have no meaningful
+    // time-of-day and are stored at UTC midnight/noon — they must be
+    // bucketed/displayed using UTC date components, not converted through a
+    // display timezone, or they can shift to the wrong day.
+    type CalItem = { date: Date; event: string; time: string; caseName: string; attorney: string; dateOnly: boolean };
 
     const eventItems: CalItem[] = events.map((ev) => ({
       date: ev.startTime,
@@ -222,6 +226,7 @@ export async function GET(_request: NextRequest) {
       attorney: ev.assignedAttorney
         ? [ev.assignedAttorney.firstName, ev.assignedAttorney.lastName].filter(Boolean).join(" ")
         : "",
+      dateOnly: ev.allDay,
     }));
 
     const taskItems: CalItem[] = tasks.map((t) => ({
@@ -232,16 +237,22 @@ export async function GET(_request: NextRequest) {
       attorney: t.assignees
         .map((a) => [a.member.user.firstName, a.member.user.lastName].filter(Boolean).join(" "))
         .join(", "),
+      dateOnly: true,
     }));
 
     const allItems = [...eventItems, ...taskItems].sort(
       (a, b) => a.date.getTime() - b.date.getTime()
     );
 
-    // Group by day of week for the email body and calendar tab
+    // Group by day of week for the email body and calendar tab. dateOnly
+    // items bucket by UTC day-of-week (matches how they're stored); timed
+    // events keep timezone-aware bucketing so they land on their correct
+    // local calendar day.
     const dayMap = new Map<number, CalItem[]>();
     for (const item of allItems) {
-      const dow = new Date(item.date.toLocaleString("en-US", { timeZone: "America/Los_Angeles" })).getDay();
+      const dow = item.dateOnly
+        ? item.date.getUTCDay()
+        : new Date(item.date.toLocaleString("en-US", { timeZone: "America/Los_Angeles" })).getDay();
       if (!dayMap.has(dow)) dayMap.set(dow, []);
       dayMap.get(dow)!.push(item);
     }
@@ -265,10 +276,14 @@ export async function GET(_request: NextRequest) {
       };
     });
 
-    // Build xlsx with both the events/tasks list and the calendar tab
+    // Build xlsx with both the events/tasks list and the calendar tab.
+    // dateOnly items format from UTC components directly rather than
+    // converting through a display timezone (see bucketing comment above).
     const xlsxRows = allItems.map((item) => ({
       Event: item.event,
-      Date: formatCsvDate(item.date, "America/Los_Angeles"),
+      Date: item.dateOnly
+        ? `${item.date.getUTCMonth() + 1}/${item.date.getUTCDate()}/${item.date.getUTCFullYear()}`
+        : formatCsvDate(item.date, "America/Los_Angeles"),
       Time: item.time,
       "Case Name": item.caseName,
       Attorney: item.attorney,
