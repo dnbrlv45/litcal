@@ -303,27 +303,36 @@ export async function PATCH(
       const ext = data.discoveryExtension ?? {};
       const caseData = data.case ?? {};
       if (ext.newDate) {
-        // 1. Try exact case number match
-        let matchingCase = caseData.caseNumber
-          ? await prisma.case.findFirst({
-              where: { workspaceId: workspace.id, caseNumber: caseData.caseNumber },
-            })
+        // 1. Reuse the case already resolved during ingestion (most reliable —
+        //    matches on title/party names, not just role-tagged CaseParty rows).
+        const preMatchedCaseId = (data as Record<string, unknown>).matchedCaseId as string | undefined;
+        let matchingCase = preMatchedCaseId
+          ? await prisma.case.findFirst({ where: { id: preMatchedCaseId, workspaceId: workspace.id } })
           : null;
 
-        // 2. Fall back to plaintiff/defendant name match
+        // 2. Try exact case number match
+        if (!matchingCase && caseData.caseNumber) {
+          matchingCase = await prisma.case.findFirst({
+            where: { workspaceId: workspace.id, caseNumber: caseData.caseNumber },
+          });
+        }
+
+        // 3. Fall back to plaintiff/defendant name match. Defendant is stored
+        //    as a scalar field on Case (not a role-tagged CaseParty row in the
+        //    common case), so check both the case title, the defendant field,
+        //    and any CaseParty rows.
         if (!matchingCase && (caseData.plaintiff || caseData.defendant)) {
           const candidates = await prisma.case.findMany({
             where: { workspaceId: workspace.id },
             include: { parties: true },
           });
           for (const c of candidates) {
-            const pMatch = !caseData.plaintiff || c.parties.some(
-              (p) => p.role === "PLAINTIFF" &&
-                p.name.toLowerCase().includes((caseData.plaintiff as string).toLowerCase())
+            const targets = [c.title, c.defendant, ...c.parties.map((p) => p.name)].filter(Boolean) as string[];
+            const pMatch = !caseData.plaintiff || targets.some(
+              (t) => t.toLowerCase().includes((caseData.plaintiff as string).toLowerCase())
             );
-            const dMatch = !caseData.defendant || c.parties.some(
-              (p) => p.role === "DEFENDANT" &&
-                p.name.toLowerCase().includes((caseData.defendant as string).toLowerCase())
+            const dMatch = !caseData.defendant || targets.some(
+              (t) => t.toLowerCase().includes((caseData.defendant as string).toLowerCase())
             );
             if (pMatch && dMatch) { matchingCase = c; break; }
           }
@@ -379,12 +388,18 @@ export async function PATCH(
       } | undefined;
 
       if (cancellation?.originalDate) {
-        // Find the matching case
-        let matchingCase = caseData.caseNumber
-          ? await prisma.case.findFirst({
-              where: { workspaceId: workspace.id, caseNumber: caseData.caseNumber },
-            })
+        // Find the matching case — reuse the case already resolved during
+        // ingestion first (most reliable), then case number, then name match.
+        const preMatchedCaseId = (data as Record<string, unknown>).matchedCaseId as string | undefined;
+        let matchingCase = preMatchedCaseId
+          ? await prisma.case.findFirst({ where: { id: preMatchedCaseId, workspaceId: workspace.id } })
           : null;
+
+        if (!matchingCase && caseData.caseNumber) {
+          matchingCase = await prisma.case.findFirst({
+            where: { workspaceId: workspace.id, caseNumber: caseData.caseNumber },
+          });
+        }
 
         if (!matchingCase && (caseData.plaintiff || caseData.defendant)) {
           const candidates = await prisma.case.findMany({
@@ -392,8 +407,9 @@ export async function PATCH(
             include: { parties: true },
           });
           for (const c of candidates) {
-            const pMatch = !caseData.plaintiff || c.title.toLowerCase().includes(caseData.plaintiff.toLowerCase());
-            const dMatch = !caseData.defendant || c.title.toLowerCase().includes(caseData.defendant.toLowerCase());
+            const targets = [c.title, c.defendant, ...c.parties.map((p) => p.name)].filter(Boolean) as string[];
+            const pMatch = !caseData.plaintiff || targets.some((t) => t.toLowerCase().includes((caseData.plaintiff as string).toLowerCase()));
+            const dMatch = !caseData.defendant || targets.some((t) => t.toLowerCase().includes((caseData.defendant as string).toLowerCase()));
             if (pMatch && dMatch) { matchingCase = c; break; }
           }
         }
