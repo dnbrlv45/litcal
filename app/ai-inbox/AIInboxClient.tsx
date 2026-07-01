@@ -844,7 +844,6 @@ export default function AIInboxClient({ isSuperAdmin = false }: { isSuperAdmin?:
             {watchStatus.lastWebhookAt && (
               <div className="text-teal-600 pl-5">
                 Last webhook: {new Date(watchStatus.lastWebhookAt).toLocaleString()}
-                {watchStatus.lastWebhookLog && <span className="ml-2 opacity-70">· {watchStatus.lastWebhookLog}</span>}
               </div>
             )}
             {!watchStatus.lastWebhookAt && (
