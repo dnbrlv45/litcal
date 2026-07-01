@@ -289,6 +289,26 @@ function SuggestionCard({
               <SummaryField label="Type" value={data.matchedEventDetails.eventType} />
               <SummaryField label="Case" value={data.matchedEventDetails.caseTitle} />
             </div>
+            {(data.event?.description || data.event?.location) && (
+              <div className="mt-2 rounded-md bg-white p-2.5 ring-1 ring-amber-200">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-amber-700">
+                  Will update event with
+                </p>
+                {data.event?.location && (
+                  <p className="mt-1 text-xs text-slate-700">
+                    <span className="font-semibold">Location:</span> {data.event.location}
+                  </p>
+                )}
+                {data.event?.description && (
+                  <p className="mt-1 whitespace-pre-wrap break-words text-xs text-slate-700">
+                    <span className="font-semibold">Notes:</span> {data.event.description}
+                  </p>
+                )}
+                <p className="mt-1.5 text-[11px] text-amber-700">
+                  This will replace the existing event&apos;s notes.
+                </p>
+              </div>
+            )}
           </div>
         ) : data.existingEventWarning ? (
           <p className="mt-2 text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-1.5">
