@@ -73,7 +73,11 @@ export async function GET(request: NextRequest) {
     }),
   ]);
 
-  type CalItem = { date: Date; event: string; time: string; caseName: string; attorney: string };
+  // dateOnly items (all-day events, task due dates) represent a calendar
+  // date with no meaningful time-of-day and are stored at UTC midnight/noon —
+  // they must be bucketed/displayed using UTC date components, not converted
+  // through the display timezone, or they can shift to the wrong day.
+  type CalItem = { date: Date; event: string; time: string; caseName: string; attorney: string; dateOnly: boolean };
 
   const eventItems: CalItem[] = events.map((ev) => ({
     date: ev.startTime,
@@ -89,6 +93,7 @@ export async function GET(request: NextRequest) {
     attorney: ev.assignedAttorney
       ? [ev.assignedAttorney.firstName, ev.assignedAttorney.lastName].filter(Boolean).join(" ")
       : "",
+    dateOnly: ev.allDay,
   }));
 
   const taskItems: CalItem[] = tasks.map((t) => ({
@@ -99,6 +104,7 @@ export async function GET(request: NextRequest) {
     attorney: t.assignees
       .map((a) => [a.member.user.firstName, a.member.user.lastName].filter(Boolean).join(" "))
       .join(", "),
+    dateOnly: true,
   }));
 
   const allItems = [...eventItems, ...taskItems].sort(
@@ -107,7 +113,13 @@ export async function GET(request: NextRequest) {
 
   const rows = allItems.map((item) => ({
     Event: item.event,
-    Date: formatCsvDate(item.date, tz),
+    // dateOnly items (all-day events, task due dates) have no meaningful
+    // time-of-day and are stored at UTC midnight/noon — format from UTC
+    // components directly rather than converting through `tz`, which could
+    // shift the displayed date back a day in negative-UTC-offset zones.
+    Date: item.dateOnly
+      ? `${item.date.getUTCMonth() + 1}/${item.date.getUTCDate()}/${item.date.getUTCFullYear()}`
+      : formatCsvDate(item.date, tz),
     Time: item.time,
     "Case Name": item.caseName,
     Attorney: item.attorney,
@@ -115,15 +127,14 @@ export async function GET(request: NextRequest) {
 
   const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-  // Bucket by UTC day-of-week, matching how the week's start/end boundaries
-  // and the DB query range are computed (pure UTC, from date-only YYYY-MM-DD
-  // strings). Converting through the display `tz` here caused date-only
-  // values (e.g. a task due date stored as UTC midnight) to shift back a day
-  // in negative-UTC-offset zones — a Monday due date would land in Sunday's
-  // bucket. Time-of-day display still uses `tz` via formatCsvTime/formatted rows.
+  // Bucket dateOnly items by UTC day-of-week (matches how they're stored and
+  // how the week's start/end boundaries are computed). Timed events keep
+  // timezone-aware bucketing so they land on their correct local calendar day.
   const dayMap = new Map<number, CalItem[]>();
   for (const item of allItems) {
-    const dow = item.date.getUTCDay();
+    const dow = item.dateOnly
+      ? item.date.getUTCDay()
+      : new Date(item.date.toLocaleString("en-US", { timeZone: tz })).getDay();
     if (!dayMap.has(dow)) dayMap.set(dow, []);
     dayMap.get(dow)!.push(item);
   }
