@@ -79,6 +79,8 @@ For simple name-only entries (e.g. "Frost", "Marquez, Ashley"), use the name as 
 
 Notes like "RESCHEDULED", "Subed out", "File NOS", or "Trial Call" should go in the event description field, not the title. If an entry says RESCHEDULED or OFF CALENDAR, still include it but note it in the description.
 
+REMOTE APPEARANCE / VIDEO LINK: If the email contains a Zoom, Teams, Google Meet, or other video/dial-in link, you MUST copy the FULL raw URL verbatim into the description — never summarize, truncate, or omit it. Also include the Meeting ID, Passcode, and dial-in phone number if present, each on its own line. Do not paraphrase these — copy them character-for-character exactly as written in the email.
+
 If one or more scheduled events are found, return this JSON object:
 {
   "found": true,
@@ -93,7 +95,7 @@ If one or more scheduled events are found, return this JSON object:
         "date": null,        // YYYY-MM-DD
         "startTime": null,   // HH:MM 24-hour (convert "10:00 a.m." → "10:00", "2:30 p.m." → "14:30"). null if not specified.
         "endTime": null,
-        "description": null, // include any notes like "RESCHEDULED", "File NOS", "Trial Call – San Diego"
+        "description": null, // include any notes like "RESCHEDULED", "File NOS", "Trial Call – San Diego" — and the FULL verbatim video link / meeting ID / passcode / dial-in number if present, each on its own line
         "location": null
       },
       "missingFields": [],

@@ -41,6 +41,29 @@ function toTimeInputValue(d: Date) {
   return d.toTimeString().slice(0, 5);
 }
 
+const URL_PATTERN = /(https?:\/\/[^\s<>"']+)/g;
+
+function linkifyText(text: string) {
+  // Split on a capturing group so matched URLs land at odd indices —
+  // avoids re-testing with a stateful global regex.
+  const parts = text.split(URL_PATTERN);
+  return parts.map((part, i) =>
+    i % 2 === 1 ? (
+      <a
+        key={i}
+        href={part}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-teal-700 underline decoration-teal-200 underline-offset-2 hover:text-teal-900 break-all"
+      >
+        {part}
+      </a>
+    ) : (
+      part
+    )
+  );
+}
+
 interface CaseOption { id: string; title: string; caseNumber: string | null; }
 
 export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated }: Props) {
@@ -465,7 +488,7 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
             {event.description && (
               <div className="flex flex-col gap-2 border-b border-slate-200 pb-5">
                 <span className="text-sm font-semibold text-slate-950">Case Notes</span>
-                <p className="text-sm leading-6 text-slate-600 whitespace-pre-wrap">{event.description}</p>
+                <p className="text-sm leading-6 text-slate-600 whitespace-pre-wrap">{linkifyText(event.description)}</p>
               </div>
             )}
 
