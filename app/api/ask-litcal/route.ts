@@ -299,9 +299,12 @@ async function handleAskLitCalRequest(
       return NextResponse.json({ answer: "I couldn't find that event in your workspace.", activeCaseId });
     }
 
-    // Build updated times using user's timezone
+    // Build updated times using user's timezone. User.timeZone is never
+    // actually set anywhere (no onboarding/settings flow writes it), so it's
+    // always the schema default "UTC" — treat that as "not configured" and
+    // fall back to the firm's actual timezone.
     const userRecord = await prisma.user.findUnique({ where: { id: user.id }, select: { timeZone: true } });
-    const tz = userRecord?.timeZone ?? "America/Los_Angeles";
+    const tz = userRecord?.timeZone && userRecord.timeZone !== "UTC" ? userRecord.timeZone : "America/Los_Angeles";
 
     // Interpret a local date+time string as wall-clock time in `tz`, return UTC Date
     function localToUTC(dateStr: string, timeStr: string, timezone: string): Date {

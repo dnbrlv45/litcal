@@ -37,7 +37,11 @@ export async function PATCH(
   if (!canEdit(membership?.role ?? "")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const userRecord = await prisma.user.findUnique({ where: { id: user.id }, select: { timeZone: true } });
-  const userTz = userRecord?.timeZone ?? "America/Los_Angeles";
+  // User.timeZone is never actually set anywhere (no onboarding/settings flow
+  // writes it), so it's always the schema default "UTC" — treat that as
+  // "not configured" and fall back to the firm's actual timezone, matching
+  // the hardcoded "America/Los_Angeles" used elsewhere in the app.
+  const userTz = userRecord?.timeZone && userRecord.timeZone !== "UTC" ? userRecord.timeZone : "America/Los_Angeles";
 
   const { id } = await params;
 
