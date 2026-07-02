@@ -46,17 +46,25 @@ export default function CourtCoveragePage() {
   const [loading, setLoading] = useState(true);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [updatePreviews, setUpdatePreviews] = useState<Record<string, { count: number; hasRule: boolean }>>({});
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   async function load() {
-    const [alertsRes, requestsRes] = await Promise.all([
-      fetch("/api/admin/court-coverage/alerts"),
-      fetch("/api/admin/court-rule-requests"),
-    ]);
-    const alertsData = await alertsRes.json();
-    const requestsData = await requestsRes.json();
-    setAlerts(alertsData.alerts ?? []);
-    setRequests(requestsData.requests ?? []);
-    setLoading(false);
+    setLoadError(null);
+    try {
+      const [alertsRes, requestsRes] = await Promise.all([
+        fetch("/api/admin/court-coverage/alerts"),
+        fetch("/api/admin/court-rule-requests"),
+      ]);
+      if (!alertsRes.ok || !requestsRes.ok) throw new Error("Failed to load court coverage data.");
+      const alertsData = await alertsRes.json();
+      const requestsData = await requestsRes.json();
+      setAlerts(alertsData.alerts ?? []);
+      setRequests(requestsData.requests ?? []);
+    } catch {
+      setLoadError("Failed to load court coverage data. Please refresh the page.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function loadPreview(alertId: string) {
@@ -134,6 +142,11 @@ export default function CourtCoveragePage() {
   return (
     <div className="flex-1 overflow-y-auto bg-slate-50 p-8">
       <div className="max-w-5xl">
+        {loadError && (
+          <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {loadError}
+          </div>
+        )}
         <h1 className="text-2xl font-bold tracking-tight text-slate-950">Court Coverage Queue</h1>
         <p className="text-sm text-slate-500 mt-1">
           Events created for counties or departments with no matching CourtHearingRule.

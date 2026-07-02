@@ -35,10 +35,7 @@ export async function GET() {
           ? {
               courtRuleUnmatched: true,
               startTime: { gte: now },
-              OR: [
-                { countyName: { equals: a.county, mode: "insensitive" as const } },
-                { caseRef: { county: { equals: a.county, mode: "insensitive" as const } } },
-              ],
+              caseRef: { county: { equals: a.county, mode: "insensitive" as const } },
             }
           : {
               courtRuleUnmatched: true,
