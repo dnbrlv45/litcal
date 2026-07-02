@@ -25,11 +25,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { EVENT_TYPE_COLORS } from "@/lib/google-calendar";
-import type { EventType } from "@/lib/google-calendar";
+import type { EventType, CalEvent } from "@/lib/google-calendar";
 import { COUNTIES_AND_COURTS } from "@/lib/counties-courts";
 import CaseTasksSection from "./CaseTasksSection";
 import CaseTimeline from "./CaseTimeline";
 import CaseDiscoverySection from "./CaseDiscoverySection";
+import EventDetailPanel from "@/components/calendar/EventDetailPanel";
 
 const STATUS_OPTIONS = [
   "ACTIVE", "PENDING", "DISCOVERY",
@@ -138,6 +139,8 @@ export default function CaseDetailClient({ id }: { id: string }) {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const membersFetched = useRef(false);
+  const [selectedEvent, setSelectedEvent] = useState<CalEvent | null>(null);
+  const [loadingEventId, setLoadingEventId] = useState<string | null>(null);
 
   // Edit state
   const [editTitle, setEditTitle] = useState("");
@@ -171,6 +174,31 @@ export default function CaseDetailClient({ id }: { id: string }) {
   useEffect(() => {
     void Promise.resolve().then(fetchCase);
   }, [fetchCase]);
+
+  function parseLocalDate(iso: string): Date {
+    const m = iso.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return new Date(iso);
+    return new Date(+m[1], +m[2] - 1, +m[3]);
+  }
+
+  async function openEventDetail(eventId: string) {
+    setLoadingEventId(eventId);
+    try {
+      const res = await fetch(`/api/calendar/events/${eventId}`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      const e = data.event as CalEvent;
+      setSelectedEvent({
+        ...e,
+        start: e.allDay ? parseLocalDate(e.start as unknown as string) : new Date(e.start),
+        end: e.allDay ? parseLocalDate(e.end as unknown as string) : new Date(e.end),
+      });
+    } catch {
+      setError("Failed to load event details.");
+    } finally {
+      setLoadingEventId(null);
+    }
+  }
 
   useEffect(() => {
     if (!membersFetched.current) {
@@ -556,8 +584,8 @@ export default function CaseDetailClient({ id }: { id: string }) {
 
         {/* Right: events + tasks */}
         <div className="flex flex-col gap-5 xl:col-span-8">
-          <EventGroup label="Upcoming" events={upcomingEvents} />
-          <EventGroup label="Past" events={pastEvents} muted />
+          <EventGroup label="Upcoming" events={upcomingEvents} onEventClick={openEventDetail} loadingEventId={loadingEventId} />
+          <EventGroup label="Past" events={pastEvents} muted onEventClick={openEventDetail} loadingEventId={loadingEventId} />
           <CaseTasksSection
             caseId={caseData.id}
             caseTitle={caseData.title}
@@ -572,6 +600,19 @@ export default function CaseDetailClient({ id }: { id: string }) {
         </div>
         </div>
       </div>
+
+      {selectedEvent && (
+        <div className="fixed inset-0 z-[220] flex justify-end bg-black/10" onClick={() => setSelectedEvent(null)}>
+          <div className="my-0 h-full py-4 pr-4" onClick={(e) => e.stopPropagation()}>
+            <EventDetailPanel
+              event={selectedEvent}
+              onClose={() => setSelectedEvent(null)}
+              onDeleted={() => { setSelectedEvent(null); void fetchCase(); }}
+              onUpdated={() => { setSelectedEvent(null); void fetchCase(); }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -622,7 +663,13 @@ function SummaryTile({ icon: Icon, label, value }: { icon: React.ElementType; la
   );
 }
 
-function EventGroup({ label, events, muted }: { label: string; events: CaseEvent[]; muted?: boolean }) {
+function EventGroup({ label, events, muted, onEventClick, loadingEventId }: {
+  label: string;
+  events: CaseEvent[];
+  muted?: boolean;
+  onEventClick: (eventId: string) => void;
+  loadingEventId: string | null;
+}) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
       <div className="mb-4 flex items-center justify-between">
@@ -640,7 +687,13 @@ function EventGroup({ label, events, muted }: { label: string; events: CaseEvent
             const colors = EVENT_TYPE_COLORS[ev.eventType ?? "OTHER"];
             const start = new Date(ev.startTime);
             return (
-              <div key={ev.id} className={`rounded-lg border border-slate-200 bg-white p-3.5 flex items-start gap-3 transition-colors hover:border-teal-200 hover:bg-teal-50/20 ${muted ? "opacity-70" : ""}`}>
+              <button
+                key={ev.id}
+                type="button"
+                onClick={() => onEventClick(ev.id)}
+                disabled={loadingEventId === ev.id}
+                className={`w-full text-left rounded-lg border border-slate-200 bg-white p-3.5 flex items-start gap-3 transition-colors hover:border-teal-200 hover:bg-teal-50/20 disabled:opacity-50 ${muted ? "opacity-70" : ""}`}
+              >
                 <div className={`mt-1 w-2.5 h-2.5 rounded-full shrink-0 ${colors.dot}`} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -669,7 +722,7 @@ function EventGroup({ label, events, muted }: { label: string; events: CaseEvent
                     )}
                   </div>
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>

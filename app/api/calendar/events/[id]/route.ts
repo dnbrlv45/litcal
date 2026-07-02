@@ -2,12 +2,89 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getAccessToken, deleteGoogleEvent, patchGoogleEvent } from "@/lib/google-calendar";
-import { buildGoogleEventPayload } from "@/lib/google-calendar-payload";
+import { buildGoogleEventPayload, eventSupportsRemoteAppearance } from "@/lib/google-calendar-payload";
 import { addTimelineEntry } from "@/lib/case-timeline";
 import { canDelete, canEdit, getCurrentWorkspace } from "@/lib/workspaces";
 import { detectConflicts } from "@/lib/conflicts";
 import { cascadeDeadlineDateChange } from "@/lib/deadline-rules";
 import { replaceEventReminders } from "@/lib/reminders";
+
+// GET /api/calendar/events/[id] — single event, same shape as the list/search endpoint
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const currentUser = await requireUser();
+  if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = currentUser.id;
+  const { workspace } = await getCurrentWorkspace(userId);
+  if (!workspace) return NextResponse.json({ error: "No workspace" }, { status: 403 });
+
+  const { id } = await params;
+
+  const event = await prisma.event.findFirst({
+    where: {
+      id,
+      OR: [
+        { workspaceId: workspace.id },
+        { userId, workspaceId: null },
+      ],
+    },
+    include: {
+      caseRef: { select: { id: true, title: true, status: true, county: true, court: true, caseNumber: true } },
+      assignedAttorney: { select: { id: true, firstName: true, lastName: true } },
+    },
+  });
+  if (!event) return NextResponse.json({ error: "Event not found" }, { status: 404 });
+
+  const supportsRemoteAppearance = eventSupportsRemoteAppearance(event.eventType);
+  const conflicts = event.assignedAttorney
+    ? await detectConflicts(event.assignedAttorney.id, event.startTime, event.endTime, event.id)
+    : [];
+
+  return NextResponse.json({
+    event: {
+      id: event.id,
+      title: event.title,
+      description: event.description,
+      start: event.startTime.toISOString(),
+      end: event.endTime.toISOString(),
+      allDay: event.allDay,
+      eventType: event.eventType,
+      subtype: event.subtype,
+      subtypeReason: event.subtypeReason,
+      location: event.location,
+      department: event.department,
+      caseId: event.caseId,
+      caseTitle: event.caseRef?.title ?? null,
+      caseNumber: event.caseRef?.caseNumber ?? null,
+      caseStatus: event.caseRef?.status ?? null,
+      assignedAttorneyId: event.assignedAttorney?.id ?? null,
+      assignedAttorneyName: event.assignedAttorney
+        ? [event.assignedAttorney.firstName, event.assignedAttorney.lastName].filter(Boolean).join(" ") || null
+        : null,
+      hasConflict: conflicts.length > 0,
+      conflicts: conflicts.map((c) => ({
+        eventId: c.eventId,
+        title: c.title,
+        startTime: c.startTime.toISOString(),
+        endTime: c.endTime.toISOString(),
+        attorneyName: c.attorneyName,
+      })),
+      caseCounty: event.caseRef?.county ?? null,
+      caseCourt: event.caseRef?.court ?? null,
+      inPerson: event.inPerson,
+      appearanceType: supportsRemoteAppearance ? event.appearanceType : null,
+      remoteLink: supportsRemoteAppearance ? event.remoteLink : null,
+      phoneNumber: supportsRemoteAppearance ? event.phoneNumber : null,
+      bridge: supportsRemoteAppearance ? event.bridge : null,
+      remotePassword: supportsRemoteAppearance ? event.remotePassword : null,
+      requestRequired: supportsRemoteAppearance ? event.requestRequired : null,
+      requestContactEmail: supportsRemoteAppearance ? event.requestContactEmail : null,
+      requestNotes: supportsRemoteAppearance ? event.requestNotes : null,
+    },
+  });
+}
 
 // DELETE /api/calendar/events/[id]
 export async function DELETE(
