@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import {
   Upload, CheckCircle, AlertCircle, Plus, Pencil, Check, X,
-  ChevronDown, ChevronRight, PowerOff, Power, Scale,
+  ChevronLeft, ChevronRight, PowerOff, Power, Scale,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -524,38 +524,32 @@ function AddRuleForm({
 
 // ─── County group ─────────────────────────────────────────────────────────────
 
-function CountyGroup({ countyName, rules, onSaved }: { countyName: string; rules: Rule[]; onSaved: (r: Rule) => void }) {
-  const [open, setOpen] = useState(false);
+function CountyTile({ countyName, rules, onClick }: { countyName: string; rules: Rule[]; onClick: () => void }) {
   const active   = rules.filter((r) => r.active).length;
   const inactive = rules.filter((r) => !r.active).length;
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 px-4 py-3 text-left hover:bg-slate-50 transition-colors"
-      >
-        {open ? <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />}
-        <span className="text-sm font-semibold text-slate-800 capitalize">{countyName}</span>
-        <div className="ml-auto flex items-center gap-1.5 shrink-0">
-          {active > 0 && (
-            <span className="inline-flex items-center rounded-full bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700 border border-teal-200">
-              {active} active
-            </span>
-          )}
-          {inactive > 0 && (
-            <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
-              {inactive} inactive
-            </span>
-          )}
-        </div>
-      </button>
-      {open && (
-        <div className="border-t border-slate-100 bg-slate-50/60 p-3 flex flex-col gap-2">
-          {rules.map((r) => <RuleRow key={r.id} rule={r} onSaved={onSaved} />)}
-        </div>
-      )}
-    </div>
+    <button
+      onClick={onClick}
+      className="flex flex-col gap-1.5 rounded-lg border border-slate-200 bg-white shadow-sm px-4 py-3 text-left hover:border-teal-300 hover:shadow-md transition-all"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-semibold text-slate-800 capitalize truncate">{countyName}</span>
+        <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
+      </div>
+      <div className="flex items-center gap-1.5">
+        {active > 0 && (
+          <span className="inline-flex items-center rounded-full bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700 border border-teal-200">
+            {active} active
+          </span>
+        )}
+        {inactive > 0 && (
+          <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+            {inactive} inactive
+          </span>
+        )}
+      </div>
+    </button>
   );
 }
 
@@ -569,6 +563,7 @@ export default function CourtRulesPage() {
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importError, setImportError]   = useState<string | null>(null);
   const [isAdmin, setIsAdmin]   = useState<boolean | null>(null);
+  const [selectedCounty, setSelectedCounty] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -665,7 +660,7 @@ export default function CourtRulesPage() {
 
   return (
     <div className="flex-1 overflow-y-auto bg-slate-50 p-8">
-      <div className="max-w-3xl">
+      <div className="max-w-5xl">
       <div className="flex items-center gap-3">
         <div className="flex size-9 items-center justify-center rounded-lg bg-teal-50 text-teal-700">
           <Scale className="w-5 h-5" />
@@ -725,14 +720,33 @@ export default function CourtRulesPage() {
 
         {rules.length === 0 ? (
           <p className="text-sm text-slate-400 italic">No rules yet. Import a CSV or add one manually above.</p>
-        ) : (
+        ) : selectedCounty && grouped[selectedCounty] ? (
           <div className="flex flex-col gap-3">
+            <button
+              onClick={() => setSelectedCounty(null)}
+              className="flex items-center gap-1.5 self-start text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              All counties
+            </button>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-slate-800 capitalize">{selectedCounty}</h3>
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
+                {grouped[selectedCounty].length}
+              </span>
+            </div>
+            <div className="flex flex-col gap-2">
+              {grouped[selectedCounty].map((r) => <RuleRow key={r.id} rule={r} onSaved={handleRuleSaved} />)}
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {Object.keys(grouped).sort().map((county) => (
-              <CountyGroup
+              <CountyTile
                 key={county}
                 countyName={county}
                 rules={grouped[county]}
-                onSaved={handleRuleSaved}
+                onClick={() => setSelectedCounty(county)}
               />
             ))}
           </div>
