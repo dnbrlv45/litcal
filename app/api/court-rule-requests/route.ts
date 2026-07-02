@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { canEdit, getCurrentWorkspace } from "@/lib/workspaces";
 import { prisma } from "@/lib/prisma";
 import { resolveStateForCounty } from "@/lib/court-hearing-rules";
+import { sendLitCalEmail } from "@/lib/google-mail";
 
 // POST /api/court-rule-requests
 export async function POST(request: NextRequest) {
@@ -51,5 +52,40 @@ export async function POST(request: NextRequest) {
     },
   });
 
+  await notifySuperAdmins(req.id, req.county, req.court, req.department, user);
+
   return NextResponse.json({ ok: true, id: req.id });
+}
+
+async function notifySuperAdmins(
+  requestId: string,
+  county: string,
+  court: string | null,
+  department: string | null,
+  requestedBy: { firstName: string | null; lastName: string | null; email: string },
+) {
+  try {
+    const superAdmins = await prisma.user.findMany({
+      where: { isSuperAdmin: true },
+      select: { email: true },
+    });
+    if (superAdmins.length === 0) return;
+
+    const requesterName = [requestedBy.firstName, requestedBy.lastName].filter(Boolean).join(" ") || requestedBy.email;
+    const scope = [county, court, department].filter(Boolean).join(" / ");
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://litcal.vercel.app";
+    const reviewUrl = new URL("/admin/court-coverage", baseUrl).toString();
+
+    const subject = `New court rule request: ${scope}`;
+    const text = `${requesterName} submitted a new court remote appearance rule request for ${scope}.\n\nReview it at: ${reviewUrl}\n\nRequest ID: ${requestId}`;
+    const html = `<p>${requesterName} submitted a new court remote appearance rule request for <strong>${scope}</strong>.</p><p><a href="${reviewUrl}">Review the request</a></p>`;
+
+    await Promise.all(
+      superAdmins.map((admin) =>
+        sendLitCalEmail({ recipientEmail: admin.email, subject, text, html }).catch(() => null)
+      )
+    );
+  } catch (err) {
+    console.error("Failed to notify super admins of new court rule request:", err);
+  }
 }
