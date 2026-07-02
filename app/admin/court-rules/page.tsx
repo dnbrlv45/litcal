@@ -4,9 +4,10 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import {
   Upload, CheckCircle, AlertCircle, Plus, Pencil, Check, X,
-  ChevronDown, ChevronRight, PowerOff, Power,
+  ChevronDown, ChevronRight, PowerOff, Power, Scale,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -529,17 +530,28 @@ function CountyGroup({ countyName, rules, onSaved }: { countyName: string; rules
   const inactive = rules.filter((r) => !r.active).length;
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 text-left group"
+        className="flex w-full items-center gap-2 px-4 py-3 text-left hover:bg-slate-50 transition-colors"
       >
-        {open ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
-        <span className="text-sm font-semibold text-slate-800 capitalize group-hover:text-slate-950">{countyName}</span>
-        <span className="text-xs text-slate-400">{active} active{inactive > 0 ? `, ${inactive} inactive` : ""}</span>
+        {open ? <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />}
+        <span className="text-sm font-semibold text-slate-800 capitalize">{countyName}</span>
+        <div className="ml-auto flex items-center gap-1.5 shrink-0">
+          {active > 0 && (
+            <span className="inline-flex items-center rounded-full bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700 border border-teal-200">
+              {active} active
+            </span>
+          )}
+          {inactive > 0 && (
+            <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+              {inactive} inactive
+            </span>
+          )}
+        </div>
       </button>
       {open && (
-        <div className="ml-6 flex flex-col gap-2">
+        <div className="border-t border-slate-100 bg-slate-50/60 p-3 flex flex-col gap-2">
           {rules.map((r) => <RuleRow key={r.id} rule={r} onSaved={onSaved} />)}
         </div>
       )}
@@ -634,7 +646,9 @@ export default function CourtRulesPage() {
 
   if (loading) {
     return (
-      <div className="p-8 text-sm text-slate-400">Loading…</div>
+      <div className="flex-1 overflow-y-auto bg-slate-50 p-8">
+        <p className="text-sm text-slate-500">Loading…</p>
+      </div>
     );
   }
 
@@ -650,19 +664,26 @@ export default function CourtRulesPage() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-8">
-      <div className="max-w-3xl flex flex-col gap-8">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-950">Court Hearing Rules</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Manage remote appearance rules by county, courthouse, and department. Rules are matched automatically when creating events.
-        </p>
+    <div className="flex-1 overflow-y-auto bg-slate-50 p-8">
+      <div className="max-w-3xl">
+      <div className="flex items-center gap-3">
+        <div className="flex size-9 items-center justify-center rounded-lg bg-teal-50 text-teal-700">
+          <Scale className="w-5 h-5" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-950">Court Hearing Rules</h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            Manage remote appearance rules by county, courthouse, and department. Rules are matched automatically when creating events.
+          </p>
+        </div>
       </div>
 
+      <Separator className="my-6" />
+
       {/* CSV Import */}
-      <div className="rounded-xl border border-slate-200 bg-white p-5 flex flex-col gap-4">
+      <div className="rounded-lg border border-slate-200 bg-white shadow-sm p-5 flex flex-col gap-4">
         <p className="text-sm font-semibold text-slate-800">Import from CSV</p>
-        <label className="flex items-center gap-3 cursor-pointer rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-3 hover:border-teal-400 hover:bg-teal-50/30 transition-colors">
+        <label className="flex items-center gap-3 cursor-pointer rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-3 hover:border-teal-400 hover:bg-teal-50/30 transition-colors">
           <Upload className="w-5 h-5 text-slate-400 shrink-0" />
           <span className="text-sm text-slate-500">{importing ? "Importing…" : "Click to upload CSV"}</span>
           <input ref={fileRef} type="file" accept=".csv,text/csv" className="sr-only" onChange={handleFile} disabled={importing} />
@@ -680,12 +701,19 @@ export default function CourtRulesPage() {
         )}
       </div>
 
+      <div className="mt-10" />
+
       {/* Manual rules */}
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold text-slate-800">
-            Rules{rules.length > 0 ? ` (${rules.length})` : ""}
-          </p>
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-semibold text-slate-800">Rules</h2>
+            {rules.length > 0 && (
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
+                {rules.length}
+              </span>
+            )}
+          </div>
         </div>
 
         <AddRuleForm
@@ -698,7 +726,7 @@ export default function CourtRulesPage() {
         {rules.length === 0 ? (
           <p className="text-sm text-slate-400 italic">No rules yet. Import a CSV or add one manually above.</p>
         ) : (
-          <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-3">
             {Object.keys(grouped).sort().map((county) => (
               <CountyGroup
                 key={county}
@@ -711,8 +739,10 @@ export default function CourtRulesPage() {
         )}
       </div>
 
+      <div className="mt-10" />
+
       {/* Matching info */}
-      <div className="rounded-xl border border-slate-100 bg-slate-50 p-5 flex flex-col gap-2">
+      <div className="rounded-lg border border-slate-200 bg-white shadow-sm p-5 flex flex-col gap-2">
         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Matching priority</p>
         <ol className="list-decimal list-inside flex flex-col gap-1 text-sm text-slate-600">
           <li>County + courthouse + department</li>
