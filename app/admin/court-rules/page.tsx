@@ -650,7 +650,8 @@ export default function CourtRulesPage() {
   }
 
   return (
-    <div className="p-8 max-w-3xl flex flex-col gap-8">
+    <div className="flex-1 overflow-y-auto p-8">
+      <div className="max-w-3xl flex flex-col gap-8">
       <div>
         <h1 className="text-2xl font-bold text-slate-950">Court Hearing Rules</h1>
         <p className="mt-1 text-sm text-slate-500">
@@ -719,6 +720,7 @@ export default function CourtRulesPage() {
           <li>County-wide rule</li>
           <li>No match — manual entry, no rule applied</li>
         </ol>
+      </div>
       </div>
     </div>
   );
