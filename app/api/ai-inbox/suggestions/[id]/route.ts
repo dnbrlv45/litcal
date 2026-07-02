@@ -10,6 +10,7 @@ import { extractEmailSuggestion } from "@/lib/ai/extractEmailSuggestion";
 import { toTitleCaseName } from "@/lib/utils";
 import { getAccessToken, patchGoogleEvent, deleteGoogleEvent } from "@/lib/google-calendar";
 import { addTimelineEntry } from "@/lib/case-timeline";
+import { cascadeDeadlineCancellation } from "@/lib/deadline-rules";
 
 // Convert a local date+time string to UTC using the given IANA timezone
 function localToUTC(dateStr: string, timeStr: string, tz: string): Date {
@@ -437,6 +438,10 @@ export async function PATCH(
               where: { id: ev.id },
               data: { status: "CANCELLED" },
             });
+            // A continued/cancelled trial or CMC leaves its auto-generated
+            // deadlines (Expert Designation, Discovery Cutoff, CCP 998 Due,
+            // File CMS, etc.) stale — cancel/remove them too.
+            await cascadeDeadlineCancellation(ev.id);
           }
 
           // If a new date was provided, create the rescheduled event
@@ -632,6 +637,10 @@ export async function PATCH(
     if (!existingEvent) return NextResponse.json({ error: "Matched event not found" }, { status: 404 });
 
     await prisma.event.update({ where: { id: eventId }, data: { status: "CANCELLED" } });
+    // A continued/cancelled trial or CMC leaves its auto-generated deadlines
+    // (Expert Designation, Discovery Cutoff, CCP 998 Due, File CMS, etc.)
+    // stale — cancel/remove them too.
+    await cascadeDeadlineCancellation(eventId);
 
     // Delete from Google Calendar
     const syncInfo = existingEvent.googleSync;

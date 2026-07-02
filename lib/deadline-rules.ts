@@ -402,3 +402,41 @@ export async function cascadeDeadlineDateChange(
 
   return { skippedModified };
 }
+
+/**
+ * Cancels every deadline generated from a trigger event (e.g. a trial or CMC
+ * that was continued/cancelled) so stale deadlines don't linger. Generated
+ * events are marked CANCELLED (preserving history); generated tasks have no
+ * CANCELLED status, so they're deleted outright — same as the hard-delete
+ * cascade already does for a trigger event that's removed entirely.
+ */
+export async function cascadeDeadlineCancellation(
+  triggerId: string,
+): Promise<{ cancelledEvents: number; deletedTasks: number }> {
+  const rows = await prisma.generatedDeadline.findMany({
+    where: { triggerEventId: triggerId },
+    include: {
+      generatedEvent: { select: { id: true, status: true } },
+      generatedTask:  { select: { id: true, status: true } },
+    },
+  });
+
+  let cancelledEvents = 0;
+  let deletedTasks = 0;
+
+  for (const row of rows) {
+    if (row.generatedEventId && row.generatedEvent && row.generatedEvent.status !== "CANCELLED") {
+      await prisma.event.update({
+        where: { id: row.generatedEventId },
+        data: { status: "CANCELLED" },
+      });
+      cancelledEvents++;
+    }
+    if (row.generatedTaskId && row.generatedTask && row.generatedTask.status !== "DONE") {
+      await prisma.task.delete({ where: { id: row.generatedTaskId } });
+      deletedTasks++;
+    }
+  }
+
+  return { cancelledEvents, deletedTasks };
+}
