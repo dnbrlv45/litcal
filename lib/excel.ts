@@ -13,6 +13,14 @@ const TEXT_MUTED  = "64748B";
 const LIGHT_BORDER: Partial<ExcelJS.Border> = { style: "thin", color: { argb: "CBD5E1" } };
 const CALENDAR_COLUMNS = 7;
 
+/** "Dylan Barlava" -> "DB". Handles single names, extra whitespace, and multiple names. */
+function getInitials(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 export interface CalendarDay {
   label: string; // e.g. "Mon 6/23"
   events: { event: string; time: string; caseName: string; attorney: string }[];
@@ -128,11 +136,18 @@ export async function buildXlsx(
 
         if (ev) {
           const meta = [ev.caseName, ev.attorney].filter(Boolean).join(" | ");
+          const initials = getInitials(ev.attorney);
           const richParts: ExcelJS.RichText[] = [
             {
-              text: `${ev.time || "All day"}\n`,
+              text: `${ev.time || "All day"}`,
               font: { bold: true, size: 9, name: "Calibri", color: { argb: HEADER_BG } },
             },
+            ...(initials
+              ? [{
+                  text: `  [${initials}]\n`,
+                  font: { bold: true, size: 9, name: "Calibri", color: { argb: TITLE_BG } },
+                } satisfies ExcelJS.RichText]
+              : [{ text: "\n", font: { size: 9, name: "Calibri" } } satisfies ExcelJS.RichText]),
             {
               text: `${ev.event}\n`,
               font: { bold: true, size: 10, name: "Calibri", color: { argb: TEXT_DARK } },
