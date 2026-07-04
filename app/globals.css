@@ -42,7 +42,7 @@
 
   /* ── LitCal design system: brand, dark nav, and event palette ──────────── */
   /* Exposes tokens as Tailwind utilities, e.g. bg-nav, text-nav-foreground,   */
-  /* bg-event-cmc, text-event-foreground. Values defined in :root below.       */
+  /* bg-event-hearing, text-event-foreground. Values defined in :root below.    */
   --color-brand-gold: var(--brand-gold);
   --color-nav: var(--nav);
   --color-nav-foreground: var(--nav-foreground);
@@ -50,12 +50,10 @@
   --color-nav-accent: var(--nav-accent);
   --color-nav-border: var(--nav-border);
   --color-event-foreground: var(--event-foreground);
-  --color-event-cmc: var(--event-cmc);
-  --color-event-tsc: var(--event-tsc);
-  --color-event-osc: var(--event-osc);
+  --color-event-deadline: var(--event-deadline);
+  --color-event-hearing: var(--event-hearing);
   --color-event-deposition: var(--event-deposition);
   --color-event-trial: var(--event-trial);
-  --color-event-hearing: var(--event-hearing);
   --color-event-mediation: var(--event-mediation);
   --color-event-other: var(--event-other);
 
@@ -113,17 +111,16 @@
   --nav-accent: oklch(0.27 0.005 270);            /* ~#2c2c30 — hover/active + Ask LitCal button */
   --nav-border: oklch(0.31 0.005 270);            /* ~#35353a */
 
-  /* Event blocks — solid, muted "jewel" fills with white text. Keyed by the
-     subtype shown in the legend (CMC/TSC/OSC) with base-type fallbacks. */
+  /* Event blocks — solid, muted "jewel" fills with white text. Keyed by
+     category (see getEventCategory): all hearing/conference subtypes share the
+     one "hearing" color so the calendar reads calmly. */
   --event-foreground: oklch(0.99 0 0);            /* #ffffff — text on fills */
-  --event-cmc: oklch(0.46 0.09 262);              /* ~#3b5b92 — Case Management (blue) */
-  --event-tsc: oklch(0.60 0.11 82);               /* ~#a37a1c — Trial Setting (gold) */
-  --event-osc: oklch(0.46 0.12 28);               /* ~#8c3330 — Order to Show Cause (red) */
+  --event-deadline: oklch(0.46 0.12 28);          /* ~#8c3330 — Deadline (red) */
+  --event-hearing: oklch(0.57 0.11 55);           /* ~#b0642a — Hearing / CMC / TSC / OSC (orange) */
   --event-deposition: oklch(0.47 0.09 300);       /* ~#5a4a8a — Deposition (purple) */
   --event-trial: oklch(0.50 0.08 160);            /* ~#2f6b57 — Trial (green) */
-  --event-hearing: oklch(0.57 0.11 55);           /* ~#b0642a — Hearing (orange) */
   --event-mediation: oklch(0.48 0.09 318);        /* ~#6a4a8a — Mediation (magenta-violet) */
-  --event-other: oklch(0.50 0.02 262);            /* ~#55606f — Other (slate) */
+  --event-other: oklch(0.50 0.02 262);            /* ~#55606f — Meeting / Other (slate) */
 }
 
 .dark {

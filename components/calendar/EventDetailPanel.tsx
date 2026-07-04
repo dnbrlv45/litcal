@@ -245,7 +245,7 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
 
   if (!event) return null;
 
-  const colors = eventColors(event.eventType, event.subtype);
+  const colors = eventColors(event.eventType);
 
   return (
     <div className="ml-5 w-[360px] shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col">

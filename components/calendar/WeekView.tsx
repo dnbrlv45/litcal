@@ -114,7 +114,7 @@ export default function WeekView({ date, today, events, onCellClick, onSelectDay
 
           {/* Spanning event bars */}
           {spanLayout.map(({ event, colStart, colSpan, row, continuesLeft, continuesRight }) => {
-            const colors = eventColors(event.eventType, event.subtype);
+            const colors = eventColors(event.eventType);
             return (
               <button
                 key={event.id}
@@ -181,7 +181,7 @@ export default function WeekView({ date, today, events, onCellClick, onSelectDay
 
                 {/* Events */}
                 {dayEvents.map((ev) => {
-                  const colors = eventColors(ev.eventType, ev.subtype);
+                  const colors = eventColors(ev.eventType);
                   const colWidth = 100 / ev.numCols;
                   return (
                     <div

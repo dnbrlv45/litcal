@@ -76,32 +76,26 @@ function fill(token: string): EventColorTokens {
   };
 }
 
+// Colors are assigned by category, not subtype: every hearing/conference type
+// (HEARING, CONFERENCE, CMC, COURT_CALL, and all their subtypes) shares the one
+// "hearing" color so the calendar isn't busy. Mirrors getEventCategory().
 export const EVENT_TYPE_COLORS: Record<EventType, EventColorTokens> = {
+  DEADLINE:                   fill("deadline"),
   HEARING:                    fill("hearing"),
+  CONFERENCE:                 fill("hearing"),
+  COURT_CALL:                 fill("hearing"),
+  CASE_MANAGEMENT_CONFERENCE: fill("hearing"),
   DEPOSITION:                 fill("deposition"),
   TRIAL:                      fill("trial"),
-  CONFERENCE:                 fill("cmc"),
-  MEETING:                    fill("other"),
   MEDIATION:                  fill("mediation"),
-  COURT_CALL:                 fill("cmc"),
-  CASE_MANAGEMENT_CONFERENCE: fill("cmc"),
-  DEADLINE:                   fill("osc"),
-  REMINDER:                   fill("tsc"),
+  MEETING:                    fill("other"),
+  REMINDER:                   fill("other"),
   OTHER:                      fill("other"),
 };
 
-// Hearing/conference subtypes carry their own color so CMC (blue), TSC (gold),
-// and OSC (red) read as distinct events even though they share a base type.
-const SUBTYPE_COLORS: Record<string, EventColorTokens> = {
-  CMC: fill("cmc"),
-  "Further CMC": fill("cmc"),
-  TSC: fill("tsc"),
-  OSC: fill("osc"),
-};
-
-/** Resolve chip colors, preferring the subtype (CMC/TSC/OSC) over the base type. */
-export function eventColors(eventType?: EventType | null, subtype?: string | null): EventColorTokens {
-  if (subtype && SUBTYPE_COLORS[subtype]) return SUBTYPE_COLORS[subtype];
+/** Resolve chip colors by event type. Subtypes intentionally do not get their
+ *  own color — CMC/TSC/OSC all render as the shared hearing color. */
+export function eventColors(eventType?: EventType | null): EventColorTokens {
   return EVENT_TYPE_COLORS[eventType ?? "OTHER"] ?? EVENT_TYPE_COLORS.OTHER;
 }
 

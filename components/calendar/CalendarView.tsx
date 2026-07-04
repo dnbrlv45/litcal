@@ -877,6 +877,23 @@ export default function CalendarView() {
         )}
       </div>
 
+      {/* Legend — event categories (all hearing subtypes share one color) */}
+      <div className="hidden md:flex items-center gap-4 px-8 pb-3 shrink-0 flex-wrap">
+        {[
+          { label: "Deadline",        cls: "bg-event-deadline" },
+          { label: "Hearing",         cls: "bg-event-hearing" },
+          { label: "Deposition",      cls: "bg-event-deposition" },
+          { label: "Trial",           cls: "bg-event-trial" },
+          { label: "Mediation",       cls: "bg-event-mediation" },
+          { label: "Meeting / Other", cls: "bg-event-other" },
+        ].map((item) => (
+          <span key={item.label} className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+            <span className={`size-2.5 rounded-full ${item.cls}`} />
+            {item.label}
+          </span>
+        ))}
+      </div>
+
       {/* Main content row */}
       <div className="flex flex-1 min-h-0 overflow-hidden px-2 pb-2 md:px-5 md:pb-5">
         {/* Calendar */}

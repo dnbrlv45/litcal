@@ -122,7 +122,7 @@ export default function TeamView({ date, today, events, attorneys, onEventClick,
                   className={`border-l border-slate-100 p-1.5 flex flex-col gap-1 ${isToday ? "bg-teal-50/20" : ""}`}
                 >
                   {cell.map((ev) => {
-                    const colors = eventColors(ev.eventType, ev.subtype);
+                    const colors = eventColors(ev.eventType);
                     return (
                       <button
                         key={ev.id}

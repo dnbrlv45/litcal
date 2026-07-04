@@ -56,18 +56,18 @@ The sidebar is a near-black rail with light text.
 
 ### Event palette
 Solid, muted **jewel** fills with white text (`--event-foreground` / `text-event-foreground`).
-Keyed by the legend subtype, with base-type fallbacks. Utilities: `bg-event-cmc`, etc.
+Keyed by **category** (`getEventCategory`), not subtype — every hearing/conference type and
+all their subtypes (CMC, TSC, OSC, MSC, …) share the one Hearing color so the calendar reads
+calmly. These six are the legend. Utilities: `bg-event-hearing`, etc.
 
-| Legend | Meaning | Token | Hex |
-|--------|---------|-------|-----|
-| CMC 🔵 | Case Management Conference | `--event-cmc` | `#3b5b92` |
-| TSC 🟡 | Trial Setting Conference | `--event-tsc` | `#b0851f` |
-| OSC 🔴 | Order to Show Cause | `--event-osc` | `#8c3330` |
-| Deposition 🟣 | Deposition | `--event-deposition` | `#5a4a8a` |
-| — | Trial | `--event-trial` | `#2f6b57` |
-| — | Hearing | `--event-hearing` | `#b0642a` |
-| — | Mediation | `--event-mediation` | `#6a4a8a` |
-| — | Other / fallback | `--event-other` | `#55606f` |
+| Legend | Covers | Token | Hex |
+|--------|--------|-------|-----|
+| Deadline 🔴 | DEADLINE | `--event-deadline` | `#8c3330` |
+| Hearing 🟠 | HEARING, CONFERENCE, COURT_CALL, CMC, and all hearing subtypes | `--event-hearing` | `#b0642a` |
+| Deposition 🟣 | DEPOSITION | `--event-deposition` | `#5a4a8a` |
+| Trial 🟢 | TRIAL | `--event-trial` | `#2f6b57` |
+| Mediation 🟣 | MEDIATION | `--event-mediation` | `#6a4a8a` |
+| Meeting / Other ⚫ | MEETING, REMINDER, OTHER | `--event-other` | `#55606f` |
 
 ---
 
@@ -97,17 +97,19 @@ floating panels/modals. Event chips use a lighter `shadow-sm` that lifts on hove
 
 ---
 
-## Adopting the tokens
+## Where it's wired
 
-1. **Event colors** — replace the light-chip map `EVENT_TYPE_COLORS` in
-   [`lib/google-calendar.ts`](lib/google-calendar.ts) (currently `bg-*-50` + dark text; Deposition
-   is cyan) with the solid `bg-event-*` + `text-event-foreground` tokens above, and key it by
-   subtype (CMC/TSC/OSC) rather than base type only.
-2. **Dark sidebar** — restyle [`components/nav/Sidebar.tsx`](components/nav/Sidebar.tsx) with
-   `bg-nav` / `text-nav-foreground` / `bg-nav-accent` (today it's light).
-3. **Serif headings** — load a display face and repoint `--font-heading` (snippet above).
+The redesign is live, so these are the source-of-truth spots to change:
 
-## Not yet wired (deltas from the live UI)
-
-The shipped app still uses a **light sidebar**, **sans-serif headings**, and **light-tinted event
-chips keyed by base type**. The tokens for the redesign exist; the three changes above turn them on.
+- **Event colors** — [`lib/google-calendar.ts`](lib/google-calendar.ts): `eventColors()` resolves
+  a chip's color from its `EventType` via the `--event-*` tokens. Colors are grouped by category
+  (see `getEventCategory` in [`lib/google-calendar-payload.ts`](lib/google-calendar-payload.ts)),
+  so all hearing/conference subtypes share the Hearing color. To recolor, edit the `--event-*`
+  values in `globals.css`; to regroup, change the `fill(...)` mapping in `EVENT_TYPE_COLORS`.
+- **Legend** — the category legend row lives in
+  [`components/calendar/CalendarView.tsx`](components/calendar/CalendarView.tsx) (just below the
+  filter bar) and must stay in sync with the six categories above.
+- **Dark sidebar** — [`components/nav/Sidebar.tsx`](components/nav/Sidebar.tsx) plus the Inbox and
+  Deadlines nav items, using `bg-nav` / `text-nav-foreground` / `bg-nav-accent`.
+- **Serif headings** — Fraunces is loaded in [`app/layout.tsx`](app/layout.tsx) and
+  `--font-heading` points at it; apply `font-heading` to page/date titles.

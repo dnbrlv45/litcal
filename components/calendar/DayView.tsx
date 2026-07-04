@@ -91,7 +91,7 @@ export default function DayView({ date, today, events, onCellClick, onEventClick
           {allDayEvents.length === 0 ? (
             <span className="text-xs text-slate-400">No all-day events</span>
           ) : allDayEvents.map((ev) => {
-            const colors = eventColors(ev.eventType, ev.subtype);
+            const colors = eventColors(ev.eventType);
             return (
               <button
                 key={ev.id}
@@ -141,7 +141,7 @@ export default function DayView({ date, today, events, onCellClick, onEventClick
 
             {/* Events */}
             {dayEvents.map((ev) => {
-              const colors = eventColors(ev.eventType, ev.subtype);
+              const colors = eventColors(ev.eventType);
               const colWidth = 100 / ev.numCols;
               return (
                 <div
