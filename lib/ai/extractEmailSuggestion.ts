@@ -63,6 +63,8 @@ const CALENDAR_PROMPT = `You are a California litigation assistant. Extract ALL 
 
 Look for: depositions, hearings, trials, CMC, MSC, IME, mediations, or any scheduled court date. There may be MULTIPLE events — extract every single one.
 
+DO NOT emit an event for a discovery RESPONSE DEADLINE (e.g. "responses due", "responses to interrogatories due", "30 days to respond", a due date calculated from a proof of service). Those are handled by a separate discovery classifier — emitting them here creates duplicate, unwanted calendar entries. Only calendar an actual SCHEDULED APPEARANCE (a hearing, deposition, trial, conference, or mediation with a real date on the calendar). If the only "date" in the email is a response deadline, return {"found": false}.
+
 IMPORTANT: The content may be a simple list of dates and names, like:
   "8/10/26 – Frost"
   "2/8/27 – Marquez"
@@ -75,7 +77,12 @@ Date formats you may see:
 - "2026-08-10" (ISO format)
 - "August 10, 2026" (full format)
 
-For simple name-only entries (e.g. "Frost", "Marquez, Ashley"), use the name as the plaintiff. You may not have the defendant, case number, or court — that's OK, leave those null.
+For simple name-only entries (e.g. "Frost", "Marquez, Ashley"), use the name as the plaintiff. You may not have the defendant, case number, or court — that's OK, leave those null. But ALWAYS populate case.plaintiff with the exact name as written on the line — never leave plaintiff null when a name is present.
+
+CONSISTENCY IS CRITICAL — the same event may be re-forwarded and re-scanned, and your output must be identical each time so duplicates can be detected:
+- Title format is fixed: "<Plaintiff last name> <EventType word>", e.g. "Frost Trial", "Marquez Deposition", "Tippins CMC". Never write "Trial for Frost" or other variants.
+- Extract the party name exactly as written; do not expand, abbreviate, or reorder it (e.g. keep "Angel A. Olvera" — do not turn it into "Angel Armando Olvera").
+- Copy the case number character-for-character; do not correct or reformat it.
 
 Notes like "RESCHEDULED", "Subed out", "File NOS", or "Trial Call" should go in the event description field, not the title. If an entry says RESCHEDULED or OFF CALENDAR, still include it but note it in the description.
 
@@ -90,8 +97,8 @@ If one or more scheduled events are found, return this JSON object:
       "confidence": 0.95,
       ${CASE_SCHEMA},
       "event": {
-        "eventType": null,   // DEPOSITION, HEARING, TRIAL, CONFERENCE, MEDIATION, DEADLINE, OTHER
-        "title": null,       // e.g. "Frost Trial", "Marquez Trial"
+        "eventType": null,   // DEPOSITION, HEARING, TRIAL, CONFERENCE, MEDIATION, OTHER (never DEADLINE — those are excluded above)
+        "title": null,       // fixed format "<Plaintiff last name> <EventType word>", e.g. "Frost Trial", "Marquez Deposition"
         "date": null,        // YYYY-MM-DD
         "startTime": null,   // HH:MM 24-hour (convert "10:00 a.m." → "10:00", "2:30 p.m." → "14:30"). null if not specified.
         "endTime": null,
@@ -99,7 +106,7 @@ If one or more scheduled events are found, return this JSON object:
         "location": null
       },
       "missingFields": [],
-      "dedupeKey": ""        // caseNumber|eventType|date|startTime — use plaintiff name if no case number
+      "dedupeKey": ""        // Build deterministically: "<caseNumber or plaintiff last name>|<eventType>|<date>". Lowercase, no spaces, do NOT include startTime. Must be byte-identical if this same event is seen again.
     }
   ]
 }
@@ -314,21 +321,18 @@ ${attachments ? `Attachments:\n${attachments}` : ""}`;
     }
   }
 
-  // Suppress redundant deadline calendar events when the email is really about
-  // discovery: a DISCOVERY/DISCOVERY_EXTENSION already owns its response deadline
-  // (the discovery flow creates the linked calendar entry on approval). The
-  // parallel calendar call often re-emits that same deadline as a CALENDAR_EVENT.
-  // We keep genuine calendar events (hearings, depositions, trials, etc.).
-  const hasDiscovery = results.some(
-    (r) => r.classification === "DISCOVERY" || r.classification === "DISCOVERY_EXTENSION"
-  );
-  if (hasDiscovery) {
-    for (let i = results.length - 1; i >= 0; i--) {
-      if (results[i].classification !== "CALENDAR_EVENT") continue;
-      const type = (results[i].event?.eventType ?? "").toUpperCase();
-      if (type.includes("DEAD") || type.includes("EXTENSION") || type.includes("DUE")) {
-        results.splice(i, 1);
-      }
+  // Drop deadline-style calendar events. A response deadline is never a real
+  // calendar appearance: when the email is about discovery, the DISCOVERY /
+  // DISCOVERY_EXTENSION flow already owns its response deadline; and even when the
+  // discovery classifier misses, a bare "responses due" date is not something the
+  // user wants as a standalone calendar entry. The prompt now forbids these, but
+  // the model still emits them occasionally, so strip them unconditionally here.
+  // Genuine calendar events (hearings, depositions, trials, etc.) are kept.
+  for (let i = results.length - 1; i >= 0; i--) {
+    if (results[i].classification !== "CALENDAR_EVENT") continue;
+    const type = (results[i].event?.eventType ?? "").toUpperCase();
+    if (type.includes("DEAD") || type.includes("EXTENSION") || type.includes("DUE")) {
+      results.splice(i, 1);
     }
   }
 

@@ -10,6 +10,14 @@ export interface ProcessResult {
   error?: string;
 }
 
+// Statuses a prior suggestion can hold and still count as a duplicate of new,
+// identical content. Crucially this includes IGNORED and DUPLICATE: without them,
+// re-forwarding an email the user already dismissed regenerates the whole batch
+// as fresh PENDING suggestions. RESCANNED is intentionally excluded — a rescan
+// nulls the old row's sourceHash/gmailMessageId so it can't collide here, and we
+// want an explicit rescan to yield fresh suggestions.
+const DEDUP_STATUSES = ["PENDING", "APPROVED", "IGNORED", "DUPLICATE"] as const;
+
 interface GmailPart {
   mimeType?: string;
   body?: { data?: string; attachmentId?: string };
@@ -168,7 +176,7 @@ export async function processGmailMessages(
           where: {
             workspaceId: targetWorkspaceId,
             classification: extracted.classification,
-            status: { in: ["PENDING", "APPROVED"] },
+            status: { in: [...DEDUP_STATUSES] },
             sourceHash,
             gmailMessageId: { not: messageId },
           },
@@ -182,7 +190,7 @@ export async function processGmailMessages(
             where: {
               workspaceId: targetWorkspaceId,
               classification: extracted.classification,
-              status: { in: ["PENDING", "APPROVED"] },
+              status: { in: [...DEDUP_STATUSES] },
               extractedData: { path: ["dedupeKey"], equals: extracted.dedupeKey },
             },
             orderBy: { createdAt: "asc" },
