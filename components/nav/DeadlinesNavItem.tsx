@@ -45,12 +45,12 @@ export default function DeadlinesNavItem({ collapsed }: { collapsed?: boolean })
         collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5"
       } ${
         isActive
-          ? "bg-white text-slate-950 shadow-sm ring-1 ring-sidebar-border"
-          : "text-slate-600 hover:text-slate-950 hover:bg-white/65"
+          ? "bg-nav-accent text-nav-foreground shadow-sm ring-1 ring-nav-border"
+          : "text-nav-muted-foreground hover:text-nav-foreground hover:bg-nav-accent"
       }`}
     >
       <span className={`relative grid size-7 place-items-center rounded-md transition-colors ${
-        isActive ? "bg-teal-50 text-teal-700" : "text-slate-500 group-hover:bg-slate-100 group-hover:text-slate-800"
+        isActive ? "bg-white/10 text-teal-200" : "text-nav-muted-foreground group-hover:bg-white/10 group-hover:text-nav-foreground"
       }`}>
         <Scale className="w-4 h-4 shrink-0" />
         {overdueCount > 0 && (

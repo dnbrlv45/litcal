@@ -693,7 +693,7 @@ export default function CalendarView() {
         {/* Top row: title + new event button */}
         <div className="flex items-center justify-between gap-2 md:hidden">
           <div className="min-w-0">
-            <h1 className="truncate text-lg font-bold tracking-tight text-slate-950">{periodLabel}</h1>
+            <h1 className="truncate font-heading text-xl font-semibold tracking-tight text-slate-950">{periodLabel}</h1>
             <p className="mt-0.5 text-xs font-medium text-slate-500">
               {filteredEvents.length} event{filteredEvents.length !== 1 ? "s" : ""}
               {activeFilterCount > 0 ? ` · ${activeFilterCount} filter${activeFilterCount !== 1 ? "s" : ""}` : ""}
@@ -737,7 +737,7 @@ export default function CalendarView() {
         <div className="hidden md:flex min-w-0 items-center gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="truncate text-2xl font-bold tracking-tight text-slate-950">{periodLabel}</h1>
+              <h1 className="truncate font-heading text-[26px] font-semibold tracking-tight text-slate-950">{periodLabel}</h1>
               <ChevronDown className="size-4 shrink-0 text-slate-500" />
             </div>
             <p className="mt-0.5 text-xs font-medium text-slate-500">

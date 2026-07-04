@@ -1,7 +1,7 @@
 "use client";
 
 import type { CalEvent } from "@/lib/google-calendar";
-import { EVENT_TYPE_COLORS } from "@/lib/google-calendar";
+import { eventColors } from "@/lib/google-calendar";
 
 const DAY_ABBR = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 
@@ -122,7 +122,7 @@ export default function TeamView({ date, today, events, attorneys, onEventClick,
                   className={`border-l border-slate-100 p-1.5 flex flex-col gap-1 ${isToday ? "bg-teal-50/20" : ""}`}
                 >
                   {cell.map((ev) => {
-                    const colors = EVENT_TYPE_COLORS[ev.eventType ?? "OTHER"];
+                    const colors = eventColors(ev.eventType, ev.subtype);
                     return (
                       <button
                         key={ev.id}

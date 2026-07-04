@@ -66,7 +66,7 @@ export default function Sidebar({ isSuperAdmin = false, isViewer = false }: { is
   }
 
   return (
-    <aside className={`hidden md:flex h-full shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200 ${
+    <aside className={`hidden md:flex h-full shrink-0 flex-col border-r border-nav-border bg-nav text-nav-foreground transition-[width] duration-200 ${
       collapsed ? "w-[76px]" : "w-[240px]"
     }`}>
       {/* Logo */}
@@ -74,8 +74,8 @@ export default function Sidebar({ isSuperAdmin = false, isViewer = false }: { is
         <Image src="/litcal-logo.svg" alt="LitCal" width={36} height={36} className="size-9 shrink-0 rounded-lg shadow-sm ring-1 ring-black/5" priority />
         {!collapsed && (
           <div className="min-w-0 leading-tight">
-            <div className="text-[15px] font-extrabold tracking-[0.1em] text-slate-950 uppercase">LitCal</div>
-            <div className="text-[11px] font-medium text-slate-500">Litigation calendar</div>
+            <div className="text-[15px] font-extrabold tracking-[0.1em] text-nav-foreground uppercase">LitCal</div>
+            <div className="text-[11px] font-medium text-nav-muted-foreground">Litigation calendar</div>
           </div>
         )}
       </div>
@@ -85,7 +85,7 @@ export default function Sidebar({ isSuperAdmin = false, isViewer = false }: { is
           <button
             type="button"
             onClick={() => openAskLitCal()}
-            className="group mb-3 flex h-10 w-full items-center gap-3 rounded-lg bg-slate-950 px-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-800"
+            className="group mb-3 flex h-10 w-full items-center gap-3 rounded-lg bg-nav-accent px-3 text-sm font-semibold text-nav-foreground shadow-sm ring-1 ring-nav-border transition-colors hover:brightness-125"
           >
             <span className="grid size-7 place-items-center rounded-md bg-white/10 text-teal-100">
               <Sparkles className="size-4 shrink-0" />
@@ -97,7 +97,7 @@ export default function Sidebar({ isSuperAdmin = false, isViewer = false }: { is
           type="button"
           onClick={toggleCollapsed}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          className={`group relative flex h-9 w-full items-center rounded-lg border border-sidebar-border bg-white/70 text-sm font-medium text-slate-600 shadow-sm transition-colors hover:bg-white hover:text-slate-950 ${
+          className={`group relative flex h-9 w-full items-center rounded-lg border border-nav-border bg-nav-accent/50 text-sm font-medium text-nav-muted-foreground shadow-sm transition-colors hover:bg-nav-accent hover:text-nav-foreground ${
             collapsed ? "justify-center px-2" : "justify-between px-3"
           }`}
         >
@@ -126,9 +126,9 @@ export default function Sidebar({ isSuperAdmin = false, isViewer = false }: { is
           <button
             onClick={() => openAskLitCal()}
             aria-label="Ask LitCal"
-            className="group relative mt-3 flex items-center justify-center rounded-lg px-2 py-2.5 text-sm text-slate-600 transition-all hover:bg-white/65 hover:text-slate-950"
+            className="group relative mt-3 flex items-center justify-center rounded-lg px-2 py-2.5 text-sm text-nav-muted-foreground transition-all hover:bg-nav-accent hover:text-nav-foreground"
           >
-            <span className="grid size-7 place-items-center rounded-md text-slate-500 transition-colors group-hover:bg-teal-50 group-hover:text-teal-700">
+            <span className="grid size-7 place-items-center rounded-md text-nav-muted-foreground transition-colors group-hover:bg-white/10 group-hover:text-teal-200">
               <Sparkles className="size-4 shrink-0" />
             </span>
             <CollapsedTooltip label="Ask LitCal" />
@@ -161,8 +161,8 @@ export default function Sidebar({ isSuperAdmin = false, isViewer = false }: { is
                 collapsed ? "justify-center px-2 py-2.5" : "gap-2 px-3 py-2"
               } ${
                 pathname === "/admin/court-coverage"
-                  ? "bg-white text-slate-950 shadow-sm ring-1 ring-sidebar-border"
-                  : "text-slate-600 hover:text-slate-950 hover:bg-white/65"
+                  ? "bg-nav-accent text-nav-foreground shadow-sm ring-1 ring-nav-border"
+                  : "text-nav-muted-foreground hover:text-nav-foreground hover:bg-nav-accent"
               }`}
             >
               <ShieldAlert className="size-4 shrink-0" />
@@ -176,8 +176,8 @@ export default function Sidebar({ isSuperAdmin = false, isViewer = false }: { is
                 collapsed ? "justify-center px-2 py-2.5" : "gap-2 px-3 py-2"
               } ${
                 pathname.startsWith("/admin/court-rules")
-                  ? "bg-white text-slate-950 shadow-sm ring-1 ring-sidebar-border"
-                  : "text-slate-600 hover:text-slate-950 hover:bg-white/65"
+                  ? "bg-nav-accent text-nav-foreground shadow-sm ring-1 ring-nav-border"
+                  : "text-nav-muted-foreground hover:text-nav-foreground hover:bg-nav-accent"
               }`}
             >
               <Settings className="size-4 shrink-0" />
@@ -189,7 +189,7 @@ export default function Sidebar({ isSuperAdmin = false, isViewer = false }: { is
         <form action="/api/auth/sign-out" method="post" className="w-full">
           <button
             aria-label="Sign Out"
-            className={`group relative flex w-full items-center rounded-lg py-2 text-sm font-medium text-slate-600 hover:bg-white/70 hover:text-slate-950 ${
+            className={`group relative flex w-full items-center rounded-lg py-2 text-sm font-medium text-nav-muted-foreground hover:bg-nav-accent hover:text-nav-foreground ${
               collapsed ? "justify-center px-2" : "gap-2 px-3"
             }`}
           >
@@ -220,12 +220,12 @@ function NavLink({ href, label, icon: Icon, active, collapsed }: NavLinkProps) {
         collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5"
       } ${
         active
-          ? "bg-white text-slate-950 shadow-sm ring-1 ring-sidebar-border"
-          : "text-slate-600 hover:bg-white/65 hover:text-slate-950"
+          ? "bg-nav-accent text-nav-foreground shadow-sm ring-1 ring-nav-border"
+          : "text-nav-muted-foreground hover:bg-nav-accent hover:text-nav-foreground"
       }`}
     >
       <span className={`grid size-7 place-items-center rounded-md transition-colors ${
-        active ? "bg-teal-50 text-teal-700" : "text-slate-500 group-hover:bg-slate-100 group-hover:text-slate-800"
+        active ? "bg-white/10 text-teal-200" : "text-nav-muted-foreground group-hover:bg-white/10 group-hover:text-nav-foreground"
       }`}>
         <Icon className="size-4 shrink-0" />
       </span>
@@ -238,7 +238,7 @@ function NavLink({ href, label, icon: Icon, active, collapsed }: NavLinkProps) {
 function SectionLabel({ children }: { children: ReactNode }) {
   return (
     <div className="mb-1 mt-5 px-3">
-      <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+      <span className="text-[10px] font-bold uppercase tracking-widest text-nav-muted-foreground">
         {children}
       </span>
     </div>

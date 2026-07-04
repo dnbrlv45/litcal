@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import type { CalEvent } from "@/lib/google-calendar";
-import { EVENT_TYPE_COLORS } from "@/lib/google-calendar";
+import { eventColors } from "@/lib/google-calendar";
 import { layoutSpanningEvents } from "@/lib/multi-day-layout";
 
 const DAYS_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -150,7 +150,7 @@ export default function MonthView({ date, today, events, onCellClick, onSelectDa
                     )}
                     <div aria-hidden="true" className="shrink-0" style={{ height: spanHeight }} />
                     {dayEvents.slice(0, 2).map((ev) => {
-                      const colors = EVENT_TYPE_COLORS[ev.eventType ?? "OTHER"];
+                      const colors = eventColors(ev.eventType, ev.subtype);
                       return (
                         <div
                           key={ev.id}
@@ -184,7 +184,7 @@ export default function MonthView({ date, today, events, onCellClick, onSelectDa
 
               {/* Spanning event bars — absolute, above day content */}
               {spanLayout.filter((item) => item.row < MAX_VISIBLE_SPAN_ROWS).map(({ event, colStart, colSpan, row, continuesLeft, continuesRight }) => {
-                const colors = EVENT_TYPE_COLORS[event.eventType ?? "OTHER"];
+                const colors = eventColors(event.eventType, event.subtype);
                 return (
                   <button
                     key={event.id}
@@ -243,7 +243,7 @@ export default function MonthView({ date, today, events, onCellClick, onSelectDa
             </div>
             <div className="flex flex-col gap-1 p-2 max-h-64 overflow-y-auto">
               {popoverEvents.map((ev) => {
-                const colors = EVENT_TYPE_COLORS[ev.eventType ?? "OTHER"];
+                const colors = eventColors(ev.eventType, ev.subtype);
                 return (
                   <button
                     key={ev.id}

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import type { CalEvent } from "@/lib/google-calendar";
-import { EVENT_TYPE_COLORS } from "@/lib/google-calendar";
+import { eventColors } from "@/lib/google-calendar";
 import { layoutDayEvents } from "@/lib/calendar-layout";
 import { layoutSpanningEvents } from "@/lib/multi-day-layout";
 
@@ -114,7 +114,7 @@ export default function WeekView({ date, today, events, onCellClick, onSelectDay
 
           {/* Spanning event bars */}
           {spanLayout.map(({ event, colStart, colSpan, row, continuesLeft, continuesRight }) => {
-            const colors = EVENT_TYPE_COLORS[event.eventType ?? "OTHER"];
+            const colors = eventColors(event.eventType, event.subtype);
             return (
               <button
                 key={event.id}
@@ -181,7 +181,7 @@ export default function WeekView({ date, today, events, onCellClick, onSelectDay
 
                 {/* Events */}
                 {dayEvents.map((ev) => {
-                  const colors = EVENT_TYPE_COLORS[ev.eventType ?? "OTHER"];
+                  const colors = eventColors(ev.eventType, ev.subtype);
                   const colWidth = 100 / ev.numCols;
                   return (
                     <div

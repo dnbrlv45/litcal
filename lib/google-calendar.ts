@@ -35,6 +35,8 @@ export interface CalEvent {
   end: Date;
   allDay: boolean;
   eventType: EventType;
+  subtype?: string | null;
+  subtypeReason?: string | null;
   location?: string;
   department?: string;
   caseId?: string;
@@ -59,19 +61,49 @@ export interface CalEvent {
   requestNotes?: string | null;
 }
 
-export const EVENT_TYPE_COLORS: Record<EventType, { bg: string; text: string; dot: string; border: string; ring: string }> = {
-  HEARING:                    { bg: "bg-orange-50",  text: "text-orange-800",  dot: "bg-orange-500",  border: "border-orange-300",  ring: "ring-orange-100" },
-  DEPOSITION:                 { bg: "bg-cyan-50",    text: "text-cyan-800",    dot: "bg-cyan-500",    border: "border-cyan-300",    ring: "ring-cyan-100" },
-  TRIAL:                      { bg: "bg-emerald-50", text: "text-emerald-800", dot: "bg-emerald-500", border: "border-emerald-300", ring: "ring-emerald-100" },
-  CONFERENCE:                 { bg: "bg-blue-50",    text: "text-blue-800",    dot: "bg-blue-500",    border: "border-blue-300",    ring: "ring-blue-100" },
-  MEETING:                    { bg: "bg-cyan-50",    text: "text-cyan-800",    dot: "bg-cyan-500",    border: "border-cyan-300",    ring: "ring-cyan-100" },
-  MEDIATION:                  { bg: "bg-violet-50",  text: "text-violet-800",  dot: "bg-violet-500",  border: "border-violet-300",  ring: "ring-violet-100" },
-  COURT_CALL:                 { bg: "bg-sky-50",     text: "text-sky-800",     dot: "bg-sky-500",     border: "border-sky-300",     ring: "ring-sky-100" },
-  CASE_MANAGEMENT_CONFERENCE: { bg: "bg-indigo-50",  text: "text-indigo-800",  dot: "bg-indigo-500",  border: "border-indigo-300",  ring: "ring-indigo-100" },
-  DEADLINE:                   { bg: "bg-rose-50",    text: "text-rose-800",    dot: "bg-rose-500",    border: "border-rose-300",    ring: "ring-rose-100" },
-  REMINDER:                   { bg: "bg-amber-50",   text: "text-amber-800",   dot: "bg-amber-500",   border: "border-amber-300",   ring: "ring-amber-100" },
-  OTHER:                      { bg: "bg-slate-50",   text: "text-slate-700",   dot: "bg-slate-400",   border: "border-slate-300",   ring: "ring-slate-100" },
+export type EventColorTokens = { bg: string; text: string; dot: string; border: string; ring: string };
+
+// Solid, muted jewel-tone fills from the design system (see DESIGN.md and the
+// --event-* tokens in globals.css). Every view renders events as filled chips,
+// so text is white (--event-foreground) on the fill.
+function fill(token: string): EventColorTokens {
+  return {
+    bg: `bg-event-${token}`,
+    text: "text-event-foreground",
+    dot: `bg-event-${token}`,
+    border: "border-transparent",
+    ring: "ring-black/5",
+  };
+}
+
+export const EVENT_TYPE_COLORS: Record<EventType, EventColorTokens> = {
+  HEARING:                    fill("hearing"),
+  DEPOSITION:                 fill("deposition"),
+  TRIAL:                      fill("trial"),
+  CONFERENCE:                 fill("cmc"),
+  MEETING:                    fill("other"),
+  MEDIATION:                  fill("mediation"),
+  COURT_CALL:                 fill("cmc"),
+  CASE_MANAGEMENT_CONFERENCE: fill("cmc"),
+  DEADLINE:                   fill("osc"),
+  REMINDER:                   fill("tsc"),
+  OTHER:                      fill("other"),
 };
+
+// Hearing/conference subtypes carry their own color so CMC (blue), TSC (gold),
+// and OSC (red) read as distinct events even though they share a base type.
+const SUBTYPE_COLORS: Record<string, EventColorTokens> = {
+  CMC: fill("cmc"),
+  "Further CMC": fill("cmc"),
+  TSC: fill("tsc"),
+  OSC: fill("osc"),
+};
+
+/** Resolve chip colors, preferring the subtype (CMC/TSC/OSC) over the base type. */
+export function eventColors(eventType?: EventType | null, subtype?: string | null): EventColorTokens {
+  if (subtype && SUBTYPE_COLORS[subtype]) return SUBTYPE_COLORS[subtype];
+  return EVENT_TYPE_COLORS[eventType ?? "OTHER"] ?? EVENT_TYPE_COLORS.OTHER;
+}
 
 export function mapGoogleEvent(e: GoogleCalEvent): CalEvent {
   const allDay = !e.start.dateTime;

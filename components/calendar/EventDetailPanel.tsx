@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import Link from "next/link";
 import type { CalEvent, EventType, ConflictDetail } from "@/lib/google-calendar";
-import { EVENT_TYPE_COLORS } from "@/lib/google-calendar";
+import { eventColors } from "@/lib/google-calendar";
 import { eventSupportsRemoteAppearance } from "@/lib/google-calendar-payload";
 
 const EVENT_TYPE_LABELS: Record<EventType, string> = {
@@ -245,7 +245,7 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
 
   if (!event) return null;
 
-  const colors = EVENT_TYPE_COLORS[event.eventType];
+  const colors = eventColors(event.eventType, event.subtype);
 
   return (
     <div className="ml-5 w-[360px] shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col">

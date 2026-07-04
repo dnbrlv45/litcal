@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import type { CalEvent } from "@/lib/google-calendar";
-import { EVENT_TYPE_COLORS } from "@/lib/google-calendar";
+import { eventColors } from "@/lib/google-calendar";
 import { layoutDayEvents } from "@/lib/calendar-layout";
 
 const ROW_HEIGHT = 64;
@@ -91,7 +91,7 @@ export default function DayView({ date, today, events, onCellClick, onEventClick
           {allDayEvents.length === 0 ? (
             <span className="text-xs text-slate-400">No all-day events</span>
           ) : allDayEvents.map((ev) => {
-            const colors = EVENT_TYPE_COLORS[ev.eventType ?? "OTHER"];
+            const colors = eventColors(ev.eventType, ev.subtype);
             return (
               <button
                 key={ev.id}
@@ -141,7 +141,7 @@ export default function DayView({ date, today, events, onCellClick, onEventClick
 
             {/* Events */}
             {dayEvents.map((ev) => {
-              const colors = EVENT_TYPE_COLORS[ev.eventType ?? "OTHER"];
+              const colors = eventColors(ev.eventType, ev.subtype);
               const colWidth = 100 / ev.numCols;
               return (
                 <div
