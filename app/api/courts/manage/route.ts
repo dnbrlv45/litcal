@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
-import { getCurrentWorkspace, canManageWorkspace } from "@/lib/workspaces";
 import { prisma } from "@/lib/prisma";
 
+// Courts are a global reference table shared by every workspace, so only a
+// super admin may mutate them — not per-workspace admins.
 async function requireAdmin() {
   const user = await requireUser();
   if (!user) return { user: null, error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
-  const { membership } = await getCurrentWorkspace(user.id);
-  if (!membership || !canManageWorkspace(membership.role))
+  if (!user.isSuperAdmin)
     return { user: null, error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   return { user, error: null };
 }

@@ -2,13 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { google } from "googleapis";
 import { prisma } from "@/lib/prisma";
 import { makeOAuth2Client, getInboxRefreshToken } from "@/lib/ai/processGmailMessages";
+import { isAuthorizedCron } from "@/lib/cron-auth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
 const TOPIC_NAME = process.env.GMAIL_PUBSUB_TOPIC ?? "projects/litcal-ai/topics/gmail-inbox";
 
-export async function GET(_req: NextRequest) {
+export async function GET(req: NextRequest) {
+  if (!isAuthorizedCron(req)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const refreshToken = await getInboxRefreshToken();
   if (!refreshToken) {
     return NextResponse.json({ error: "No Gmail refresh token" }, { status: 400 });

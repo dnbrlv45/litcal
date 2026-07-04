@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { sendLitCalEmailWithAttachment } from "@/lib/google-mail";
 import { getEventDisplayName, formatCsvDate, formatCsvTime } from "@/lib/event-display";
 import { buildXlsx, type CalendarDay } from "@/lib/excel";
+import { isAuthorizedCron } from "@/lib/cron-auth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -152,7 +153,11 @@ function buildEmailText(recipientName: string, weekLabel: string, dayGroups: Day
   return lines.join("\n");
 }
 
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
+  if (!isAuthorizedCron(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const { start, end, label: weekLabel } = nextWeekBounds();
 
   const workspaces = await prisma.workspace.findMany({

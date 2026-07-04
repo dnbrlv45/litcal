@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { google, type gmail_v1 } from "googleapis";
+import { OAuth2Client } from "google-auth-library";
 import { prisma } from "@/lib/prisma";
 import { makeOAuth2Client, getInboxRefreshToken, processGmailMessages } from "@/lib/ai/processGmailMessages";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-function verifyRequest(req: NextRequest): boolean {
+const oidcClient = new OAuth2Client();
+
+async function verifyRequest(req: NextRequest): Promise<boolean> {
   const secret = process.env.GMAIL_WEBHOOK_SECRET;
 
   // Check secret token in query param (simple, no service account needed)
@@ -15,23 +18,29 @@ function verifyRequest(req: NextRequest): boolean {
     if (searchParams.get("secret") === secret) return true;
   }
 
-  // Fallback: accept Google-signed JWT (for authenticated push subscriptions)
+  // Fallback: verify a genuinely Google-signed OIDC token (authenticated push).
+  // The signature MUST be verified against Google's public certs — decoding the
+  // payload alone would let anyone forge an `iss` claim and bypass auth.
   const authHeader = req.headers.get("authorization");
   if (authHeader?.startsWith("Bearer ")) {
     try {
-      const [, payloadB64] = authHeader.slice(7).split(".");
-      const payload = JSON.parse(Buffer.from(payloadB64, "base64").toString("utf-8"));
-      if (payload.iss !== "https://accounts.google.com") return false;
-      if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return false;
-      return true;
-    } catch { return false; }
+      const audience = process.env.GMAIL_PUBSUB_AUDIENCE;
+      const ticket = await oidcClient.verifyIdToken({
+        idToken: authHeader.slice(7),
+        ...(audience ? { audience } : {}),
+      });
+      const payload = ticket.getPayload();
+      return payload?.iss === "https://accounts.google.com" || payload?.iss === "accounts.google.com";
+    } catch {
+      return false;
+    }
   }
 
   return false;
 }
 
 export async function POST(req: NextRequest) {
-  if (!verifyRequest(req)) {
+  if (!(await verifyRequest(req))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
