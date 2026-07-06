@@ -95,7 +95,7 @@ async function handleAskLitCalRequest(
   if (!question?.trim()) return NextResponse.json({ error: "Question is required" }, { status: 400 });
   if (question.length > 1000) return NextResponse.json({ error: "Question too long (max 1000 characters)" }, { status: 400 });
 
-  // Rate limit: 10 per minute
+  // Rate limit: 25 requests per minute per user
   const oneMinuteAgo = new Date(Date.now() - 60_000);
   const recentCount = await prisma.askLitCalLog.count({
     where: { userId: user.id, createdAt: { gte: oneMinuteAgo } },
@@ -608,7 +608,7 @@ async function handleAskLitCalRequest(
       if (attorneyId && !intent.allDay) {
         const startDate = new Date(`${intent.date}T${intent.startTime}:00-07:00`);
         const endDate = new Date(`${intent.date}T${effectiveEndTime}:00-07:00`);
-        const found = await detectConflicts(attorneyId, startDate, endDate);
+        const found = await detectConflicts(attorneyId, startDate, endDate, undefined, resolvedCase.id);
         conflicts = found.map((c) => ({
           eventId: c.eventId,
           title: c.title,
