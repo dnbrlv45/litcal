@@ -15,10 +15,10 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ShieldAlert,
-  Inbox,
   Sparkles,
 } from "lucide-react";
 import InboxNavItem from "./InboxNavItem";
+import AIInboxNavItem from "./AIInboxNavItem";
 import DeadlinesNavItem from "./DeadlinesNavItem";
 import { useAskLitCal } from "@/components/ask-litcal/AskLitCalContext";
 
@@ -26,7 +26,6 @@ const PRIMARY_NAV_ITEMS = [
   { label: "Calendar",  href: "/",            icon: CalendarDays },
   { label: "Cases",     href: "/cases",        icon: Briefcase },
   { label: "Tasks",     href: "/tasks",        icon: CheckSquare },
-  { label: "AI Inbox",  href: "/ai-inbox",     icon: Inbox },
 ];
 
 const WORKSPACE_NAV_ITEMS = [
@@ -109,7 +108,7 @@ export default function Sidebar({ isSuperAdmin = false, isViewer = false }: { is
 
       {/* Nav */}
       <nav className={`flex min-h-0 flex-1 flex-col gap-1 ${collapsed ? "overflow-visible px-3" : "overflow-y-auto px-4"}`}>
-        {PRIMARY_NAV_ITEMS.filter(({ href }) => !(isViewer && href === "/ai-inbox")).map(({ label, href, icon: Icon }) => (
+        {PRIMARY_NAV_ITEMS.map(({ label, href, icon: Icon }) => (
           <NavLink
             key={href}
             href={href}
@@ -119,6 +118,7 @@ export default function Sidebar({ isSuperAdmin = false, isViewer = false }: { is
             collapsed={collapsed}
           />
         ))}
+        {!isViewer && <AIInboxNavItem collapsed={collapsed} />}
         <InboxNavItem collapsed={collapsed} />
         <DeadlinesNavItem collapsed={collapsed} />
 

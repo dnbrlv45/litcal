@@ -12,17 +12,20 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status");
+  const countsOnly = searchParams.get("countsOnly") === "1";
 
   const baseWhere = { workspaceId: workspace.id };
   const [suggestions, counts] = await Promise.all([
-    prisma.aISuggestion.findMany({
-      where: {
-        ...baseWhere,
-        ...(status ? { status } : {}),
-      },
-      orderBy: { createdAt: "desc" },
-      take: 100,
-    }),
+    countsOnly
+      ? Promise.resolve([])
+      : prisma.aISuggestion.findMany({
+          where: {
+            ...baseWhere,
+            ...(status ? { status } : {}),
+          },
+          orderBy: { createdAt: "desc" },
+          take: 100,
+        }),
     prisma.aISuggestion.groupBy({
       by: ["status"],
       where: baseWhere,

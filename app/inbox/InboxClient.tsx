@@ -107,7 +107,7 @@ export default function InboxClient() {
   const unread = notifications.filter((n) => !n.read).length;
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 max-w-3xl mx-auto w-full">
+    <div className="flex-1 overflow-y-auto p-6 w-full">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <Bell className="w-5 h-5 text-slate-600" />
