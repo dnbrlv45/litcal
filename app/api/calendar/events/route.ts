@@ -318,7 +318,7 @@ export async function POST(request: NextRequest) {
   }
 
   const preConflicts = inheritedAttorneyId
-    ? await detectConflicts(inheritedAttorneyId, startDate, endDate)
+    ? await detectConflicts(inheritedAttorneyId, startDate, endDate, undefined, caseId || null)
     : [];
 
   // Create the event in Supabase (source of truth)

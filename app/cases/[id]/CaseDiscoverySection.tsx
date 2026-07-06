@@ -52,7 +52,7 @@ interface DiscoveryItem {
   originalDueDate: string;
   currentDueDate: string;
   status: DiscoveryStatus;
-  progressStatus: "NOT_STARTED" | "QUESTIONNAIRE_SENT" | "IN_PROGRESS";
+  progressStatus: "NOT_STARTED" | "QUESTIONNAIRE_SENT" | "IN_PROGRESS" | "IN_REVIEW";
   assignedToId: string | null;
   assignedTo: TeamMember | null;
   notes: string | null;
@@ -64,12 +64,14 @@ const PROGRESS_LABELS: Record<string, string> = {
   NOT_STARTED: "Not Started",
   QUESTIONNAIRE_SENT: "Questionnaire Sent",
   IN_PROGRESS: "In Progress",
+  IN_REVIEW: "In Review",
 };
 
 const PROGRESS_COLORS: Record<string, string> = {
   NOT_STARTED: "bg-slate-100 text-slate-600",
   QUESTIONNAIRE_SENT: "bg-purple-100 text-purple-700",
   IN_PROGRESS: "bg-blue-100 text-blue-700",
+  IN_REVIEW: "bg-amber-100 text-amber-700",
 };
 
 

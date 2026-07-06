@@ -12,12 +12,17 @@ export interface ConflictInfo {
  * Returns events assigned to the same attorney that overlap [start, end).
  * Touching boundaries (end === otherStart) are NOT considered conflicts.
  * Cancelled and completed events are excluded.
+ *
+ * Overlapping events on the same case (`sameCaseId`) are not conflicts: an
+ * attorney can appear at, say, a CMC and an OSC set on the same case at the
+ * same time in one appearance, so those should not be flagged.
  */
 export async function detectConflicts(
   attorneyId: string,
   start: Date,
   end: Date,
   excludeEventId?: string,
+  sameCaseId?: string | null,
 ): Promise<ConflictInfo[]> {
   const overlapping = await prisma.event.findMany({
     where: {
@@ -27,6 +32,7 @@ export async function detectConflicts(
       startTime: { lt: end },
       endTime: { gt: start },
       ...(excludeEventId ? { id: { not: excludeEventId } } : {}),
+      ...(sameCaseId ? { NOT: { caseId: sameCaseId } } : {}),
     },
     select: {
       id: true,
@@ -68,6 +74,7 @@ export async function getConflictedEventIds(
     select: {
       id: true,
       assignedAttorneyId: true,
+      caseId: true,
       startTime: true,
       endTime: true,
     },
@@ -92,6 +99,9 @@ export async function getConflictedEventIds(
         const b = attorneyEvents[j];
         // If b starts at or after a ends, no more overlaps possible (sorted)
         if (b.startTime >= a.endTime) break;
+        // Same-case overlaps aren't conflicts — one appearance covers both
+        // (e.g. a CMC and OSC on the same case at the same time).
+        if (a.caseId && b.caseId && a.caseId === b.caseId) continue;
         // b.startTime < a.endTime and b.endTime > a.startTime (guaranteed since b starts after a)
         conflicted.add(a.id);
         conflicted.add(b.id);

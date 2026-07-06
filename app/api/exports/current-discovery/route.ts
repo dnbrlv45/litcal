@@ -27,6 +27,7 @@ const PROGRESS_LABELS: Record<string, string> = {
   NOT_STARTED: "Not Started",
   QUESTIONNAIRE_SENT: "Questionnaire Sent",
   IN_PROGRESS: "In Progress",
+  IN_REVIEW: "In Review",
 };
 
 const ROW_COLORS: Record<string, string> = {

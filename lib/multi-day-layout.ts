@@ -24,19 +24,24 @@ function isSameDay(a: Date, b: Date) {
 /**
  * Compute spanning layout for all-day / multi-day events in a 7-day week.
  * weekDays must be an array of 7 Date objects (each at midnight).
+ *
+ * By default only multi-day all-day events are laid out — callers like the
+ * month grid render single-day all-day events inline in each day cell. Pass
+ * `includeSingleDay` for views (e.g. the week all-day banner) that have no
+ * inline slot and need every all-day event placed as a bar.
  */
 export function layoutSpanningEvents(
   events: CalEvent[],
   weekDays: Date[],
+  { includeSingleDay = false }: { includeSingleDay?: boolean } = {},
 ): SpanLayout[] {
   const weekStart = dayStart(weekDays[0]);
   const weekEnd   = new Date(weekDays[6]); weekEnd.setHours(23, 59, 59, 999);
 
-  // Include multi-day all-day events that overlap with this week
-  // Single-day all-day events are rendered inline like regular events
   const relevant = events
     .filter((e) => {
       if (!e.allDay || e.start > weekEnd || e.end < weekStart) return false;
+      if (includeSingleDay) return true;
       const sameDay = e.start.getFullYear() === e.end.getFullYear() &&
         e.start.getMonth() === e.end.getMonth() &&
         e.start.getDate() === e.end.getDate();

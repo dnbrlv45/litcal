@@ -54,8 +54,9 @@ export default function WeekView({ date, today, events, onCellClick, onSelectDay
   const scrollRef = useRef<HTMLDivElement>(null);
   const days = getWeekDays(date);
   const allDayEvents = events.filter((e) => e.allDay);
-  const spanLayout = layoutSpanningEvents(allDayEvents, days);
-  const spanRows = spanLayout.length > 0 ? Math.max(...spanLayout.map((s) => s.row)) + 1 : 1;
+  const spanLayout = layoutSpanningEvents(allDayEvents, days, { includeSingleDay: true });
+  const hasAllDay = spanLayout.length > 0;
+  const spanRows = hasAllDay ? Math.max(...spanLayout.map((s) => s.row)) + 1 : 1;
   const SPAN_ROW_H = 28; // px per stacking row
 
   useEffect(() => {
@@ -95,22 +96,18 @@ export default function WeekView({ date, today, events, onCellClick, onSelectDay
         })}
       </div>
 
-      {/* All-day / multi-day row */}
+      {/* All-day / multi-day row — only rendered when the week actually has all-day events */}
+      {hasAllDay && (
       <div className="flex shrink-0 border-b border-slate-200 bg-white">
         <div className="w-16 shrink-0 border-r border-slate-100 px-2 py-2 text-right text-xs text-slate-500 self-center">all-day</div>
-        {/* 7-column grid for spanning events */}
-        <div
-          className="flex-1 relative"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(7, 1fr)",
-            minHeight: spanRows * SPAN_ROW_H + 8,
-          }}
-        >
-          {/* Column border lines */}
-          {days.map((_, i) => (
-            <div key={i} className={`${i > 0 ? "border-l border-slate-100" : ""}`} />
-          ))}
+        {/* Day columns use the same flex layout as the header/body so the
+            vertical lines line up exactly across all three rows. */}
+        <div className="flex-1 relative" style={{ minHeight: spanRows * SPAN_ROW_H + 8 }}>
+          <div className="absolute inset-0 flex">
+            {days.map((_, i) => (
+              <div key={i} className="flex-1 border-l border-slate-100" />
+            ))}
+          </div>
 
           {/* Spanning event bars */}
           {spanLayout.map(({ event, colStart, colSpan, row, continuesLeft, continuesRight }) => {
@@ -143,6 +140,7 @@ export default function WeekView({ date, today, events, onCellClick, onSelectDay
           })}
         </div>
       </div>
+      )}
 
       {/* Scrollable body */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto">

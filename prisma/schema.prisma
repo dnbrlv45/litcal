@@ -799,6 +799,7 @@ enum DiscoveryProgressStatus {
   NOT_STARTED
   QUESTIONNAIRE_SENT
   IN_PROGRESS
+  IN_REVIEW
 }
 
 enum ExtensionAppliesTo {

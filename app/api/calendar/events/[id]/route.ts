@@ -39,7 +39,7 @@ export async function GET(
 
   const supportsRemoteAppearance = eventSupportsRemoteAppearance(event.eventType);
   const conflicts = event.assignedAttorney
-    ? await detectConflicts(event.assignedAttorney.id, event.startTime, event.endTime, event.id)
+    ? await detectConflicts(event.assignedAttorney.id, event.startTime, event.endTime, event.id, event.caseId)
     : [];
 
   return NextResponse.json({
@@ -266,7 +266,7 @@ export async function PATCH(
 
   // Check conflicts against the saved state (non-blocking)
   const conflicts = updated.assignedAttorney
-    ? await detectConflicts(updated.assignedAttorney.id, newStart, newEnd, id)
+    ? await detectConflicts(updated.assignedAttorney.id, newStart, newEnd, id, updated.caseId)
     : [];
 
   // Timeline: event edited
