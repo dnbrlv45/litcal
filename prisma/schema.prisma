@@ -824,6 +824,9 @@ model DiscoveryItem {
   status               DiscoveryStatus    @default(AWAITING_RESPONSE)
   progressStatus       DiscoveryProgressStatus @default(NOT_STARTED)
   assignedToId         String?
+  // Off-system assignee (e.g. discovery staff who are not LitCal users).
+  // Mutually exclusive with assignedToId at the application layer.
+  externalAssignee     String?
   notes                String?
 
   linkedEventId        String?            @unique

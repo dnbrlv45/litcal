@@ -47,6 +47,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     action?: string;
     notes?: string;
     assignedToId?: string | null;
+    externalAssignee?: string | null;
     progressStatus?: string;
   };
 
@@ -55,7 +56,16 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   } else {
     const data: Record<string, unknown> = {};
     if (body.notes !== undefined) data.notes = body.notes;
-    if (body.assignedToId !== undefined) data.assignedToId = body.assignedToId || null;
+    // assignedToId (a LitCal user) and externalAssignee (off-system name) are
+    // mutually exclusive — setting either clears the other.
+    if (body.assignedToId !== undefined) {
+      data.assignedToId = body.assignedToId || null;
+      if (body.assignedToId) data.externalAssignee = null;
+    }
+    if (body.externalAssignee !== undefined) {
+      data.externalAssignee = body.externalAssignee || null;
+      if (body.externalAssignee) data.assignedToId = null;
+    }
     if (body.progressStatus !== undefined) data.progressStatus = body.progressStatus;
     if (Object.keys(data).length > 0) {
       await prisma.discoveryItem.update({ where: { id: discoveryId }, data });

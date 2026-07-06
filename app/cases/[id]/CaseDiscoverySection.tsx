@@ -55,6 +55,7 @@ interface DiscoveryItem {
   progressStatus: "NOT_STARTED" | "QUESTIONNAIRE_SENT" | "IN_PROGRESS" | "IN_REVIEW";
   assignedToId: string | null;
   assignedTo: TeamMember | null;
+  externalAssignee: string | null;
   notes: string | null;
   extensions: Extension[];
   createdAt: string;
@@ -73,6 +74,10 @@ const PROGRESS_COLORS: Record<string, string> = {
   IN_PROGRESS: "bg-blue-100 text-blue-700",
   IN_REVIEW: "bg-amber-100 text-amber-700",
 };
+
+// Discovery staff who work cases but are not LitCal users. Selecting one stores
+// their name in DiscoveryItem.externalAssignee (assignedToId stays null).
+const EXTERNAL_ASSIGNEES = ["Agustin Spangaro"];
 
 
 function fmt(dateStr: string) {
@@ -427,9 +432,11 @@ function DiscoveryCard({ item, caseId, members, onUpdate, onDelete }: {
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
               {DISCOVERY_DIRECTION_LABELS[item.direction]}
-              {item.assignedTo && (
+              {item.assignedTo ? (
                 <span className="ml-1.5">· {[item.assignedTo.firstName, item.assignedTo.lastName].filter(Boolean).join(" ")}</span>
-              )}
+              ) : item.externalAssignee ? (
+                <span className="ml-1.5">· {item.externalAssignee}</span>
+              ) : null}
             </p>
           </div>
           <div className="text-right shrink-0">
@@ -473,8 +480,15 @@ function DiscoveryCard({ item, caseId, members, onUpdate, onDelete }: {
                 <div>
                   <p className="text-xs text-slate-400 font-medium uppercase tracking-wide mb-1">Assigned To</p>
                   <select
-                    value={item.assignedToId ?? ""}
-                    onChange={(e) => patchField({ assignedToId: e.target.value || null })}
+                    value={item.assignedToId ?? (item.externalAssignee ? `ext:${item.externalAssignee}` : "")}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v.startsWith("ext:")) {
+                        patchField({ assignedToId: null, externalAssignee: v.slice(4) });
+                      } else {
+                        patchField({ assignedToId: v || null, externalAssignee: null });
+                      }
+                    }}
                     className="w-full h-8 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700"
                   >
                     <option value="">Unassigned</option>
@@ -483,6 +497,11 @@ function DiscoveryCard({ item, caseId, members, onUpdate, onDelete }: {
                         {[m.firstName, m.lastName].filter(Boolean).join(" ")}
                       </option>
                     ))}
+                    <optgroup label="Discovery staff (not in program)">
+                      {EXTERNAL_ASSIGNEES.map((name) => (
+                        <option key={name} value={`ext:${name}`}>{name}</option>
+                      ))}
+                    </optgroup>
                   </select>
                 </div>
                 <div>
