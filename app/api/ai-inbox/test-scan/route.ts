@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getCurrentWorkspace } from "@/lib/workspaces";
 import { extractEmailSuggestion, type EmailSuggestionResult } from "@/lib/ai/extractEmailSuggestion";
+import { rateLimit } from "@/lib/rate-limit";
 import { Prisma } from "@prisma/client";
 import crypto from "crypto";
 
@@ -90,6 +91,11 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
 export async function POST() {
   const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Cap AI/Gmail cost: 10 scans/minute per user across test-scan + rescan.
+  if (!rateLimit(`inbox-scan:${user.id}`, 10, 60_000)) {
+    return NextResponse.json({ error: "Too many scans. Please wait a moment." }, { status: 429 });
+  }
 
   const { workspace } = await getCurrentWorkspace(user.id);
   if (!workspace) return NextResponse.json({ error: "No workspace found" }, { status: 400 });
