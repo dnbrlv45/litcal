@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getAccessToken, createGoogleEvent, createLitCalCalendar } from "@/lib/google-calendar";
+import { getAccessToken, createGoogleEvent, createLitCalCalendar, GoogleReauthRequiredError } from "@/lib/google-calendar";
 import { buildGoogleEventPayload, getGoogleColorId } from "@/lib/google-calendar-payload";
-import { getCurrentWorkspace, canManageWorkspace } from "@/lib/workspaces";
+import { getCurrentWorkspace } from "@/lib/workspaces";
 
 function googleAllDayEnd(date: Date): string {
   const end = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
@@ -52,16 +52,32 @@ export async function POST() {
   const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  // Any workspace member can sync — it only pushes to the caller's own
+  // connected Google Calendar and only reads events they can already see.
   const { workspace, membership } = await getCurrentWorkspace(user.id);
-  if (!workspace) return NextResponse.json({ error: "No workspace" }, { status: 403 });
-  if (!canManageWorkspace(membership?.role ?? "")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!workspace || !membership) return NextResponse.json({ error: "No workspace" }, { status: 403 });
 
   const connection = await prisma.userCalendarConnection.findFirst({
     where: { userId: user.id, provider: "GOOGLE", isActive: true },
   });
   if (!connection) return NextResponse.json({ error: "Google Calendar not connected" }, { status: 400 });
 
-  const accessToken = await getAccessToken(connection.refreshToken);
+  let accessToken: string;
+  try {
+    accessToken = await getAccessToken(connection.refreshToken);
+  } catch (err) {
+    if (err instanceof GoogleReauthRequiredError) {
+      await prisma.userCalendarConnection.update({
+        where: { id: connection.id },
+        data: { isActive: false },
+      });
+      return NextResponse.json(
+        { error: "google_reconnect_required", message: "Your Google Calendar connection expired — reconnect it and try again." },
+        { status: 409 },
+      );
+    }
+    throw err;
+  }
 
   // Resolve/recreate LitCal calendar
   let litCalId = connection.providerCalendarId;
@@ -205,13 +221,19 @@ export async function POST() {
     }
   }
 
-  // Sync tasks with due dates to Google Calendar
+  // Sync tasks with due dates to Google Calendar — tracked per user, so a
+  // task already pushed to one member's calendar still backfills for others.
+  const syncedTaskIdsForUser = await prisma.userTaskGoogleSync.findMany({
+    where: { userId: user.id },
+    select: { taskId: true },
+  });
+  const syncedTaskIdSet = new Set(syncedTaskIdsForUser.map((s) => s.taskId));
   const unsyncedTasks = await prisma.task.findMany({
     where: {
       workspaceId: workspace.id,
       dueDate: { not: null },
-      googleEventId: null,
       status: { not: "DONE" },
+      ...(syncedTaskIdSet.size > 0 ? { id: { notIn: [...syncedTaskIdSet] } } : {}),
     },
     include: {
       caseRef: { select: { title: true } },
@@ -242,9 +264,21 @@ export async function POST() {
         litCalId
       );
 
-      await prisma.task.update({
-        where: { id: task.id },
-        data: { googleEventId: gEvent.id, googleCalendarId: litCalId },
+      await prisma.userTaskGoogleSync.upsert({
+        where: { taskId_userId: { taskId: task.id, userId: user.id } },
+        create: {
+          taskId: task.id,
+          userId: user.id,
+          googleEventId: gEvent.id,
+          googleCalendarId: litCalId,
+          syncStatus: "SYNCED",
+        },
+        update: {
+          googleEventId: gEvent.id,
+          googleCalendarId: litCalId,
+          syncStatus: "SYNCED",
+          lastError: null,
+        },
       });
       tasksSynced++;
     } catch (err) {

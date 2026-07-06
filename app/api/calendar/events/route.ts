@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getAccessToken, createGoogleEvent, createLitCalCalendar } from "@/lib/google-calendar";
+import { getAccessToken, createGoogleEvent, createLitCalCalendar, GoogleReauthRequiredError } from "@/lib/google-calendar";
 import type { GoogleCalEvent } from "@/lib/google-calendar";
 import { buildGoogleEventPayload, eventSupportsRemoteAppearance, getGoogleColorId } from "@/lib/google-calendar-payload";
 import { addTimelineEntry } from "@/lib/case-timeline";
@@ -649,8 +649,16 @@ export async function POST(request: NextRequest) {
 
       googlePush = { ok: true };
     } catch (err) {
-      console.error("Google Calendar push failed (event saved to DB):", err);
-      googlePush = { ok: false, error: String(err) };
+      if (err instanceof GoogleReauthRequiredError) {
+        await prisma.userCalendarConnection.update({
+          where: { id: connection.id },
+          data: { isActive: false },
+        });
+        googlePush = { ok: false, error: "Google Calendar connection expired — reconnect it in Settings" };
+      } else {
+        console.error("Google Calendar push failed (event saved to DB):", err);
+        googlePush = { ok: false, error: String(err) };
+      }
     }
   }
 

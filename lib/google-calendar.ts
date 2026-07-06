@@ -112,6 +112,16 @@ export function mapGoogleEvent(e: GoogleCalEvent): CalEvent {
   };
 }
 
+// Thrown when Google rejects the refresh token itself (revoked/expired) rather
+// than a transient failure — callers should mark the connection as needing
+// reconnection instead of just logging and retrying later.
+export class GoogleReauthRequiredError extends Error {
+  constructor(detail: string) {
+    super(`Google Calendar connection needs to be reconnected: ${detail}`);
+    this.name = "GoogleReauthRequiredError";
+  }
+}
+
 export async function getAccessToken(refreshToken: string): Promise<string> {
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -125,6 +135,9 @@ export async function getAccessToken(refreshToken: string): Promise<string> {
   });
   if (!res.ok) {
     const body = await res.text();
+    if (body.includes("invalid_grant")) {
+      throw new GoogleReauthRequiredError(body);
+    }
     throw new Error(`Token refresh failed: ${body}`);
   }
   const data = await res.json();

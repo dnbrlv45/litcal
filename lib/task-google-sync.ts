@@ -1,8 +1,18 @@
 import { prisma } from "@/lib/prisma";
-import { getAccessToken, createGoogleEvent, createLitCalCalendar } from "@/lib/google-calendar";
+import { getAccessToken, createGoogleEvent, createLitCalCalendar, GoogleReauthRequiredError } from "@/lib/google-calendar";
 import { getGoogleColorId } from "@/lib/google-calendar-payload";
 
-/** Push a task as an all-day event to the user's LitCal Google Calendar. */
+async function deactivateOnReauth(err: unknown, connectionId: string) {
+  if (err instanceof GoogleReauthRequiredError) {
+    await prisma.userCalendarConnection.update({ where: { id: connectionId }, data: { isActive: false } });
+  }
+}
+
+/**
+ * Push a task as an all-day event to the user's own LitCal Google Calendar.
+ * Sync state is tracked per (task, user) in UserTaskGoogleSync — pushing for
+ * one user must never make the task look synced for anyone else.
+ */
 export async function pushTaskToGoogle(
   userId: string,
   task: { id: string; title: string; dueDate: Date; priority: string; caseRef?: { title: string } | null }
@@ -50,21 +60,34 @@ export async function pushTaskToGoogle(
       litCalId
     );
 
-    await prisma.task.update({
-      where: { id: task.id },
-      data: { googleEventId: gEvent.id, googleCalendarId: litCalId },
+    await prisma.userTaskGoogleSync.upsert({
+      where: { taskId_userId: { taskId: task.id, userId } },
+      create: {
+        taskId: task.id,
+        userId,
+        googleEventId: gEvent.id,
+        googleCalendarId: litCalId,
+        syncStatus: "SYNCED",
+      },
+      update: {
+        googleEventId: gEvent.id,
+        googleCalendarId: litCalId,
+        syncStatus: "SYNCED",
+        lastError: null,
+      },
     });
   } catch (err) {
+    await deactivateOnReauth(err, connection.id);
     console.error(`Google Calendar push failed for task ${task.id}:`, err);
   }
 }
 
-/** Delete a task's Google Calendar event. */
-export async function deleteTaskFromGoogle(
-  userId: string,
-  task: { id: string; googleEventId: string | null; googleCalendarId: string | null }
-): Promise<void> {
-  if (!task.googleEventId || !task.googleCalendarId) return;
+/** Delete a task's Google Calendar event from this user's own calendar. */
+export async function deleteTaskFromGoogle(userId: string, taskId: string): Promise<void> {
+  const sync = await prisma.userTaskGoogleSync.findUnique({
+    where: { taskId_userId: { taskId, userId } },
+  });
+  if (!sync) return;
 
   const connection = await prisma.userCalendarConnection.findFirst({
     where: { userId, provider: "GOOGLE", isActive: true },
@@ -74,14 +97,12 @@ export async function deleteTaskFromGoogle(
   try {
     const accessToken = await getAccessToken(connection.refreshToken);
     await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(task.googleCalendarId)}/events/${encodeURIComponent(task.googleEventId)}`,
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(sync.googleCalendarId)}/events/${encodeURIComponent(sync.googleEventId)}`,
       { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } }
     );
-    await prisma.task.update({
-      where: { id: task.id },
-      data: { googleEventId: null, googleCalendarId: null },
-    });
+    await prisma.userTaskGoogleSync.delete({ where: { id: sync.id } });
   } catch (err) {
-    console.error(`Google Calendar delete failed for task ${task.id}:`, err);
+    await deactivateOnReauth(err, connection.id);
+    console.error(`Google Calendar delete failed for task ${taskId}:`, err);
   }
 }

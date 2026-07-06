@@ -119,11 +119,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       });
     }
     // Remove from Google Calendar when marked done
-    void deleteTaskFromGoogle(currentUser.id, {
-      id: task.id,
-      googleEventId: task.googleEventId ?? null,
-      googleCalendarId: task.googleCalendarId ?? null,
-    });
+    void deleteTaskFromGoogle(currentUser.id, task.id);
   } else if (body.status !== undefined && existing.status === "DONE" && body.status !== "DONE") {
     // Moved back from DONE — re-push to Google Calendar if it has a due date
     if (task.dueDate) {
@@ -136,18 +132,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       });
     }
   } else if (body.dueDate !== undefined) {
-    // Due date changed — re-push to Google Calendar
-    const rawTask = await prisma.task.findUnique({
-      where: { id: task.id },
-      select: { googleEventId: true, googleCalendarId: true },
+    // Due date changed — re-push to Google Calendar (only if this user had it synced)
+    const existingSync = await prisma.userTaskGoogleSync.findUnique({
+      where: { taskId_userId: { taskId: task.id, userId: currentUser.id } },
     });
-    if (rawTask?.googleEventId) {
+    if (existingSync) {
       // Delete old event first, then push new one
-      void deleteTaskFromGoogle(currentUser.id, {
-        id: task.id,
-        googleEventId: rawTask.googleEventId,
-        googleCalendarId: rawTask.googleCalendarId ?? null,
-      }).then(() => {
+      void deleteTaskFromGoogle(currentUser.id, task.id).then(() => {
         if (task.dueDate) {
           void pushTaskToGoogle(currentUser.id, {
             id: task.id,
@@ -218,11 +209,9 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   await prisma.notification.deleteMany({
     where: { workspaceId: workspace.id, taskId: id },
   });
-  void deleteTaskFromGoogle(currentUser.id, {
-    id,
-    googleEventId: existing.googleEventId ?? null,
-    googleCalendarId: existing.googleCalendarId ?? null,
-  });
+  // Awaited (not fire-and-forget): deleting the task cascades to
+  // UserTaskGoogleSync, so this must read the sync row before that happens.
+  await deleteTaskFromGoogle(currentUser.id, id);
   await prisma.task.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }

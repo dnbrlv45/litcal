@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getAccessToken, deleteGoogleEvent, patchGoogleEvent } from "@/lib/google-calendar";
+import { getAccessToken, deleteGoogleEvent, patchGoogleEvent, GoogleReauthRequiredError } from "@/lib/google-calendar";
 import { buildGoogleEventPayload, eventSupportsRemoteAppearance } from "@/lib/google-calendar-payload";
 import { addTimelineEntry } from "@/lib/case-timeline";
 import { canDelete, canEdit, getCurrentWorkspace } from "@/lib/workspaces";
@@ -171,6 +171,9 @@ export async function DELETE(
           syncToDelete.googleEventId
         );
       } catch (err) {
+        if (err instanceof GoogleReauthRequiredError) {
+          await prisma.userCalendarConnection.update({ where: { id: connection.id }, data: { isActive: false } });
+        }
         console.error("Google Calendar delete failed:", err);
       }
     }
@@ -283,12 +286,14 @@ export async function PATCH(
 
   // Mirror edits to Google Calendar
   if (updated.googleSync) {
+    let editConnectionId: string | null = null;
     try {
       const connection = await prisma.userCalendarConnection.findFirst({
         where: { userId, provider: "GOOGLE", isActive: true },
-        select: { refreshToken: true },
+        select: { id: true, refreshToken: true },
       });
       if (connection) {
+        editConnectionId = connection.id;
         const fullEvent = await prisma.event.findUnique({
           where: { id },
           select: {
@@ -356,6 +361,9 @@ export async function PATCH(
         }
       }
     } catch (err) {
+      if (err instanceof GoogleReauthRequiredError && editConnectionId) {
+        await prisma.userCalendarConnection.update({ where: { id: editConnectionId }, data: { isActive: false } });
+      }
       console.error("Google Calendar patch failed on event edit:", err);
     }
   }

@@ -25,6 +25,7 @@ model User {
   events              Event[]
   calendarConnections UserCalendarConnection[]
   userGoogleSyncs     UserGoogleCalendarSync[]
+  userTaskGoogleSyncs UserTaskGoogleSync[]
   cases               Case[]
   workspaceMemberships WorkspaceMember[]
   sessions            AuthSession[]
@@ -296,6 +297,31 @@ model UserGoogleCalendarSync {
   @@index([googleEventId])
 }
 
+// Per-user Google sync state for tasks (mirrors UserGoogleCalendarSync for
+// events). Task.googleEventId/googleCalendarId are legacy single-user fields
+// kept for backfill history only — sync status must be tracked per user so
+// one member's push doesn't make a task look "already synced" for everyone.
+model UserTaskGoogleSync {
+  id               String     @id @default(cuid())
+  taskId           String
+  userId           String
+
+  googleEventId    String
+  googleCalendarId String
+
+  syncedAt         DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  syncStatus       SyncStatus @default(SYNCED)
+  lastError        String?
+
+  task             Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user             User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+  @@index([userId])
+  @@index([googleEventId])
+}
+
 enum SyncStatus {
   SYNCED
   PENDING
@@ -525,6 +551,7 @@ model Task {
   notifications     Notification[]
   generatedDeadline GeneratedDeadline?
   discoveryLinked   DiscoveryItem?     @relation("DiscoveryLinkedTask")
+  userGoogleSyncs   UserTaskGoogleSync[]
 
   @@index([workspaceId])
   @@index([caseId])
