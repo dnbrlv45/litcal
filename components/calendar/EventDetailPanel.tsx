@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { X, MapPin, Calendar, Clock, Pencil, Trash2, Check, Briefcase, ChevronRight, FileText, Sparkles, AlertTriangle, Building2, Zap, Link2, Video, Phone, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,7 +64,7 @@ function linkifyText(text: string) {
   );
 }
 
-interface CaseOption { id: string; title: string; caseNumber: string | null; }
+interface CaseOption { id: string; title: string; caseNumber: string | null; status: string; }
 
 export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated }: Props) {
   const [editing, setEditing] = useState(false);
@@ -78,6 +78,10 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
   const [description, setDescription] = useState("");
   const [caseId, setCaseId] = useState("");
   const [cases, setCases] = useState<CaseOption[]>([]);
+  const [caseSearch, setCaseSearch] = useState("");
+  const [caseDropdownOpen, setCaseDropdownOpen] = useState(false);
+  const [caseHighlight, setCaseHighlight] = useState(-1);
+  const caseDropdownRef = useRef<HTMLDivElement>(null);
   const [allDay, setAllDay] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -119,6 +123,16 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
 
   useEffect(() => {
     fetch("/api/cases").then((r) => r.json()).then((d) => setCases(d.cases ?? [])).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (caseDropdownRef.current && !caseDropdownRef.current.contains(e.target as Node)) {
+        setCaseDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
   useEffect(() => {
@@ -171,6 +185,34 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
       .catch(() => {});
   }, [event?.id, event?.eventType, event?.inPerson, event?.appearanceType, event?.remoteLink, event?.phoneNumber, event?.requestContactEmail, event?.caseCounty, event?.caseCourt, event?.department]);
 
+  const filteredCases = cases
+    .filter((c) => (c.status !== "ARCHIVED" && c.status !== "CLOSED") || c.id === caseId)
+    .filter((c) => {
+      const q = caseSearch.toLowerCase();
+      return !q || c.title.toLowerCase().includes(q) || (c.caseNumber ?? "").toLowerCase().includes(q);
+    });
+
+  function selectCase(id: string) {
+    setCaseId(id); setCaseSearch(""); setCaseDropdownOpen(false);
+  }
+
+  function handleCaseKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setCaseHighlight((h) => Math.min(h + 1, filteredCases.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setCaseHighlight((h) => Math.max(h - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (caseHighlight >= 0 && caseHighlight < filteredCases.length) {
+        selectCase(filteredCases[caseHighlight].id);
+      }
+    } else if (e.key === "Escape") {
+      setCaseDropdownOpen(false);
+    }
+  }
+
   function startEdit() {
     if (!event) return;
     setTitle(event.title);
@@ -183,6 +225,8 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
     setDepartment(event.department ?? "");
     setDescription(event.description ?? "");
     setCaseId(event.caseId ?? "");
+    setCaseSearch("");
+    setCaseDropdownOpen(false);
     setError(null);
     setEditing(true);
   }
@@ -585,19 +629,54 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
             {cases.length > 0 && (
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="ep-case">Case</Label>
-                <select
-                  id="ep-case"
-                  value={caseId}
-                  onChange={(e) => setCaseId(e.target.value)}
-                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                >
-                  <option value="">— No case —</option>
-                  {cases.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.title}{c.caseNumber ? ` (#${c.caseNumber})` : ""}
-                    </option>
-                  ))}
-                </select>
+                <div ref={caseDropdownRef} className="relative min-w-0">
+                  <button
+                    type="button"
+                    id="ep-case"
+                    onClick={() => { setCaseDropdownOpen((o) => !o); setCaseSearch(""); }}
+                    className="flex h-9 w-full items-center rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring text-left overflow-hidden"
+                  >
+                    <span className="truncate flex-1">
+                      {caseId
+                        ? (() => { const c = cases.find((c) => c.id === caseId); return c ? `${c.title}${c.caseNumber ? ` (#${c.caseNumber})` : ""}` : "Select..."; })()
+                        : "— No case —"}
+                    </span>
+                    <svg className="w-3.5 h-3.5 shrink-0 opacity-50 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                  </button>
+                  {caseDropdownOpen && (
+                    <div className="relative left-0 mt-1 z-50 w-full rounded-lg border border-slate-200 bg-white shadow-xl overflow-hidden">
+                      <div className="p-2 border-b border-slate-100">
+                        <input
+                          autoFocus
+                          value={caseSearch}
+                          onChange={(e) => { setCaseSearch(e.target.value); setCaseHighlight(0); }}
+                          onKeyDown={handleCaseKeyDown}
+                          placeholder="Search cases..."
+                          className="w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-sm outline-none focus:border-teal-300 focus:ring-1 focus:ring-teal-200"
+                        />
+                      </div>
+                      <div className="max-h-52 overflow-y-auto">
+                        <button
+                          type="button"
+                          onClick={() => selectCase("")}
+                          className={`w-full px-3 py-2 text-left text-sm hover:bg-slate-50 ${!caseId ? "font-semibold text-teal-700" : "text-slate-700"}`}
+                        >
+                          — No case —
+                        </button>
+                        {filteredCases.map((c, i) => (
+                          <button
+                            type="button"
+                            key={c.id}
+                            onClick={() => selectCase(c.id)}
+                            className={`w-full px-3 py-2 text-left text-sm ${caseHighlight === i ? "bg-teal-50 text-teal-800" : "hover:bg-slate-50"} ${caseId === c.id ? "font-semibold text-teal-700" : "text-slate-700"}`}
+                          >
+                            {c.title}{c.caseNumber ? ` (#${c.caseNumber})` : ""}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
