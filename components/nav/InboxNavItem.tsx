@@ -59,10 +59,11 @@ export default function InboxNavItem({ collapsed }: { collapsed?: boolean }) {
     } catch { /* silent */ }
   }, []);
 
-  // Initial fetch + 30s polling
+  // Initial fetch + 60s polling. This runs on every page for every open
+  // session, so keep it infrequent — DB egress on the Free tier is capped.
   useEffect(() => {
     void fetchNotifications();
-    const interval = setInterval(() => void fetchNotifications(), 30000);
+    const interval = setInterval(() => void fetchNotifications(), 60000);
     return () => clearInterval(interval);
   }, [fetchNotifications]);
 

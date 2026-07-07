@@ -12,15 +12,10 @@ export default function DeadlinesNavItem({ collapsed }: { collapsed?: boolean })
 
   const fetchOverdue = useCallback(async () => {
     try {
-      const res = await fetch("/api/deadlines?includeCompleted=false");
+      const res = await fetch("/api/deadlines?countsOnly=1");
       if (!res.ok) return;
       const data = await res.json();
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const overdue = (data.deadlines ?? []).filter((d: { dueDate: string; isCompleted: boolean }) => {
-        return !d.isCompleted && new Date(d.dueDate) < today;
-      });
-      setOverdueCount(overdue.length);
+      setOverdueCount(data.overdueCount ?? 0);
     } catch { /* silent */ }
   }, []);
 

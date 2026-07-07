@@ -701,16 +701,18 @@ export default function AIInboxClient({ isSuperAdmin = false }: { isSuperAdmin?:
     return () => { for (const ev of events) window.removeEventListener(ev, bump); };
   }, []);
 
-  // Auto-refresh: only when idle ≥8s, tab visible, nothing in flight, no card busy.
+  // Auto-refresh: only when idle ≥15s, tab visible, nothing in flight, no card busy.
+  // Suggestions are manual-approval-only anyway, so a 30s cadence is plenty
+  // responsive while cutting DB egress ~7x versus the previous 4s interval.
   useEffect(() => {
-    const IDLE_MS = 8000;
+    const IDLE_MS = 15000;
     const id = setInterval(() => {
       if (document.visibilityState !== "visible") return;
       if (Date.now() - lastActivityRef.current < IDLE_MS) return;
       if (busyIdsRef.current.size > 0) return;
       if (fetchingRef.current || scanning || registeringWatch) return;
       void fetchSuggestions({ silent: true });
-    }, 4000);
+    }, 30000);
     return () => clearInterval(id);
   }, [fetchSuggestions, scanning, registeringWatch]);
 

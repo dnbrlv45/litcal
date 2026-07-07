@@ -83,6 +83,41 @@ export async function GET(request: NextRequest) {
     membership.role !== "ADMIN" &&
     membership.role !== "OWNER";
 
+  // Lightweight mode for the sidebar's overdue badge — a plain count instead
+  // of fetching every deadline event/task (with case/attorney/discovery joins)
+  // and every upcoming trial on a 60s poll from every open tab.
+  if (searchParams.get("countsOnly") === "1") {
+    const todayStart = new Date();
+    todayStart.setUTCHours(0, 0, 0, 0);
+
+    const [overdueEvents, overdueTasks] = await Promise.all([
+      prisma.event.count({
+        where: {
+          eventType: "DEADLINE",
+          OR: [
+            { workspaceId: workspace.id },
+            { userId: currentUser.id, workspaceId: null },
+          ],
+          caseRef: { status: { notIn: ["CLOSED", "ARCHIVED"] } },
+          status: { notIn: ["COMPLETED", "CANCELLED"] },
+          startTime: { lt: todayStart },
+          ...(isAssistantOnly ? { assignedAttorneyId: currentUser.id } : {}),
+        },
+      }),
+      prisma.task.count({
+        where: {
+          workspaceId: workspace.id,
+          dueDate: { lt: todayStart },
+          caseRef: { status: { notIn: ["CLOSED", "ARCHIVED"] } },
+          status: { not: "DONE" },
+          ...(isAssistantOnly ? { assignees: { some: { member: { userId: currentUser.id } } } } : {}),
+        },
+      }),
+    ]);
+
+    return NextResponse.json({ overdueCount: overdueEvents + overdueTasks });
+  }
+
   // Source A: Deadline Events
   const eventWhere: Record<string, unknown> = {
     eventType: "DEADLINE",
