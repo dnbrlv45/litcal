@@ -55,7 +55,9 @@ export default function LitCalGoogleAuth({ mode }: Props) {
         </p>
 
         <p className="mt-6 text-center text-xs leading-5 text-slate-500">
-          By continuing, you agree to use LitCal for authorized legal calendar management.
+          By continuing, you agree to LitCal&rsquo;s{" "}
+          <Link href="/terms" className="underline hover:text-slate-700">Terms of Service</Link> and{" "}
+          <Link href="/privacy" className="underline hover:text-slate-700">Privacy Policy</Link>.
         </p>
       </section>
     </main>

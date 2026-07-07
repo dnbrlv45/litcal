@@ -6,6 +6,8 @@ const publicRoutes = [
   /^\/$/,
   /^\/sign-in(?:\/.*)?$/,
   /^\/sign-up(?:\/.*)?$/,
+  /^\/privacy$/, // must be reachable without a session for Google OAuth verification review
+  /^\/terms$/,   // same
   /^\/api\/auth\/google\/sign-in(?:\/.*)?$/,
   /^\/api\/auth\/sign-out$/,
   /^\/api\/cron\//, // cron-job.org has no session cookie
