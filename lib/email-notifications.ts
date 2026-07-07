@@ -482,10 +482,16 @@ function isRecentDue(sendAt: Date, now: Date) {
 }
 
 export async function sendDueTaskEmails(now = new Date()) {
+  // isRecentDue() only accepts sendAt (dueDate at 9:00 UTC) within the last 36h,
+  // so bound the query the same way instead of fetching every open task ever —
+  // padded wider than 36h since dueDate's stored time-of-day isn't always 9:00 UTC.
+  const windowStart = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+  const windowEnd = new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000);
+
   const tasks = await prisma.task.findMany({
     where: {
       status: { not: "DONE" },
-      dueDate: { not: null },
+      dueDate: { not: null, gte: windowStart, lte: windowEnd },
     },
     include: {
       caseRef: { select: { id: true, title: true, caseNumber: true, status: true, court: true } },
