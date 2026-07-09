@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import {
   Upload, CheckCircle, AlertCircle, Plus, Pencil, Check, X,
-  ChevronLeft, ChevronRight, PowerOff, Power, Scale,
+  ChevronLeft, ChevronRight, PowerOff, Power, Scale, RefreshCw,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -36,6 +36,11 @@ interface CountyOption {
 }
 
 interface ImportResult { created: number; updated: number; skipped: number; }
+interface BackfillResult {
+  eventsUpdated: number;
+  googleEventsPatched: number;
+  googlePatchFailures: number;
+}
 
 // ─── CSV parser ───────────────────────────────────────────────────────────────
 
@@ -74,6 +79,8 @@ function Field({ label, value, onChange }: { label: string; value: string; onCha
 function RuleRow({ rule, onSaved }: { rule: Rule; onSaved: (updated: Rule) => void }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillStatus, setBackfillStatus] = useState<string | null>(null);
   const [form, setForm] = useState({
     appearanceType:     rule.appearanceType     ?? "",
     phoneNumber:        rule.phoneNumber        ?? "",
@@ -129,6 +136,28 @@ function RuleRow({ rule, onSaved }: { rule: Rule; onSaved: (updated: Rule) => vo
     }
   }
 
+  async function handleBackfill() {
+    setBackfilling(true);
+    setBackfillStatus(null);
+    const res = await fetch(`/api/court-hearing-rules/manage/${rule.id}/backfill`, {
+      method: "POST",
+    });
+    setBackfilling(false);
+
+    if (res.ok) {
+      const result = await res.json() as BackfillResult;
+      const googleNote = result.googlePatchFailures > 0
+        ? `, ${result.googlePatchFailures} Google update failed`
+        : result.googleEventsPatched > 0
+          ? `, ${result.googleEventsPatched} Google event${result.googleEventsPatched !== 1 ? "s" : ""} patched`
+          : "";
+      setBackfillStatus(`${result.eventsUpdated} future event${result.eventsUpdated !== 1 ? "s" : ""} updated${googleNote}.`);
+    } else {
+      const data = await res.json().catch(() => null) as { error?: string } | null;
+      setBackfillStatus(data?.error ?? "Backfill failed.");
+    }
+  }
+
   return (
     <div className={`rounded-lg border ${rule.active ? "border-slate-200 bg-white" : "border-slate-100 bg-slate-50 opacity-60"} px-4 py-3 flex flex-col gap-3`}>
       {/* Header row */}
@@ -168,6 +197,14 @@ function RuleRow({ rule, onSaved }: { rule: Rule; onSaved: (updated: Rule) => vo
           >
             {rule.active ? <PowerOff className="w-3.5 h-3.5" /> : <Power className="w-3.5 h-3.5" />}
           </button>
+          <button
+            onClick={() => void handleBackfill()}
+            disabled={!rule.active || backfilling}
+            className="p-1.5 rounded-md hover:bg-teal-50 text-slate-400 hover:text-teal-700 transition-colors disabled:opacity-40"
+            title="Update matching future events"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${backfilling ? "animate-spin" : ""}`} />
+          </button>
         </div>
       </div>
 
@@ -182,6 +219,7 @@ function RuleRow({ rule, onSaved }: { rule: Rule; onSaved: (updated: Rule) => vo
           {!rule.remoteLink && !rule.requestContactEmail && !rule.phoneNumber && !rule.bridge && (
             <span className="italic text-slate-300">No appearance details</span>
           )}
+          {backfillStatus && <span className="text-teal-700">{backfillStatus}</span>}
         </div>
       )}
 
