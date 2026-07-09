@@ -14,6 +14,15 @@ function getFirstDayOfMonth(year: number, month: number) {
   return new Date(year, month, 1).getDay();
 }
 
+function formatMonthTime(event: CalEvent) {
+  if (event.allDay) return null;
+  return event.start
+    .toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    .replace(":00", "")
+    .replace(/\s/g, "")
+    .toLowerCase();
+}
+
 interface Props {
   date: Date;
   today: Date;
@@ -102,7 +111,10 @@ export default function MonthView({ date, today, events, onCellClick, onSelectDa
         ))}
       </div>
 
-      <div className="flex-1 grid min-h-0" style={{ gridTemplateRows: `repeat(${weeks.length}, minmax(0, 1fr))` }}>
+      <div
+        className="flex-1 grid min-h-0 overflow-y-auto overscroll-contain"
+        style={{ gridTemplateRows: `repeat(${weeks.length}, minmax(8.75rem, 1fr))` }}
+      >
         {weeks.map((week, wi) => {
           // Build the 7 Date objects for this week row.
           // Null cells are padding from prev/next month — compute their actual dates
@@ -123,15 +135,16 @@ export default function MonthView({ date, today, events, onCellClick, onSelectDa
           const spanHeight = visibleSpanRows * SPAN_ROW_H;
 
           return (
-            <div key={wi} className="relative grid grid-cols-7 overflow-hidden">
+            <div key={wi} className="relative grid grid-cols-7 min-h-0">
               {/* Day cells */}
               {week.map((day, di) => {
                 const dayEvents = day ? eventsForDay(day) : [];
+                const hiddenEventCount = Math.max(dayEvents.length - 2, 0);
                 return (
                   <div
                     key={di}
                     onClick={() => day && onCellClick(new Date(year, month, day))}
-                    className={`border-b border-r border-slate-100 last:border-r-0 flex flex-col gap-1 transition-colors ${
+                    className={`min-h-0 border-b border-r border-slate-100 last:border-r-0 flex flex-col gap-1 transition-colors ${
                       day === null ? "bg-slate-50/70" : "hover:bg-teal-50/30 cursor-pointer"
                     }`}
                     style={{ padding: "6px" }}
@@ -149,33 +162,37 @@ export default function MonthView({ date, today, events, onCellClick, onSelectDa
                       </button>
                     )}
                     <div aria-hidden="true" className="shrink-0" style={{ height: spanHeight }} />
-                    {dayEvents.slice(0, 2).map((ev) => {
-                      const colors = eventColors(ev.eventType);
-                      return (
-                        <div
-                          key={ev.id}
-                          onClick={(e) => { e.stopPropagation(); onEventClick(ev); }}
-                          className={`truncate rounded-md border px-2 py-1 text-xs font-semibold cursor-pointer shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${colors.bg} ${colors.text} ${ev.hasConflict ? "border-amber-400" : colors.border}`}
-                          title={ev.title}
-                        >
-                          {ev.hasConflict
-                            ? <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 mr-1 align-middle" />
-                            : <span className={`inline-block w-1.5 h-1.5 rounded-full ${colors.dot} mr-1 align-middle`} />
-                          }
-                          {ev.title}
-                          {ev.hasConflict && <span className="ml-1 text-amber-600">⚠</span>}
-                        </div>
-                      );
-                    })}
-                    {dayEvents.length > 2 && (
+                    <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-hidden">
+                      {dayEvents.slice(0, 2).map((ev) => {
+                        const colors = eventColors(ev.eventType);
+                        const time = formatMonthTime(ev);
+                        return (
+                          <div
+                            key={ev.id}
+                            onClick={(e) => { e.stopPropagation(); onEventClick(ev); }}
+                            className={`min-w-0 truncate rounded-md border px-2 py-1 text-xs font-semibold cursor-pointer shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${colors.bg} ${colors.text} ${ev.hasConflict ? "border-amber-400" : colors.border}`}
+                            title={time ? `${time} ${ev.title}` : ev.title}
+                          >
+                            {ev.hasConflict
+                              ? <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 mr-1 align-middle" />
+                              : <span className={`inline-block w-1.5 h-1.5 rounded-full ${colors.dot} mr-1 align-middle`} />
+                            }
+                            {time && <span className="mr-1 font-bold tabular-nums opacity-90">{time}</span>}
+                            {ev.title}
+                            {ev.hasConflict && <span className="ml-1 text-amber-600">⚠</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {hiddenEventCount > 0 && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           setPopover(popover?.day === day ? null : { day: day!, rect: e.currentTarget.getBoundingClientRect() });
                         }}
-                        className="px-1 text-xs font-medium text-teal-700 hover:text-teal-900 hover:underline text-left"
+                        className="shrink-0 rounded px-1 py-0.5 text-left text-xs font-semibold text-teal-700 hover:bg-teal-50 hover:text-teal-900 hover:underline"
                       >
-                        +{dayEvents.length - 2} more
+                        +{hiddenEventCount} more
                       </button>
                     )}
                   </div>
@@ -244,6 +261,7 @@ export default function MonthView({ date, today, events, onCellClick, onSelectDa
             <div className="flex flex-col gap-1 p-2 max-h-64 overflow-y-auto">
               {popoverEvents.map((ev) => {
                 const colors = eventColors(ev.eventType);
+                const time = formatMonthTime(ev);
                 return (
                   <button
                     key={ev.id}
@@ -254,6 +272,7 @@ export default function MonthView({ date, today, events, onCellClick, onSelectDa
                       ? <span className="shrink-0 inline-block w-1.5 h-1.5 rounded-full bg-amber-500" />
                       : <span className={`shrink-0 inline-block w-1.5 h-1.5 rounded-full ${colors.dot}`} />
                     }
+                    {time && <span className="shrink-0 font-bold tabular-nums opacity-90">{time}</span>}
                     <span className="truncate">{ev.title}</span>
                     {ev.hasConflict && <span className="ml-auto shrink-0 text-amber-600">⚠</span>}
                   </button>
