@@ -115,8 +115,8 @@
      category (see getEventCategory): all hearing/conference subtypes share the
      one "hearing" color so the calendar reads calmly. */
   --event-foreground: oklch(0.99 0 0);            /* #ffffff — text on fills */
-  --event-deadline: oklch(0.46 0.12 28);          /* ~#8c3330 — Deadline (red) */
-  --event-hearing: oklch(0.57 0.11 55);           /* ~#b0642a — Hearing / CMC / TSC / OSC (orange) */
+  --event-deadline: oklch(0.45 0.17 24);          /* ~#9a2426 — Deadline (deep red) */
+  --event-hearing: oklch(0.48 0.12 245);          /* ~#2f5f9f — Hearing / CMC / TSC / OSC (blue) */
   --event-deposition: oklch(0.47 0.09 300);       /* ~#5a4a8a — Deposition (purple) */
   --event-trial: oklch(0.50 0.08 160);            /* ~#2f6b57 — Trial (green) */
   --event-mediation: oklch(0.48 0.09 318);        /* ~#6a4a8a — Mediation (magenta-violet) */

@@ -62,8 +62,8 @@ calmly. These six are the legend. Utilities: `bg-event-hearing`, etc.
 
 | Legend | Covers | Token | Hex |
 |--------|--------|-------|-----|
-| Deadline 🔴 | DEADLINE | `--event-deadline` | `#8c3330` |
-| Hearing 🟠 | HEARING, CONFERENCE, COURT_CALL, CMC, and all hearing subtypes | `--event-hearing` | `#b0642a` |
+| Deadline 🔴 | DEADLINE | `--event-deadline` | `#9a2426` |
+| Hearing 🔵 | HEARING, CONFERENCE, COURT_CALL, CMC, and all hearing subtypes | `--event-hearing` | `#2f5f9f` |
 | Deposition 🟣 | DEPOSITION | `--event-deposition` | `#5a4a8a` |
 | Trial 🟢 | TRIAL | `--event-trial` | `#2f6b57` |
 | Mediation 🟣 | MEDIATION | `--event-mediation` | `#6a4a8a` |
