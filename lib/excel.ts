@@ -20,14 +20,22 @@ function getInitialOverride(fullName: string): string | null {
   return null;
 }
 
+function stripNameSuffixes(fullName: string): string {
+  return fullName
+    .replace(/,\s*(esq\.?|attorney|counsel)\s*$/i, "")
+    .replace(/\s+(esq\.?|attorney|counsel)\s*$/i, "")
+    .trim();
+}
+
 /** "Dylan Barlava" -> "DB". Handles single names, extra whitespace, and multiple names. */
 function getInitials(fullName: string): string {
-  if (fullName.includes(",")) {
-    return fullName.split(",").map((name) => getInitials(name)).filter(Boolean).join(", ");
+  const normalizedName = stripNameSuffixes(fullName);
+  if (normalizedName.includes(",")) {
+    return normalizedName.split(",").map((name) => getInitials(name)).filter(Boolean).join(", ");
   }
-  const override = getInitialOverride(fullName);
+  const override = getInitialOverride(normalizedName);
   if (override) return override;
-  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  const parts = normalizedName.split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
