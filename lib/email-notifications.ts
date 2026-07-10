@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { sendLitCalEmail } from "@/lib/google-mail";
-import { adjustToBusinessDay, DAY_OF_9AM } from "@/lib/reminders";
+import { DAY_OF_9AM, dayOf9AMReminderSendAt } from "@/lib/reminders";
 
 export type EmailNotificationType =
   | "TASK_ASSIGNED"
@@ -482,7 +482,7 @@ function isRecentDue(sendAt: Date, now: Date) {
 }
 
 export async function sendDueTaskEmails(now = new Date()) {
-  // isRecentDue() only accepts sendAt (dueDate at 9:00 UTC) within the last 36h,
+  // isRecentDue() only accepts sendAt (dueDate at 9:00 Pacific) within the last 36h,
   // so bound the query the same way instead of fetching every open task ever —
   // padded wider than 36h since dueDate's stored time-of-day isn't always 9:00 UTC.
   const windowStart = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
@@ -509,10 +509,9 @@ export async function sendDueTaskEmails(now = new Date()) {
   for (const task of tasks) {
     if (!task.dueDate) continue;
     if (task.caseRef?.status === "CLOSED" || task.caseRef?.status === "ARCHIVED") continue;
-    // All task types: day-of at 9:00 AM UTC, no weekend adjustment
+    // All task types: day-of at 9:00 AM Pacific, no weekend adjustment
     {
-      const sendAt = new Date(task.dueDate);
-      sendAt.setUTCHours(9, 0, 0, 0);
+      const sendAt = dayOf9AMReminderSendAt(task.dueDate);
       const minutesBefore = DAY_OF_9AM;
       if (!isRecentDue(sendAt, now)) continue;
 

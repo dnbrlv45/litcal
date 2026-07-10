@@ -8,6 +8,7 @@ import { canDelete, canEdit, getCurrentWorkspace } from "@/lib/workspaces";
 import { detectConflicts } from "@/lib/conflicts";
 import { cascadeDeadlineDateChange } from "@/lib/deadline-rules";
 import { replaceEventReminders } from "@/lib/reminders";
+import { allDayDateToNoonUTCISOString, googleAllDayExclusiveEndDate } from "@/lib/all-day-dates";
 
 // GET /api/calendar/events/[id] — single event, same shape as the list/search endpoint
 export async function GET(
@@ -223,9 +224,26 @@ export async function PATCH(
 
   const validTypes = ["DEADLINE","HEARING","DEPOSITION","TRIAL","CONFERENCE","MEETING","MEDIATION","COURT_CALL","CASE_MANAGEMENT_CONFERENCE","REMINDER","OTHER"];
   const safeEventType = body.eventType && validTypes.includes(body.eventType) ? body.eventType as never : undefined;
+  const effectiveAllDay = body.allDay ?? event.allDay;
+  const normalizedStart = body.start !== undefined
+    ? effectiveAllDay ? new Date(allDayDateToNoonUTCISOString(body.start.slice(0, 10))) : new Date(body.start)
+    : undefined;
+  let normalizedEnd = body.end !== undefined
+    ? effectiveAllDay ? new Date(allDayDateToNoonUTCISOString(body.end.slice(0, 10))) : new Date(body.end)
+    : undefined;
+
+  if (
+    effectiveAllDay &&
+    normalizedStart &&
+    normalizedEnd &&
+    normalizedStart.getTime() !== normalizedEnd.getTime() &&
+    new Date(body.end!).getTime() - new Date(body.start!).getTime() < 24 * 60 * 60 * 1000
+  ) {
+    normalizedEnd = normalizedStart;
+  }
 
   // Detect if this is a user edit of an auto-generated event — mark userModified
-  const isDateChanging = body.start !== undefined && new Date(body.start).getTime() !== event.startTime.getTime();
+  const isDateChanging = normalizedStart !== undefined && normalizedStart.getTime() !== event.startTime.getTime();
   if (isDateChanging) {
     await prisma.generatedDeadline.updateMany({
       where: { generatedEventId: id },
@@ -238,8 +256,8 @@ export async function PATCH(
     data: {
       ...(body.title !== undefined && { title: body.title.trim() }),
       ...(body.description !== undefined && { description: body.description || null }),
-      ...(body.start !== undefined && { startTime: new Date(body.start) }),
-      ...(body.end !== undefined && { endTime: new Date(body.end) }),
+      ...(normalizedStart !== undefined && { startTime: normalizedStart }),
+      ...(normalizedEnd !== undefined && { endTime: normalizedEnd }),
       ...(safeEventType !== undefined && { eventType: safeEventType }),
       ...("subtype" in body && { subtype: body.subtype?.trim() || null }),
       ...("subtypeReason" in body && { subtypeReason: body.subtypeReason?.trim() || null }),
@@ -265,6 +283,10 @@ export async function PATCH(
   if (isDateChanging) {
     const cascade = await cascadeDeadlineDateChange(id, newStart);
     skippedModified = cascade.skippedModified;
+    await prisma.discoveryItem.updateMany({
+      where: { linkedEventId: id },
+      data: { currentDueDate: newStart },
+    });
   }
 
   // Check conflicts against the saved state (non-blocking)
@@ -343,7 +365,7 @@ export async function PATCH(
                   ? { date: newStart.toISOString().slice(0, 10) }
                   : { dateTime: newStart.toISOString(), timeZone },
                 end: updated.allDay
-                  ? { date: newEnd.toISOString().slice(0, 10) }
+                  ? { date: googleAllDayExclusiveEndDate(newEnd) }
                   : { dateTime: newEnd.toISOString(), timeZone },
               }),
             }

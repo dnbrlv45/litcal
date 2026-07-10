@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { EventType, ConflictDetail } from "@/lib/google-calendar";
+import { allDayDateToNoonUTCISOString } from "@/lib/all-day-dates";
 import { HEARING_SUBTYPES, HEARING_EVENT_TYPES } from "@/lib/google-calendar-payload";
 import { Inbox, Send } from "lucide-react";
 import type { DiscoveryDirection } from "@prisma/client";
@@ -364,12 +365,8 @@ export default function EventModal({ open, onClose, defaultStart, googleConnecte
     if (!effectiveTitle.trim()) { setError("Title is required."); return; }
 
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const toNoonUTC = (dateStr: string) => {
-      const d = new Date(`${dateStr}T00:00:00`);
-      return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0, 0)).toISOString();
-    };
-    const startISO = allDay ? toNoonUTC(date) : new Date(`${date}T${startTime}`).toISOString();
-    const endISO   = allDay ? new Date(`${endDate}T23:59:59`).toISOString() : new Date(`${date}T${endTime}`).toISOString();
+    const startISO = allDay ? allDayDateToNoonUTCISOString(date) : new Date(`${date}T${startTime}`).toISOString();
+    const endISO   = allDay ? allDayDateToNoonUTCISOString(endDate) : new Date(`${date}T${endTime}`).toISOString();
 
     setSaving(true); setError(null);
     try {

@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import Link from "next/link";
 import type { CalEvent, EventType, ConflictDetail } from "@/lib/google-calendar";
+import { allDayDateToNoonUTCISOString } from "@/lib/all-day-dates";
 import { eventColors } from "@/lib/google-calendar";
 import { eventSupportsRemoteAppearance } from "@/lib/google-calendar-payload";
 
@@ -249,8 +250,8 @@ export default function EventDetailPanel({ event, onClose, onDeleted, onUpdated 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     if (!event || !title.trim()) { setError("Title is required."); return; }
-    const startISO = allDay ? new Date(`${date}T00:00:00`).toISOString() : new Date(`${date}T${startTime}`).toISOString();
-    const endISO   = allDay ? new Date(`${date}T23:59:59`).toISOString() : new Date(`${date}T${endTime}`).toISOString();
+    const startISO = allDay ? allDayDateToNoonUTCISOString(date) : new Date(`${date}T${startTime}`).toISOString();
+    const endISO   = allDay ? allDayDateToNoonUTCISOString(date) : new Date(`${date}T${endTime}`).toISOString();
     if (!allDay && new Date(endISO) <= new Date(startISO)) { setError("End time must be after start time."); return; }
     setSaving(true);
     setError(null);

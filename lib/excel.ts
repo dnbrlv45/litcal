@@ -13,8 +13,20 @@ const TEXT_MUTED  = "64748B";
 const LIGHT_BORDER: Partial<ExcelJS.Border> = { style: "thin", color: { argb: "CBD5E1" } };
 const CALENDAR_COLUMNS = 7;
 
+function getInitialOverride(fullName: string): string | null {
+  const normalized = fullName.trim().toLowerCase();
+  if (/\bjacob\b/.test(normalized)) return "JR";
+  if (/\bsayan\b/.test(normalized)) return "SA";
+  return null;
+}
+
 /** "Dylan Barlava" -> "DB". Handles single names, extra whitespace, and multiple names. */
 function getInitials(fullName: string): string {
+  if (fullName.includes(",")) {
+    return fullName.split(",").map((name) => getInitials(name)).filter(Boolean).join(", ");
+  }
+  const override = getInitialOverride(fullName);
+  if (override) return override;
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();

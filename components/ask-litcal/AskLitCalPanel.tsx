@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { X, Send, Loader2, MessageSquare, Sparkles, CalendarPlus, AlertTriangle, CheckCircle2, Briefcase, ClipboardList, Trash2 } from "lucide-react";
 import { useAskLitCal } from "./AskLitCalContext";
+import { allDayDateToNoonUTCISOString } from "@/lib/all-day-dates";
 
 interface EventIntent {
   eventType?: string;
@@ -583,9 +584,8 @@ export default function AskLitCalPanel() {
       let startISO: string;
       let endISO: string;
       if (proposed.allDay) {
-        const d = new Date(`${proposed.date}T00:00:00`);
-        startISO = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0)).toISOString();
-        endISO = new Date(`${proposed.date}T23:59:59`).toISOString();
+        startISO = allDayDateToNoonUTCISOString(proposed.date);
+        endISO = allDayDateToNoonUTCISOString(proposed.date);
       } else {
         // Append :00 seconds for cross-browser ISO 8601 compatibility
         const startStr = `${proposed.date}T${proposed.startTime}:00`;

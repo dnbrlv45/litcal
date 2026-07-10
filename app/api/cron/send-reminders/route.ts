@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendDueTaskEmails, sendEventReminderEmails } from "@/lib/email-notifications";
-import { DAY_OF_9AM } from "@/lib/reminders";
+import { DAY_OF_9AM, dayOf9AMReminderSendAt } from "@/lib/reminders";
 import { isAuthorizedCron } from "@/lib/cron-auth";
 
 export const dynamic = "force-dynamic";
@@ -44,8 +44,33 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ sent: 0, notifications: 0, emails: { event: { sent: 0, skipped: 0, failed: 0 }, task: taskEmails } });
   }
 
+  const deliverable = [];
+  const deferred: Array<{ id: string; sendAt: Date }> = [];
+  for (const reminder of due) {
+    if (reminder.minutesBefore === DAY_OF_9AM) {
+      const intendedSendAt = dayOf9AMReminderSendAt(reminder.event.startTime);
+      if (now < intendedSendAt) {
+        deferred.push({ id: reminder.id, sendAt: intendedSendAt });
+        continue;
+      }
+    }
+    deliverable.push(reminder);
+  }
+
+  await Promise.all(deferred.map((reminder) =>
+    prisma.eventReminder.update({
+      where: { id: reminder.id },
+      data: { sendAt: reminder.sendAt },
+    })
+  ));
+
+  if (deliverable.length === 0) {
+    const taskEmails = await sendDueTaskEmails(now);
+    return NextResponse.json({ sent: 0, deferred: deferred.length, notifications: 0, emails: { event: { sent: 0, skipped: 0, failed: 0 }, task: taskEmails } });
+  }
+
   // Load active coverage assignments for all affected workspaces
-  const workspaceIds = [...new Set(due.map((r) => r.event.workspaceId).filter(Boolean) as string[])];
+  const workspaceIds = [...new Set(deliverable.map((r) => r.event.workspaceId).filter(Boolean) as string[])];
   const coverageAssignments = await prisma.coverageAssignment.findMany({
     where: {
       workspaceId: { in: workspaceIds },
@@ -71,7 +96,7 @@ export async function GET(request: NextRequest) {
 
   const rows: NotifRow[] = [];
 
-  for (const reminder of due) {
+  for (const reminder of deliverable) {
     const ev = reminder.event;
     if (!ev.workspaceId) continue;
 
@@ -123,17 +148,18 @@ export async function GET(request: NextRequest) {
     await prisma.notification.createMany({ data: rows, skipDuplicates: true });
   }
 
-  const eventEmails = await sendEventReminderEmails(due.map((r) => r.id), coverageMap);
+  const eventEmails = await sendEventReminderEmails(deliverable.map((r) => r.id), coverageMap);
   const taskEmails = await sendDueTaskEmails(now);
 
   // Mark reminders sent
   await prisma.eventReminder.updateMany({
-    where: { id: { in: due.map((r) => r.id) } },
+    where: { id: { in: deliverable.map((r) => r.id) } },
     data: { sent: true },
   });
 
   return NextResponse.json({
-    sent: due.length,
+    sent: deliverable.length,
+    deferred: deferred.length,
     notifications: rows.length,
     emails: { event: eventEmails, task: taskEmails },
   });

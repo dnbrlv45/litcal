@@ -11,6 +11,7 @@ import { HEARING_SUBTYPES, buildGoogleEventPayload } from "@/lib/google-calendar
 import { getAccessToken, patchGoogleEvent } from "@/lib/google-calendar";
 import { replaceEventReminders } from "@/lib/reminders";
 import { cascadeDeadlineDateChange } from "@/lib/deadline-rules";
+import { googleAllDayExclusiveEndDate } from "@/lib/all-day-dates";
 
 export const maxDuration = 60;
 
@@ -431,7 +432,7 @@ async function handleAskLitCalRequest(
                 ? { date: newStart.toISOString().slice(0, 10) }
                 : { dateTime: newStart.toISOString(), timeZone: tz },
               end: updatedEvent.allDay
-                ? { date: newEnd.toISOString().slice(0, 10) }
+                ? { date: googleAllDayExclusiveEndDate(newEnd) }
                 : { dateTime: newEnd.toISOString(), timeZone: tz },
             }
           );

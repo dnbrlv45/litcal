@@ -5,6 +5,40 @@ export const DAY_OF_9AM = -1;
 // Google Calendar reminder overrides accept minutes ≤ 40320 (28 days).
 // We cap at 40320 for the Google payload but keep the full value in DB.
 export const GOOGLE_MAX_REMINDER_MINUTES = 40320;
+const DEFAULT_REMINDER_TIME_ZONE = "America/Los_Angeles";
+
+function localDateTimeToUTC(dateStr: string, timeStr: string, timeZone: string): Date {
+  const candidate = new Date(`${dateStr}T${timeStr}:00Z`);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(candidate).reduce<Record<string, string>>((acc, part) => {
+    if (part.type !== "literal") acc[part.type] = part.value;
+    return acc;
+  }, {});
+
+  const localForCandidate = `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}`;
+  const diffMs = new Date(`${dateStr}T${timeStr}:00`).getTime() - new Date(localForCandidate).getTime();
+  return new Date(candidate.getTime() + diffMs);
+}
+
+export function dayOf9AMReminderSendAt(
+  calendarDate: Date,
+  timeZone = DEFAULT_REMINDER_TIME_ZONE,
+): Date {
+  const dateStr = [
+    calendarDate.getUTCFullYear(),
+    String(calendarDate.getUTCMonth() + 1).padStart(2, "0"),
+    String(calendarDate.getUTCDate()).padStart(2, "0"),
+  ].join("-");
+  return localDateTimeToUTC(dateStr, "09:00", timeZone);
+}
 
 /** Move Saturday or Sunday backward to the preceding Friday. Uses UTC to avoid timezone drift. */
 export function adjustToBusinessDay(date: Date): Date {
@@ -68,10 +102,8 @@ export function computeReminders(
   const schedule = getEventReminderSchedule(eventType);
   return schedule.map((minutes) => {
     if (minutes === DAY_OF_9AM) {
-      // 9:00 AM UTC on the event's calendar date; no weekend adjustment
-      const d = new Date(eventStart);
-      d.setUTCHours(9, 0, 0, 0);
-      return { minutesBefore: DAY_OF_9AM, sendAt: d };
+      // 9:00 AM Pacific on the event's calendar date; no weekend adjustment.
+      return { minutesBefore: DAY_OF_9AM, sendAt: dayOf9AMReminderSendAt(eventStart) };
     }
     const raw = new Date(eventStart.getTime() - minutes * 60 * 1000);
     // Apply business-day adjustment only for day-level (≥1440 min) reminders.

@@ -12,12 +12,7 @@ import { applyDeadlineRules } from "@/lib/deadline-rules";
 import { findCourtHearingRule, computeRemoteAppearanceDueDate } from "@/lib/court-hearing-rules";
 import { upsertCoverageAlert } from "@/lib/court-coverage-alerts";
 import { sendTaskAssignedEmails } from "@/lib/email-notifications";
-
-function googleAllDayEnd(date: Date): string {
-  const end = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-  end.setUTCDate(end.getUTCDate() + 1);
-  return end.toISOString().slice(0, 10);
-}
+import { googleAllDayExclusiveEndDate } from "@/lib/all-day-dates";
 
 async function recordUserGoogleSync(input: {
   eventId: string;
@@ -571,7 +566,7 @@ export async function POST(request: NextRequest) {
           location: googlePayload.location,
           colorId: googlePayload.colorId,
           start: event.allDay ? event.startTime.toISOString().slice(0, 10) : start,
-          end: event.allDay ? googleAllDayEnd(event.startTime) : end,
+          end: event.allDay ? googleAllDayExclusiveEndDate(event.endTime) : end,
           allDay: event.allDay,
           timeZone: timeZone ?? "UTC",
           reminderOverrides,
@@ -612,7 +607,7 @@ export async function POST(request: NextRequest) {
         for (const ge of generatedEvents) {
           try {
             const dayStr = ge.startTime.toISOString().slice(0, 10);
-            const endDayStr = googleAllDayEnd(ge.startTime);
+            const endDayStr = googleAllDayExclusiveEndDate(ge.endTime);
             const ggEvent: GoogleCalEvent = await createGoogleEvent(
               accessToken,
               {

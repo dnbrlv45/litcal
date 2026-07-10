@@ -4,12 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getAccessToken, createGoogleEvent, createLitCalCalendar, GoogleReauthRequiredError } from "@/lib/google-calendar";
 import { buildGoogleEventPayload, getGoogleColorId } from "@/lib/google-calendar-payload";
 import { getCurrentWorkspace } from "@/lib/workspaces";
-
-function googleAllDayEnd(date: Date): string {
-  const end = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-  end.setUTCDate(end.getUTCDate() + 1);
-  return end.toISOString().slice(0, 10);
-}
+import { googleAllDayExclusiveEndDate } from "@/lib/all-day-dates";
 
 async function syncedEventIdsForUser(userId: string): Promise<Set<string>> {
   const rows = await prisma.$queryRaw<Array<{ eventId: string }>>`
@@ -190,7 +185,7 @@ export async function POST() {
         ? event.startTime.toISOString().slice(0, 10)
         : event.startTime.toISOString();
       const endField = event.allDay
-        ? googleAllDayEnd(event.startTime)
+        ? googleAllDayExclusiveEndDate(event.endTime)
         : event.endTime.toISOString();
 
       const gEvent = await createGoogleEvent(

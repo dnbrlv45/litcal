@@ -30,6 +30,26 @@ function parseLocalDate(iso: string): Date {
   return new Date(+m[1], +m[2] - 1, +m[3]);
 }
 
+function parseAllDayEventDates(startValue: Date | string, endValue: Date | string): { start: Date; end: Date } {
+  const startIso = String(startValue);
+  const endIso = String(endValue);
+  const start = parseLocalDate(startIso);
+  let end = parseLocalDate(endIso);
+
+  const startInstant = new Date(startValue);
+  const endInstant = new Date(endValue);
+  if (
+    start.getTime() !== end.getTime() &&
+    !Number.isNaN(startInstant.getTime()) &&
+    !Number.isNaN(endInstant.getTime()) &&
+    endInstant.getTime() - startInstant.getTime() < 24 * 60 * 60 * 1000
+  ) {
+    end = start;
+  }
+
+  return { start, end };
+}
+
 const MONTH_NAMES = [
   "January","February","March","April","May","June",
   "July","August","September","October","November","December",
@@ -278,30 +298,35 @@ export default function CalendarView() {
   }
 
   function parseEventList(rawEvents: CalEvent[]): CalEvent[] {
-    return rawEvents.map((e) => ({
-      ...e,
-      start: e.allDay ? parseLocalDate(e.start as unknown as string) : new Date(e.start),
-      end: e.allDay ? parseLocalDate(e.end as unknown as string) : new Date(e.end),
-      eventType: e.eventType ?? "OTHER",
-      caseId: e.caseId ?? undefined,
-      caseTitle: e.caseTitle ?? undefined,
-      caseStatus: e.caseStatus ?? undefined,
-      department: e.department ?? undefined,
-      assignedAttorneyId: e.assignedAttorneyId ?? undefined,
-      assignedAttorneyName: e.assignedAttorneyName ?? undefined,
-      hasConflict: e.hasConflict ?? false,
-      caseCounty: e.caseCounty ?? null,
-      caseCourt:  e.caseCourt  ?? null,
-      inPerson: e.inPerson ?? false,
-      appearanceType: e.appearanceType ?? null,
-      remoteLink: e.remoteLink ?? null,
-      phoneNumber: e.phoneNumber ?? null,
-      bridge: e.bridge ?? null,
-      remotePassword: e.remotePassword ?? null,
-      requestRequired: e.requestRequired ?? null,
-      requestContactEmail: e.requestContactEmail ?? null,
-      requestNotes: e.requestNotes ?? null,
-    }));
+    return rawEvents.map((e) => {
+      const allDayDates = e.allDay
+        ? parseAllDayEventDates(e.start as unknown as string, e.end as unknown as string)
+        : null;
+      return {
+        ...e,
+        start: allDayDates ? allDayDates.start : new Date(e.start),
+        end: allDayDates ? allDayDates.end : new Date(e.end),
+        eventType: e.eventType ?? "OTHER",
+        caseId: e.caseId ?? undefined,
+        caseTitle: e.caseTitle ?? undefined,
+        caseStatus: e.caseStatus ?? undefined,
+        department: e.department ?? undefined,
+        assignedAttorneyId: e.assignedAttorneyId ?? undefined,
+        assignedAttorneyName: e.assignedAttorneyName ?? undefined,
+        hasConflict: e.hasConflict ?? false,
+        caseCounty: e.caseCounty ?? null,
+        caseCourt:  e.caseCourt  ?? null,
+        inPerson: e.inPerson ?? false,
+        appearanceType: e.appearanceType ?? null,
+        remoteLink: e.remoteLink ?? null,
+        phoneNumber: e.phoneNumber ?? null,
+        bridge: e.bridge ?? null,
+        remotePassword: e.remotePassword ?? null,
+        requestRequired: e.requestRequired ?? null,
+        requestContactEmail: e.requestContactEmail ?? null,
+        requestNotes: e.requestNotes ?? null,
+      };
+    });
   }
 
   async function fetchRange(start: Date, end: Date): Promise<CalEvent[] | null> {
