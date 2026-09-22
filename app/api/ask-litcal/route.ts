@@ -480,7 +480,20 @@ async function handleAskLitCalRequest(
 
     if (intent.caseQuery) {
       const matches = await searchCases(intent.caseQuery, workspace.id);
-      if (matches.length === 1) {
+      // The user already has an active case open — if it's among the fuzzy
+      // matches for the name they used, just use it instead of making them
+      // disambiguate against other cases that merely share a first/last name.
+      const activeMatch = activeCaseId ? matches.find((m) => m.id === activeCaseId) : undefined;
+      if (activeMatch) {
+        const full = await prisma.case.findUnique({
+          where: { id: activeMatch.id },
+          select: { id: true, title: true, caseNumber: true, county: true, court: true, status: true },
+        });
+        if (full && full.status !== "ARCHIVED" && full.status !== "CLOSED") {
+          resolvedCase = full;
+          finalActiveCaseId = full.id;
+        }
+      } else if (matches.length === 1) {
         const full = await prisma.case.findUnique({
           where: { id: matches[0].id },
           select: { id: true, title: true, caseNumber: true, county: true, court: true, status: true },

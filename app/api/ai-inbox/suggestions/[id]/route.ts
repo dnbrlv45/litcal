@@ -10,7 +10,8 @@ import { extractEmailSuggestion } from "@/lib/ai/extractEmailSuggestion";
 import { toTitleCaseName } from "@/lib/utils";
 import { getAccessToken, patchGoogleEvent, deleteGoogleEvent } from "@/lib/google-calendar";
 import { addTimelineEntry } from "@/lib/case-timeline";
-import { cascadeDeadlineCancellation } from "@/lib/deadline-rules";
+import { applyDeadlineRules, cascadeDeadlineCancellation } from "@/lib/deadline-rules";
+import { computeReminders } from "@/lib/reminders";
 
 // Convert a local date+time string to UTC using the given IANA timezone
 function localToUTC(dateStr: string, timeStr: string, tz: string): Date {
@@ -104,7 +105,7 @@ export async function PATCH(
         return NextResponse.json({ error: "Missing event date in extracted data" }, { status: 400 });
       }
 
-      const mappedType = mapEventType(event.eventType);
+      const mappedType = mapEventType(event.eventType, event.title);
       const startTime = localToUTC(event.date, event.startTime ?? "09:00", userTz);
       // Trials default to a 7-day all-day block; other events to 1 hour
       let endTime = event.endTime
@@ -240,7 +241,15 @@ export async function PATCH(
         : null;
 
       if (!duplicateEvent) {
-        await prisma.event.create({
+        const inheritedAttorneyId = caseId
+          ? (await prisma.caseStaff.findFirst({
+              where: { caseId, role: "ATTORNEY" },
+              select: { userId: true },
+              orderBy: { createdAt: "asc" },
+            }))?.userId ?? null
+          : null;
+
+        const createdEvent = await prisma.event.create({
           data: {
             userId:      user.id,
             workspaceId: workspace.id,
@@ -253,7 +262,35 @@ export async function PATCH(
             location:    event.location ?? undefined,
             eventType:   mappedType,
             status:      "SCHEDULED",
+            assignedAttorneyId: inheritedAttorneyId,
           },
+        });
+
+        // Reminders + deadline automation (e.g. CMC → File CMS task 15 days
+        // before, Trial → Expert Designation / Discovery Cutoff / 998 Due).
+        // The direct /api/calendar/events POST route runs these on create;
+        // this approval path was creating the bare event and skipping them.
+        const reminderRows = computeReminders(startTime, mappedType);
+        if (reminderRows.length > 0) {
+          await prisma.eventReminder.createMany({
+            data: reminderRows.map((r) => ({
+              eventId: createdEvent.id,
+              minutesBefore: r.minutesBefore,
+              sendAt: r.sendAt,
+            })),
+          });
+        }
+
+        await applyDeadlineRules({
+          id: createdEvent.id,
+          eventType: mappedType,
+          subtype: null,
+          startTime,
+          caseId: caseId ?? null,
+          userId: user.id,
+          workspaceId: workspace.id,
+          assignedAttorneyId: inheritedAttorneyId,
+          timeZone: userTz,
         });
       }
     }
@@ -774,13 +811,19 @@ function mapDiscoveryType(raw: string | null | undefined): "FORM_INTERROGATORIES
   return "OTHER";
 }
 
-function mapEventType(raw: string | null | undefined): "HEARING" | "DEPOSITION" | "TRIAL" | "CONFERENCE" | "MEDIATION" | "DEADLINE" | "OTHER" {
+function mapEventType(raw: string | null | undefined, title?: string | null): "HEARING" | "DEPOSITION" | "TRIAL" | "CONFERENCE" | "CASE_MANAGEMENT_CONFERENCE" | "MEDIATION" | "DEADLINE" | "OTHER" {
+  const t = (raw ?? "").toUpperCase();
+  const titleT = (title ?? "").toUpperCase();
+  // The extraction schema only offers a generic CONFERENCE eventType for
+  // CALENDAR_EVENT — "CMC" only ever shows up in the title (e.g. "Tippins
+  // CMC"). Catch it here so it maps to CASE_MANAGEMENT_CONFERENCE and the
+  // 15-days-before File CMS deadline rule actually fires.
+  if (t.includes("CASE_MANAGEMENT") || /\bCMC\b/.test(t) || /\bCMC\b/.test(titleT)) return "CASE_MANAGEMENT_CONFERENCE";
   if (!raw) return "OTHER";
-  const t = raw.toUpperCase();
   if (t.includes("HEAR"))  return "HEARING";
   if (t.includes("DEPO"))  return "DEPOSITION";
   if (t.includes("TRIAL")) return "TRIAL";
-  if (t.includes("CONF") || t.includes("CMC") || t.includes("MSC")) return "CONFERENCE";
+  if (t.includes("CONF") || t.includes("MSC")) return "CONFERENCE";
   if (t.includes("MEDI"))  return "MEDIATION";
   if (t.includes("DEAD") || t.includes("EXTENSION")) return "DEADLINE";
   return "OTHER";
