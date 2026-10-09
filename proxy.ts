@@ -10,6 +10,10 @@ const publicRoutes = [
   /^\/terms$/,   // same
   /^\/api\/auth\/sign-in$/,
   /^\/api\/auth\/sign-up$/,
+  /^\/api\/auth\/forgot-password$/,
+  /^\/api\/auth\/reset-password$/,
+  /^\/forgot-password$/,
+  /^\/reset-password$/,
   /^\/api\/auth\/sign-out$/,
   /^\/api\/cron\//, // cron-job.org has no session cookie
   /^\/api\/ai-inbox\/gmail-webhook$/, // Gmail Pub/Sub push; authenticates via ?secret= param, no session cookie

@@ -30,6 +30,7 @@ model User {
   cases               Case[]
   workspaceMemberships WorkspaceMember[]
   sessions            AuthSession[]
+  passwordResetTokens PasswordResetToken[]
   notifications       Notification[]
   notificationPreference UserNotificationPreference?
   emailNotificationLogs  EmailNotificationLog[]
@@ -56,6 +57,19 @@ model AuthSession {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // ─── WORKSPACES / TEAMS ──────────────────────────────────────────────────────

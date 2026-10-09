@@ -73,6 +73,11 @@ export default function PasswordAuth({ mode }: { mode: AuthMode }) {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
+          {isSignIn && (
+            <Link href="/forgot-password" className="-mt-1 self-end text-xs font-semibold text-teal-800 hover:text-teal-900">
+              Forgot password?
+            </Link>
+          )}
           {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
           <button
             type="submit"
