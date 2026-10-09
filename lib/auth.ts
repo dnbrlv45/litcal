@@ -6,13 +6,6 @@ import { prisma } from "@/lib/prisma";
 export const SESSION_COOKIE = "litcal_session";
 const SESSION_DAYS = 30;
 
-export interface GoogleIdentity {
-  sub: string;
-  email: string;
-  given_name?: string;
-  family_name?: string;
-}
-
 export interface MicrosoftIdentity {
   sub: string;
   email: string;
@@ -49,39 +42,6 @@ export async function getCurrentUser() {
 export async function requireUser() {
   const user = await getCurrentUser();
   return user;
-}
-
-export async function upsertGoogleUser(identity: GoogleIdentity) {
-  const email = identity.email.trim().toLowerCase();
-  const existing = await prisma.user.findFirst({
-    where: {
-      OR: [
-        { googleSub: identity.sub },
-        { email },
-      ],
-    },
-  });
-
-  if (existing) {
-    return prisma.user.update({
-      where: { id: existing.id },
-      data: {
-        email,
-        googleSub: identity.sub,
-        firstName: identity.given_name ?? existing.firstName,
-        lastName: identity.family_name ?? existing.lastName,
-      },
-    });
-  }
-
-  return prisma.user.create({
-    data: {
-      email,
-      googleSub: identity.sub,
-      firstName: identity.given_name ?? null,
-      lastName: identity.family_name ?? null,
-    },
-  });
 }
 
 export async function upsertMicrosoftUser(identity: MicrosoftIdentity) {

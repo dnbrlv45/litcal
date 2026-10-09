@@ -1,5 +1,5 @@
-import LitCalGoogleAuth from "@/components/auth/LitCalGoogleAuth";
+import PasswordAuth from "@/components/auth/PasswordAuth";
 
 export default function SignInPage() {
-  return <LitCalGoogleAuth mode="sign-in" />;
+  return <PasswordAuth mode="sign-in" />;
 }

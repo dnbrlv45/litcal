@@ -15,6 +15,7 @@ model User {
   email        String   @unique
   googleSub    String?  @unique
   microsoftSub String?  @unique
+  passwordHash String?
   firstName    String?
   lastName     String?
   timeZone     String   @default("UTC")
